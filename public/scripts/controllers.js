@@ -6,12 +6,22 @@ controllers.controller('HomeCtrl', ['$scope', 'profile', function ($scope, profi
   $scope.profile = profile;
 }]);
 
-controllers.controller('SettingsCtrl', ['$scope', 'settings', function ($scope, settings) {
-  $scope.settings = settings;
+controllers.controller('SettingsCtrl', ['$scope', 'Settings', function ($scope, Settings) {
+  $scope.settings = Settings.read() || {
+    level: 'easy',
+    scene: 'desert',
+    character: 'professor',
+    sound: 'on',
+    currentView: 'level',
+    currentPage: 'templates/settings/level.tpl.html'
+  };
   $scope.save = function() {
-    $scope.recipe.$save(function(recipe) {
-      $location.path('/view/' + recipe.id);
-    });
+    Settings.write($scope.settings);
+  };
+  $scope.navigate = function(item) {
+    $scope.settings.currentView = item;
+    $scope.settings.currentPage = 'templates/settings/' + item + '.tpl.html'
+    Settings.write($scope.settings);
   };
 }]);
 

@@ -1,6 +1,14 @@
 <h3>Settings</h3>
-<ul>
-  <li ng-repeat="recipe in recipes">
-    <div><a ng-href="/#/view/{{recipe.id}}">{{recipe.title}}</a></div>
-  </li>
-</ul>
+<div>
+  <div class="span10">
+    <ul>
+      <li><div><a ng-click="navigate('level')">Level</a></div></li>
+      <li><div><a ng-click="navigate('scene')">Scene</a></div></li>
+      <li><div><a ng-click="navigate('character')">Character</a></div></li>
+    </ul>
+  </div>
+
+  <div class="span10">
+    <div ng-include="settings.currentPage"></div>
+  </div>
+</div>

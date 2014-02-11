@@ -1,6 +1,7 @@
 'use strict';
 
 angular.module('app', [
+  'app.services',
   'app.controllers',
   'app.directives',
   'ngRoute'
@@ -15,17 +16,17 @@ angular.module('app', [
           }]
         },
         */
-        templateUrl:'htmls/home.tpl.html'
+        templateUrl:'templates/home.tpl.html'
       }).when('/settings', {
         controller: 'SettingsCtrl',
         /*
         resolve: {
-          recipe: ['SettingsLoader', function(SettingsLoader) {
-            return SettingsLoader();
+          settings: ['Settings', function(Settings) {
+            return Settings.read();
           }]
         },
         */
-        templateUrl:'htmls/settings.tpl.html'
+        templateUrl:'templates/settings.tpl.html'
       }).when('/game', {
         controller: 'GameCtrl',
         /*
@@ -35,7 +36,7 @@ angular.module('app', [
           }]
         },
         */
-        templateUrl:'htmls/game.tpl.html'
+        templateUrl:'templates/game.tpl.html'
       }).otherwise({
         redirectTo:'/'
       });

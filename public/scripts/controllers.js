@@ -11,17 +11,19 @@ controllers.controller('SettingsCtrl', ['$scope', 'Settings', function ($scope, 
     level: 'easy',
     scene: 'desert',
     character: 'professor',
-    sound: 'on',
     currentView: 'level',
     currentPage: 'templates/settings/level.tpl.html'
   };
-  $scope.save = function() {
-    Settings.write($scope.settings);
-  };
   $scope.navigate = function(item) {
-    $scope.settings.currentView = item;
-    $scope.settings.currentPage = 'templates/settings/' + item + '.tpl.html'
-    Settings.write($scope.settings);
+    var settings = $scope.settings;
+    settings.currentView = item;
+    settings.currentPage = 'templates/settings/' + item + '.tpl.html'
+    Settings.write(settings);
+  };
+  $scope.select = function(item) {
+    var settings = $scope.settings;
+    settings[settings.currentView] = item;
+    Settings.write(settings);
   };
 }]);
 

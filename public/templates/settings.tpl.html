@@ -2,9 +2,9 @@
 <div>
   <div class="span10">
     <ul>
-      <li><div><a ng-click="navigate('level')">Level</a></div></li>
-      <li><div><a ng-click="navigate('scene')">Scene</a></div></li>
-      <li><div><a ng-click="navigate('character')">Character</a></div></li>
+      <li><div><a ng-click="navigate('level')" ng-class="{bold: settings.currentView === 'level'}">Level</a></div></li>
+      <li><div><a ng-click="navigate('scene')" ng-class="{bold: settings.currentView === 'scene'}">Scene</a></div></li>
+      <li><div><a ng-click="navigate('character')" ng-class="{bold: settings.currentView === 'character'}">Character</a></div></li>
     </ul>
   </div>
 

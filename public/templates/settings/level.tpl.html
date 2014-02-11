@@ -2,9 +2,9 @@
 <div>
   <div class="span10">
     <ul>
-      <li><div><a ng-click="select('easy')">Easy</a></div></li>
-      <li><div><a ng-click="select('normal')">Normal</a></div></li>
-      <li><div><a ng-click="select('high')"></a>High</div></li>
+      <li><div><a ng-click="select('easy')" ng-class="{bold: settings.level === 'easy'}">Easy</a></div></li>
+      <li><div><a ng-click="select('normal')" ng-class="{bold: settings.level === 'normal'}">Normal</a></div></li>
+      <li><div><a ng-click="select('high')" ng-class="{bold: settings.level === 'high'}">High</a></div></li>
     </ul>
   </div>
 

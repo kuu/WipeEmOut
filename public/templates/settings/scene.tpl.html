@@ -2,9 +2,9 @@
 <div>
   <div class="span10">
     <ul>
-      <li><div><a ng-click="select('desert')">Desert Road</a></div></li>
-      <li><div><a ng-click="select('space')">Milkey Way</a></div></li>
-      <li><div><a ng-click="select('ocean')">Ocean Current</a></div></li>
+      <li><div><a ng-click="select('desert')" ng-class="{bold: settings.scene === 'desert'}">Desert Road</a></div></li>
+      <li><div><a ng-click="select('space')" ng-class="{bold: settings.scene === 'space'}">Milkey Way</a></div></li>
+      <li><div><a ng-click="select('ocean')" ng-class="{bold: settings.scene === 'ocean'}">Ocean Current</a></div></li>
     </ul>
   </div>
 

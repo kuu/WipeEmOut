@@ -1,2281 +1,6 @@
 
 /**
  * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-var quickswf = {
-  structs: {
-
-  },
-  tags: {
-
-  },
-  utils: {
-
-  },
-};
-
-(function(global) {
-
-  var mPolyFills = global.quickswf.polyfills = {};
-
-  var mHaveBlob = ('Blob' in global);
-  var mHaveBlobConstructor = false;
-
-  if (mHaveBlob) {
-    try {
-      new Blob();
-      mHaveBlobConstructor = true;
-    } catch (e) {
-      mHaveBlobConstructor = false;
-    }
-  }
-
-  mPolyFills.newBlob = function(pData, pOptions) {
-    pData = pData || [''];
-    pOptions = pOptions || {};
-    if (mHaveBlobConstructor) {
-      var tClone = [];
-      for (var i = 0, il = pData.length; i < il; i++) {
-        var tData = pData[i];
-        if (tData === null) continue;
-        var tBuf = new ArrayBuffer(tData.length);
-        var tNewArray = new Uint8Array(tBuf);
-        tNewArray.set(tData);
-        tClone.push(tBuf);
-      }
-      return new Blob(tClone, pOptions);
-    } else {
-      var BlobBuilder = window.BlobBuilder 
-          || window.WebKitBlobBuilder 
-          || window.MozBlobBuilder 
-          || window.MSBlobBuilder;
-
-      if (BlobBuilder){
-        var tBuilder = new BlobBuilder();
-        for (var i = 0, il = pData.length; i < il; i++) {
-          var tData = pData[i];
-          if (tData === null) continue;
-          if (tData.buffer) {
-            var tNewArray = new Uint8Array(tData.length);
-            tNewArray.set(tData);
-            tBuilder.append(tNewArray.buffer);
-          } else {
-            tBuilder.append(tData);
-          }
-        }
-        return tBuilder.getBlob(pOptions.type);
-      }
-
-      var tNewData = new Array(65536);
-      var tIndex = 0;
-      for (var i = 0, il = pData.length; i < il; i++) {
-        var tDataI = pData[i];
-        if (tDataI === null) continue;
-        for (var k = 0, kl = tDataI.length; k < kl; k++) {
-          tNewData[tIndex + k] = String.fromCharCode(tDataI[k]);
-        }
-        tIndex += kl;
-      }
-      var tResult = {
-        length: tNewData.length,
-        data: tNewData.join(''),
-        type: pOptions.type
-      };
-      return tResult;
-    }
-  };
-
-}(this));
-
-/**
- * @author Yuta Imaya
- * @author Jason Parrott (Namespace modifications)
- *
- * Copyright (C) 2013 SWFCrew Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-//-----------------------------------------------------------------------------
-// Code copied from zlib.js at https://github.com/imaya/zlib.js
-// with permission from author.
-//-----------------------------------------------------------------------------
-
-
-(function(global) {
-
-  global.quickswf.utils.Adler32 = Adler32;
-
-  /**
-   * Adler32 ハッシュ値の作成
-   * @param {!(Array|Uint8Array|string)} array 算出に使用する byte array.
-   * @return {number} Adler32 ハッシュ値.
-   */
-  function Adler32(array) {
-    if (typeof(array) === 'string') {
-      array = Zlib.Util.stringToByteArray(array);
-    }
-    return Adler32.update(1, array);
-  };
-
-  /**
-   * Adler32 ハッシュ値の更新
-   * @param {number} adler 現在のハッシュ値.
-   * @param {!(Array|Uint8Array)} array 更新に使用する byte array.
-   * @return {number} Adler32 ハッシュ値.
-   */
-  Adler32.update = function(adler, array) {
-    /** @type {number} */
-    var s1 = adler & 0xffff;
-    /** @type {number} */
-    var s2 = (adler >>> 16) & 0xffff;
-    /** @type {number} array length */
-    var len = array.length;
-    /** @type {number} loop length (don't overflow) */
-    var tlen;
-    /** @type {number} array index */
-    var i = 0;
-
-    while (len > 0) {
-      tlen = len > Adler32.OptimizationParameter ?
-        Adler32.OptimizationParameter : len;
-      len -= tlen;
-      do {
-        s1 += array[i++];
-        s2 += s1;
-      } while (--tlen);
-
-      s1 %= 65521;
-      s2 %= 65521;
-    }
-
-    return ((s2 << 16) | s1) >>> 0;
-  };
-
-  /**
-   * Adler32 最適化パラメータ
-   * 現状では 1024 程度が最適.
-   * @see http://jsperf.com/adler-32-simple-vs-optimized/3
-   * @const
-   * @type {number}
-   */
-  Adler32.OptimizationParameter = 1024;
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.SWF = SWF;
-
-  /**
-   * The data structure that holds all data
-   * about an SWF file.
-   * @constructor
-   * @class {quickswf.SWF}
-   */
-  function SWF(pVersion, pEncoding, pBounds, pFrameRate, pFrameCount) {
-    this.version = pVersion;
-    this.encoding = pEncoding;
-    this.bounds = pBounds;
-    this.width = Math.abs((pBounds.right - pBounds.left) / 20);
-    this.height = Math.abs((pBounds.bottom - pBounds.top) / 20);
-    this.frameRate = pFrameRate;
-    this.frameCount = pFrameCount;
-    this.rootSprite = new global.quickswf.structs.Sprite();
-    this.dictionary = new Object();
-    this.orderedDictionary = [];
-    this.fonts = new Object();
-    this.jpegTableDQT = null;
-    this.jpegTableDHT = null;
-    this.streamSoundMetadata = null;
-    this.mediaLoader = new global.quickswf.utils.MediaLoader();
-  }
-
-  SWF.prototype.destroy = function() {
-    this.rootSprite = null;
-    this.jpegTableDQT = null;
-    this.jpegTableDHT = null;
-    this.dictionary = null;
-    this.orderedDictionary = null;
-    this.fonts = null;
-  };
-
-
-}(this));
-
-/**
- * @author Yoshihiro Yamazaki
- *
- * Copyright (C) 2012 Yoshihiro Yamazaki
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.structs.KERNINGRECORD = KERNINGRECORD;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.KERNINGRECORD}
-   */
-  function KERNINGRECORD(pCode1, pCode2, pAdjustment) {
-    this.code1 = pCode1;
-    this.code2 = pCode2;
-    this.adjustment = pAdjustment;
-  }
-
-  /**
-   * Loads a KERNINGRECORD type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @return {quickswf.structs.KERNINGRECORD} The loaded KERNINGRECORD.
-   */
-  KERNINGRECORD.load = function(pReader, pFlagWideCodes) {
-    var tCode1, tCode2, tAdjustment;
-
-    if (pFlagWideCodes) {
-      tCode1 = pReader.getUint16();
-      tCode2 = pReader.getUint16();
-    } else {
-      tCode1 = pReader.getUint8();
-      tCode2 = pReader.getUint8();
-    }
-
-    tAdjustment = pReader.getUint16();
-
-    return new KERNINGRECORD(tCode1, tCode2, tAdjustment);
-  };
-
-}(this));
-
-/**
- * @author Yoshihiro Yamazaki
- *
- * Copyright (C) 2012 QuickSWF project
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.structs.GLYPHENTRY = GLYPHENTRY;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.GLYPHENTRY}
-   */
-  function GLYPHENTRY(pGlyphIndex, pGlyphAdvance) {
-    this.index = pGlyphIndex;
-    this.advance = pGlyphAdvance;
-  }
-
-  /**
-   * Loads a GLYPHENTRY type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {number} pGlyphBits Bits in each glyph Index
-   * @param {number} pAdvanceBits Bits in each advance value.
-   * @return {quickswf.structs.GLYPHENTRY} The loaded GLYPHENTRY.
-   */
-  GLYPHENTRY.load = function(pReader, pGlyphBits, pAdvanceBits) {
-    var tGlyphIndex = pReader.getUBits(pGlyphBits);
-    var tGlyphAdvance = pReader.getUBits(pAdvanceBits);
-
-    return new GLYPHENTRY(tGlyphIndex, tGlyphAdvance);
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.structs.CLIPACTIONS = CLIPACTIONS;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.CLIPACTIONS}
-   */
-  function CLIPACTIONS() {
-    this.allEventFlags = 0;
-    this.clipActionRecords = new Array();
-  }
-
-  /**
-   * Loads a CLIPACTIONS type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {number} pVersion The version of this SWF.
-   * @return {quickswf.structs.CLIPACTIONS} The loaded CLIPACTIONS.
-   */
-  CLIPACTIONS.load = function(pReader, pVersion) {
-    var tActions = new CLIPACTIONS();
-
-    pReader.getUint16(); // Reserved for nothing.
-
-    if (pVersion <= 5) {
-      tActions.allEventFlags = pReader.getUint16();
-    } else {
-      tActions.allEventFlags = pReader.getUint32();
-    }
-
-    for (;;) {
-      if (pVersion <= 5) {
-        if (pReader.getUint16() === 0) {
-          break;
-        } else {
-          pReader.seek(-2); // wind backwards.
-        }
-      } else {
-        if (pReader.getUint32() === 0) {
-          break;
-        } else {
-          pReader.seek(-4); // wind backwards.
-        }
-      }
-
-      var tEventFlags;
-      if (pVersion <= 5) {
-        tEventFlags = pReader.getUint16();
-      } else {
-        tEventFlags = pReader.getUint32();
-      }
-
-      var tActionRecordSize = pReader.getUint32();
-      var tData = pReader.getByteArray(tActionRecordSize);
-
-      if (pVersion >= 6) {
-        // check for keypress and do U8
-      }
-
-      tActions.clipActionRecords.push({
-        eventFlags: tEventFlags,
-        action: tData
-      });
-    }
-
-    return tActions;
-  };
-
-}(this));
-
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.structs.RGBA = RGBA;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.RGBA}
-   */
-  function RGBA(pRed, pGreen, pBlue, pAlpha) {
-    this.red = pRed;
-    this.green = pGreen;
-    this.blue = pBlue;
-    this.alpha = pAlpha;
-  }
-
-  RGBA.prototype.toString = function() {
-    return 'rgba(' +
-      this.red +
-      ',' +
-      this.green +
-      ',' +
-      this.blue +
-      ',' +
-      this.alpha +
-      ')';
-  };
-
-  /**
-   * Loads a colour RGBA type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {bool} pWithAlpha If this structure has alpha or not.
-   * @return {quickswf.structs.RGBA} The loaded RGBA.
-   */
-  RGBA.load = function(pReader, pWithAlpha) {
-    return new RGBA(
-      pReader.getUint8(),
-      pReader.getUint8(),
-      pReader.getUint8(),
-      pWithAlpha ? pReader.getUint8() / 255 : 1.0
-    );
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.structs.LINESTYLE = LINESTYLE;
-  var RGBA = global.quickswf.structs.RGBA;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.LINESTYLE}
-   */
-  function LINESTYLE(pIsMorph) {
-    if (pIsMorph) {
-      this.startWidth = 0;
-      this.endWidth = 0;
-      this.startColor = null;
-      this.endColor = null;
-    } else {
-      this.width = 0;
-      this.color = null;
-    }
-  }
-
-  /**
-   * Loads a LINESTYLE type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {bool} pWithAlpha True if alpha needs to be parsed.
-   * @param {bool} pIsMorph True if morph shape.
-   * @return {quickswf.structs.LINESTYLE} The loaded LINESTYLE.
-   */
-  LINESTYLE.load = function(pReader, pWithAlpha, pIsMorph) {
-    var tLineStyle = new LINESTYLE(pIsMorph);
-
-    if (pIsMorph) {
-      tLineStyle.startWidth = pReader.getUint16();
-      tLineStyle.endWidth = pReader.getUint16();
-      tLineStyle.startColor = RGBA.load(pReader, pWithAlpha);
-      tLineStyle.endColor = RGBA.load(pReader, pWithAlpha);
-    } else {
-      tLineStyle.width = pReader.getUint16();
-      tLineStyle.color = RGBA.load(pReader, pWithAlpha);
-    }
-
-    return tLineStyle;
-  };
-
-  /**
-   * Loads an array of LINESTYLE types.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {bool} pWithAlpha True if alpha needs to be parsed.
-   * @param {bool} pHasLargeFillCount True if this struct can have more than 256 styles.
-   * @param {bool} pIsMorph True if morph shape.
-   * @return {Array.<quickswf.structs.LINESTYLE>} The loaded LINESTYLE array.
-   */
-  LINESTYLE.loadMultiple = function(pReader, pWithAlpha, pHasLargeFillCount, pIsMorph) {
-    var tCount = pReader.getUint8();
-
-    if (pHasLargeFillCount && tCount === 0xFF) {
-      tCount = pReader.getUint16();
-    }
-
-    var tArray = new Array(tCount);
-
-    for (var i = 0; i < tCount; i++) {
-      tArray[i] = LINESTYLE.load(pReader, pWithAlpha, pIsMorph);
-    }
-
-    return tArray;
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.structs.GRADIENT = GRADIENT;
-  global.quickswf.structs.Stop = Stop;
-
-  var RGBA = global.quickswf.structs.RGBA;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.GRADIENT}
-   */
-  function GRADIENT() {
-    this.spreadMode = 0;
-    this.interpolationMode = 0;
-    this.stops = new Array();
-    this.focalPoint = 0.0;
-  }
-
-  /**
-   * @constructor
-   * @private
-   * @param {bool} pIsMorph True if morph shape.
-   */
-  function Stop(pIsMorph) {
-    if (pIsMorph) {
-      this.startRatio = 0;
-      this.startColor = null;
-      this.endRatio = 0;
-      this.endColor = null;
-    } else {
-      this.ratio = 0;
-      this.color = null;
-    }
-  }
-
-  /**
-   * Loads a GRADIENT type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {bool} pWithAlpha True if we need to parse colour.
-   * @param {bool} pIsMorph True if morph shape.
-   * @return {quickswf.structs.GRADIENT} The loaded GRADIENT.
-   */
-  GRADIENT.load = function(pReader, pWithAlpha, pIsMorph) {
-    var tGradient = new GRADIENT();
-
-    tGradient.spreadMode = pReader.getUBits(2);
-    tGradient.interpolationMode = pReader.getUBits(2);
-    var tStops = tGradient.stops;
-    var tCount = tStops.length = pReader.getUBits(4);
-    var tStop;
-
-    for (var i = 0; i < tCount; i++) {
-      tStop = new Stop(pIsMorph);
-
-      if (pIsMorph) {
-        tStop.startRatio = pReader.getUint8();
-        tStop.startColor = RGBA.load(pReader, true);
-        tStop.endRatio = pReader.getUint8();
-        tStop.endColor = RGBA.load(pReader, true);
-      } else {
-        tStop.ratio = pReader.getUint8();
-        tStop.color = RGBA.load(pReader, pWithAlpha);
-      }
-
-      tStops[i] = tStop;
-    }
-
-    return tGradient;
-  };
-
-}(this));
-
-/**
- * @author Yoshihiro Yamazaki
- *
- * Copyright (C) 2012 QuickSWF project
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  var mStruct = global.quickswf.structs;
-  mStruct.TEXTRECORD = TEXTRECORD;
-  var RGBA = mStruct.RGBA;
-  var GLYPHENTRY = mStruct.GLYPHENTRY;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.TEXTRECORD}
-   */
-  function TEXTRECORD() {
-    this.type = 0;
-    this.styleflags = 0;
-    this.id = -1;
-    this.color = null;
-    this.x = 0;
-    this.y = 0;
-    this.height = 0;
-    this.xAdvance = 0;
-    this.glyphs = null;
-  }
-
-  /**
-   * Loads a TEXTRECORD type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {number} p_1stB First byte of TextRecord.
-   * @param {bool} pWithAlpha True if parsing alpha is needed.
-   * @param {number} pGlyphBits Bits in each glyph Index
-   * @param {number} pAdvanceBits Bits in each advance value.
-   * @param {quickswf.structs.Text} pText DefineText object which has this TEXTRECORD.
-   * @return {quickswf.structs.TEXTRECORD} The loaded TEXTRECORD.
-   */
-  TEXTRECORD.load = function(pReader, p_1stB, pWithAlpha, pGlyphBits, pAdvanceBits, pText) {
-    var tTextRecordType = p_1stB >>> 7;
-    var tStyleFlags = p_1stB;
-    var tTextColor = null;
-
-    if (tStyleFlags & 0x08) { // StyleFlagsHasFont
-      pText.fontID = pReader.getUint16();
-    }
-    if (tStyleFlags & 0x04) { // StyleFlagsHasColor
-      pText.textColor = RGBA.load(pReader, pWithAlpha);
-    }
-    if (tStyleFlags & 0x01) { // StyleFlagsHasXOffset
-      pText.xOffset = pReader.getUint16();
-      pText.xAdvance = 0;
-    }
-    if (tStyleFlags & 0x02) { // StyleFlagsHasYOffset
-      pText.yOffset = pReader.getUint16();
-    }
-    if (tStyleFlags & 0x08) { // StyleFlagsHasFont
-      pText.textHeight = pReader.getUint16();
-    }
-
-    var tTEXTRECORD = new TEXTRECORD;
-
-    tTEXTRECORD.type = tTextRecordType;
-    tTEXTRECORD.styleflags = tStyleFlags;
-    tTEXTRECORD.id = pText.fontID;
-    tTEXTRECORD.color = pText.textColor;
-    tTEXTRECORD.x = pText.xOffset;
-    tTEXTRECORD.y = pText.yOffset;
-    tTEXTRECORD.height = pText.textHeight;
-    tTEXTRECORD.xAdvance = pText.xAdvance;
-
-    var tGlyphCount = pReader.getUint8();
-    var tGlypyEntries = new Array(tGlyphCount);
-
-    for (var i = 0; i < tGlyphCount; i++) {
-      tGlypyEntries[i] = GLYPHENTRY.load(pReader, pGlyphBits, pAdvanceBits);
-      pText.xAdvance += tGlypyEntries[i].advance;
-    }
-
-    tTEXTRECORD.glyphs = tGlypyEntries;
-
-    pReader.align();
-
-    return tTEXTRECORD;
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.structs.RECT = RECT;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.RECT}
-   */
-  function RECT(pLeft, pRight, pTop, pBottom) {
-    this.left = pLeft;
-    this.right = pRight;
-    this.top = pTop;
-    this.bottom = pBottom;
-  }
-
-  RECT.prototype.move = function (pXOffset, pYOffset) {
-    this.left   += pXOffset;
-    this.right  += pXOffset;
-    this.top    += pYOffset;
-    this.bottom += pYOffset;
-  };
-
-  RECT.prototype.clone  = function () {
-    return new RECT(this.left, this.right, this.top, this.bottom);
-  };
-
-  /**
-   * Loads a RECT type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @return {quickswf.structs.RECT} The loaded RECT.
-   */
-  RECT.load = function(pReader) {
-    var tNumberOfBits = pReader.getUBits(5);
-    var tLeft = pReader.getBits(tNumberOfBits);
-    var tRight = pReader.getBits(tNumberOfBits);
-    var tTop = pReader.getBits(tNumberOfBits);
-    var tBottom = pReader.getBits(tNumberOfBits);
-
-    pReader.align();
-
-    return new RECT(tLeft, tRight, tTop, tBottom);
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  var quickswf = global.quickswf;
-  quickswf.Parser = Parser;
-
-  var RECT = quickswf.structs.RECT;
-  var SWF = quickswf.SWF;
-
-  /**
-   * @constructor
-   */
-  function Parser(pBuffer) {
-    /**
-     * The SWFReader object for this parser.
-     * @type {quickswf.SWFReader}
-     */
-    this.r = new quickswf.SWFReader(pBuffer);
-
-    /**
-     * The SWF object that gets created after parsing.
-     * @type {quickswf.SWF}
-     */
-    this.swf = null;
-
-    /**
-     * The currently being parsed frame index.
-     * @type {Number}
-     */
-    this.currentFrame = 0;
-
-    /**
-     * A stack of frame indices to keep track of while parsing.
-     * @type {Array.<Number>}
-     */
-    this.frameStack = new Array();
-
-    /**
-     * A stack of Sprites to keep track of while parsing.
-     * @type {Array.<quickswf.structs.Sprite>}
-     */
-    this.spriteStack = new Array();
-
-    /**
-     * The currently being parsed Sprite.
-     * @type {quickswf.structs.Sprite}
-     */
-    this.currentSprite = null;
-
-    /**
-     * The flag to track whether non-UTF8 character is parsed.
-     * @type {boolearn}
-     */
-    this.nonUtf8CharDetected = false;
-
-    this.register = register;
-  }
-
-  function register(pId, pObject) {
-    this.swf.dictionary[pId] = pObject;
-    this.swf.orderedDictionary.push(pObject);
-  }
-
-  Parser.prototype = /** @lends {quickswf.Parser#} */ {
-
-    /**
-     * Adds a new action to the current frame
-     * of the current sprite.
-     * @param {Object} pData The data. Make sure it has a type property of type String.
-     */
-    add: function(pData) {
-      var tFrames = this.currentSprite.frames;
-      var tIndex = this.currentFrame;
-      var tRealData = new Object();
-
-      for (var k in pData) {
-        tRealData[k] = pData[k];
-      }
-
-      if (tFrames[tIndex] === void 0) {
-        tFrames[tIndex] = [tRealData];
-      } else {
-        tFrames[tIndex].push(tRealData);
-      }
-    },
-
-    /**
-     * Parses the current buffer.
-     * @param {Function=} pSuccessCallback The callback to call on success.
-     * @param {Function=} pFailureCallback The callback to call on failure.
-     */
-    parse: function(pSuccessCallback, pFailureCallback) {
-      var tTimer = Date.now();
-      var tReader = this.r;
-
-      var tCompressedFlag = tReader.getChar();
-
-      if (tCompressedFlag !== 'C' && tCompressedFlag !== 'F') {
-        pFailureCallback && pFailureCallback('Invalid SWF format.');
-        return false;
-      }
-
-      if (tReader.getString(2) !== 'WS') {
-        pFailureCallback && pFailureCallback('Invalid SWF format.');
-        return false;
-      }
-
-      var tVersion = tReader.getUint8();
-      var tFileSize = tReader.getUint32();
-
-      if (tVersion <= 5) {
-        tReader.encoding = 'shift_jis';
-      }
-
-      if (tCompressedFlag === 'C') {
-        var tInflator = new benri.io.compression.Inflator('inflate');
-        tReader = this.r = new quickswf.SWFReader(tInflator.inflate(tReader.extract(tReader.tell(), tReader.getLength())));
-        tFileSize -= 8; // offset for beginning of file which doesn't exist in this new buffer.
-      }
-
-      var tBounds = RECT.load(tReader);
-      var tFrameRate = tReader.getUint16() / 256;
-      var tFrameCount = tReader.getUint16();
-
-      var tSWF = this.swf = new SWF(tVersion, tReader.encoding, tBounds, tFrameRate, tFrameCount);
-
-      this.currentSprite = tSWF.rootSprite;
-      this.currentSprite.id = 0;
-      this.currentSprite.frameCount = tFrameCount;
-
-      var self = this;
-
-      function parseTag() {
-        var tLocalReader = tReader;
-
-        for (;;) {
-          var tTypeAndLength = tLocalReader.getUint16();
-          var tType = (tTypeAndLength >>> 6) + '';
-          var tLength = tTypeAndLength & 0x3F;
-
-          if (tLength === 0x3F) {
-            tLength = tLocalReader.getUint32();
-          }
-
-          var tExpectedFinalIndex = tLocalReader.tell() + tLength;
-
-          if (!(tType in self)) {
-            console.warn('Unknown tag: ' + tType);
-            tLocalReader.seek(tLength);
-          } else {
-            self[tType + ''](tLength);
-          }
-
-          // Forgive the hack for DefineSprite (39). It's length is for all the tags inside of it.
-          if (tType !== '39' && tLocalReader.tell() !== tExpectedFinalIndex) {
-            console.error('Expected final index incorrect for tag ' + tType);
-            tLocalReader.seekTo(tExpectedFinalIndex);
-          }
-
-          if (tLocalReader.tell() >= tFileSize) {
-            var tDelay = tSWF.mediaLoader.checkComplete();
-            tDelay.on('complete', function () {
-              pSuccessCallback && pSuccessCallback(tSWF);
-            });
-
-            tDelay.on('fail', function(pEvent) {
-              pFailureCallback && pFailureCallback(pEvent);
-            });
-
-            return;
-          }
-
-          if (Date.now() - tTimer >= 4500) {
-            tTimer = Date.now();
-            setTimeout(parseTag, 10);
-            return;
-          }
-        }
-      }
-
-      parseTag();
-
-      return true;
-    }
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['39'] = defineSprite;
-  global.quickswf.structs.Sprite = Sprite;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.Sprite}
-   */
-  function Sprite() {
-    this.id = -1;
-    this.frameCount = 0;
-    this.frames = new Array(0);
-    this.frameLabels = new Object();
-  }
-
-  Sprite.prototype.displayListType = 'DefineSprite';
-
-  /**
-   * Loads a Sprite.
-   * @param {quickswf.Reader} pReader The reader to read from.
-   * @return {quickswf.structs.Sprite} The parsed Sprite.
-   */
-  Sprite.load = function(pReader) {
-    var tSprite = new Sprite();
-    tSprite.id = pReader.getUint16();
-    tSprite.frameCount = pReader.getUint16();
-
-    return tSprite;
-  };
-
-  function defineSprite(pLength) {
-    var tSprite = Sprite.load(this.r);
-    this.spriteStack.push(this.currentSprite);
-    this.currentSprite = tSprite;
-    this.frameStack.push(this.currentFrame);
-    this.currentFrame = 0;
-
-    this.register(tSprite.id, tSprite);
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-  
-  global.quickswf.Parser.prototype['1'] = showFrame;
-
-  function showFrame(pLength) {
-    var tCurrentFrame = this.currentFrame;
-
-    if (this.currentSprite.frames[tCurrentFrame] === void 0) {
-      this.currentSprite.frames[tCurrentFrame] = [];
-    }
-
-    this.currentFrame = tCurrentFrame + 1;
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['5'] = parseRemoveObject;
-  global.quickswf.Parser.prototype['28'] = parseRemoveObject2;
-
-  function parseRemoveObject(pLength) {
-    this.r.getUint16();
-    parseRemoveObject2.call(this, pLength);
-  }
-
-  function parseRemoveObject2(pLength) {
-    var tDepth = this.r.getUint16();
-    this.add({
-      type: 'remove',
-      depth: tDepth
-    });
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['9'] = setBackgroundColor;
-
-  var RGBA = global.quickswf.structs.RGBA;
-
-  function setBackgroundColor(pLength) {
-    // TODO: support wmmode transparent.
-    var tRGBA = RGBA.load(this.r, false);
-    this.add({type: 'background', color: tRGBA});
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['43'] = frameLabel;
-
-  function frameLabel(pLength) {
-    var tLabel = this.r.getString();
-    if (!(tLabel in this.currentSprite.frameLabels)) {
-      this.currentSprite.frameLabels[tLabel] = this.currentFrame;
-    }
-  }
-
-}(this));
-
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-  
-  global.quickswf.Parser.prototype['0'] = end;
-
-  function end(pLength) {
-    this.currentSprite = this.spriteStack.pop();
-    this.currentFrame = this.frameStack.pop();
-  }
-
-}(this));
-
-/**
- * @author Yoshihiro Yamazaki
- *
- * Copyright (C) 2012 QuickSWF project
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['37'] = defineEditText;
-
-  var RECT = global.quickswf.structs.RECT;
-  var RGBA = global.quickswf.structs.RGBA;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.EditText}
-   */
-  function EditText() {
-    this.id = -1;
-    this.bounds = null;
-    this.wordwrap = false;
-    this.multiline = false;
-    this.password = false;
-    this.readonly = false;
-    this.autosize = false;
-    this.noselect = false;
-    this.border = false;
-    this.wasstatic = false;
-    this.html = false;
-    this.useoutline = false;
-    this.font = 0;
-    this.fontclass = null;
-    this.fontheight = 0;
-    this.textcolor = null;
-    this.maxlength = 0;
-    this.align = 0;
-    this.leftmargin = 0;
-    this.rightmargin = 0;
-    this.indent = 0;
-    this.leading = 0;
-    this.variablename = null;
-    this.initialtext = null;
-  }
-
-  EditText.prototype.displayListType = 'DefineEditText';
-
-  /**
-   * Loads a EditText type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @return {quickswf.structs.EditText} The loaded EditText.
-   */
-  EditText.load = function(pReader) {
-    var tEditText = new EditText();
-    return tEditText;
-  };
-
-  function defineEditText(pLength) {
-    parseEditText(this);
-  }
-
-  function parseEditText(pParser) {
-    var tReader = pParser.r;
-    var tId = tReader.getUint16();
-    var tBounds = RECT.load(tReader);
-    var tFlags1 = tReader.getUint8();
-    var tFlags2 = tReader.getUint8();
-    var tHasText      = (tFlags1 & 0x80) ? true : false;
-    var tWordWrap     = (tFlags1 & 0x40) ? true : false;
-    var tMultiline    = (tFlags1 & 0x20) ? true : false;
-    var tPassword     = (tFlags1 & 0x10) ? true : false;
-    var tReadOnly     = (tFlags1 & 0x08) ? true : false;
-    var tHasTextColor = (tFlags1 & 0x04) ? true : false;
-    var tHasMaxLength = (tFlags1 & 0x02) ? true : false;
-    var tHasFont      = (tFlags1 & 0x01) ? true : false;
-    var tHasFontClass = (tFlags2 & 0x80) ? true : false;
-    var tAutoSize     = (tFlags2 & 0x40) ? true : false;
-    var tHasLayout    = (tFlags2 & 0x20) ? true : false;
-    var tNoSelect     = (tFlags2 & 0x10) ? true : false;
-    var tBorder       = (tFlags2 & 0x08) ? true : false;
-    var tWasStatic    = (tFlags2 & 0x04) ? true : false;
-    var tHTML         = (tFlags2 & 0x02) ? true : false;
-    var tUseOutline   = (tFlags2 & 0x01) ? true : false;
-    var tFontId = -1;
-    var tFont = null;
-
-    if (tHasFont) {
-      tFontId = tReader.getUint16();
-      tFont = pParser.swf.fonts[tFontId + ''];
-    }
-
-    var tFontClass = null;
-
-    if (tHasFontClass) {
-      tFontClass = tReader.getString();
-    }
-
-    var tFontHeight = 0;
-
-    if (tHasFont) {
-      tFontHeight = tReader.getUint16();
-    }
-
-    var tTextColor = null;
-
-    if (tHasTextColor) {
-      tTextColor = RGBA.load(tReader, true);
-    }
-
-    var tMaxLength = 0;
-
-    if (tHasMaxLength) {
-      tMaxLength = tReader.getUint16();
-    }
-
-    var tAlign = 0;
-    var tLeftMargin = 0;
-    var tRightMargin = 0;
-    var tIndent = 0;
-    var tLeading = 0;
-
-    if (tHasLayout) {
-      tAlign = tReader.getUint8();
-      tLeftMargin = tReader.getUint16();
-      tRightMargin = tReader.getUint16();
-      tIndent = tReader.getUint16();
-      tLeading = tReader.getUint16();
-    }
-
-    var tVariableName = tReader.getString();
-    var tInitialText = null;
-
-    if (tHasText) {
-      tInitialText = tReader.getString();
-    }
-
-    var tEditText = EditText.load(tReader);
-
-    tEditText.id = tId;
-    tEditText.bounds = tBounds;
-    tEditText.wordwrap = tWordWrap;
-    tEditText.multiline = tMultiline;
-    tEditText.password = tPassword;
-    tEditText.readonly = tReadOnly;
-    tEditText.autosize = tAutoSize;
-    tEditText.noselect = tNoSelect;
-    tEditText.border = tBorder;
-    tEditText.wasstatic = tWasStatic;
-    tEditText.html = tHTML;
-    tEditText.useoutline = tUseOutline;
-    tEditText.font = tFontId;
-    tEditText.fontclass = tFontClass;
-    tEditText.fontheight = tFontHeight;
-    tEditText.textcolor = tTextColor;
-    tEditText.maxlength = tMaxLength;
-    tEditText.align = tAlign;
-    tEditText.leftmargin = tLeftMargin;
-    tEditText.rightmargin = tRightMargin;
-    tEditText.indent = tIndent;
-    tEditText.leading = tLeading;
-    tEditText.variablename = tVariableName;
-    tEditText.initialtext = tInitialText;
-
-    pParser.register(tId, tEditText);
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.structs.MATRIX = MATRIX;
-
-  /**
-   * @constructor
-   * @extends {Array}
-   * @class {quickswf.structs.MATRIX}
-   */
-  function MATRIX() {
-
-  }
-
-  MATRIX.prototype = [1, 0, 0, 1, 0, 0];
-
-  /**
-   * Loads a MATRIX type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @return {quickswf.structs.MATRIX} The loaded MATRIX.
-   */
-  MATRIX.load = function(pReader) {
-    var tMatrix = new MATRIX();
-    var tNumberOfBits;
-
-    // Check to see if we have scale.
-    if (pReader.getUBits(1) === 1) {
-      tNumberOfBits = pReader.getUBits(5);
-      tMatrix[0] = pReader.getFixedPoint16(tNumberOfBits);
-      tMatrix[3] = pReader.getFixedPoint16(tNumberOfBits);
-    }
-
-    // Check to see if we have skew.
-    if (pReader.getUBits(1) === 1) {
-      tNumberOfBits = pReader.getUBits(5);
-      tMatrix[1] = pReader.getFixedPoint16(tNumberOfBits);
-      tMatrix[2] = pReader.getFixedPoint16(tNumberOfBits);
-    }
-
-    // Grab the translation.
-    tNumberOfBits = pReader.getUBits(5);
-    tMatrix[4] = pReader.getBits(tNumberOfBits);
-    tMatrix[5] = pReader.getBits(tNumberOfBits);
-
-    pReader.align();
-
-    return tMatrix;
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  var mStructs = global.quickswf.structs;
-  mStructs.FILLSTYLE = FILLSTYLE;
-  var RGBA = mStructs.RGBA;
-  var MATRIX = mStructs.MATRIX;
-  var GRADIENT = mStructs.GRADIENT;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.FILLSTYLE}
-   */
-  function FILLSTYLE(pIsMorph) {
-    if (pIsMorph) {
-      this.type = 0;
-      this.startColor = null;
-      this.endColor = null;
-      this.startMatrix = null;
-      this.endMatrix = null;
-      this.gradient = null;
-      this.bitmapId = null;
-    } else {
-      this.type = 0;
-      this.color = null;
-      this.matrix = null;
-      this.gradient = null;
-      this.bitmapId = null;
-    }
-  }
-
-  /**
-   * Loads a FILLSTYLE type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {bool} pWithAlpha True if alpha needs to be parsed.
-   * @param {bool} pIsMorph True if morph shape.
-   * @return {quickswf.structs.FILLSTYLE} The loaded FILLSTYLE.
-   */
-  FILLSTYLE.load = function(pReader, pWithAlpha, pIsMorph) {
-    var tFillStyle = new FILLSTYLE(pIsMorph);
-    var tType = tFillStyle.type = pReader.getUint8();
-
-    switch (tType) {
-      case 0x00: // Solid fill
-        if (pIsMorph) {
-          tFillStyle.startColor = RGBA.load(pReader, pWithAlpha);
-          tFillStyle.endColor = RGBA.load(pReader, pWithAlpha);
-        } else {
-          tFillStyle.color = RGBA.load(pReader, pWithAlpha);
-        }
-        break;
-      case 0x10: // Linear gradient fill
-      case 0x12: // Radial gradient fill
-      case 0x13: // Focal radial gradient fill
-        if (pIsMorph) {
-          tFillStyle.startMatrix = MATRIX.load(pReader);
-          tFillStyle.endMatrix = MATRIX.load(pReader);
-        } else {
-          tFillStyle.matrix = MATRIX.load(pReader);
-        }
-
-        tFillStyle.gradient = GRADIENT.load(pReader, pWithAlpha, pIsMorph);
-
-        if (tType === 0x13) {
-          tFillStyle.gradient.focalPoint = pReader.getFixedPoint8(16);
-        }
-
-        break;
-      case 0x40: // Repeating bitmap fill
-      case 0x41: // Clipped bitmap fill
-      case 0x42: // Non-smoothed repeating bitmap
-      case 0x43: // Non-smoothed clipped bitmap
-        tFillStyle.bitmapId = pReader.getUint16();
-
-        if (pIsMorph) {
-          tFillStyle.startMatrix = MATRIX.load(pReader);
-          tFillStyle.endMatrix = MATRIX.load(pReader);
-        } else {
-          tFillStyle.matrix = MATRIX.load(pReader);
-        }
-        if (tFillStyle.bitmapId === 0xFFFF) {
-          tFillStyle.color = new RGBA(255, 0, 0, 1);
-          tFillStyle.type = 0;
-
-          if (pIsMorph) {
-            tFillStyle.startMatrix = null;
-            tFillStyle.endMatrix = null;
-          } else {
-            tFillStyle.matrix = null;
-          }
-
-          tFillStyle.bitmapId = null;
-
-          break;
-        }
-
-        if (tType === 0x42 || tType === 0x43) {
-          console.warn('Non-smoothed bitmaps are not supported');
-        }
-
-        break;
-      default:
-        console.error('Unknown fill style type: ' + tType);
-        return;
-    }
-
-    return tFillStyle;
-  };
-
-  /**
-   * Loads an array of FILLSTYLE types.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {bool} pWithAlpha True if alpha needs to be parsed.
-   * @param {bool} pHasLargeFillCount True if this struct can have more than 256 styles.
-   * @param {bool} pIsMorph True if morph shape.
-   * @return {Array.<quickswf.structs.FILLSTYLE>} The loaded FILLSTYLE array.
-   */
-  FILLSTYLE.loadMultiple = function(pReader, pWithAlpha, pHasLargeFillCount, pIsMorph) {
-    var tCount = pReader.getUint8();
-
-    if (pHasLargeFillCount && tCount === 0xFF) {
-      tCount = pReader.getUint16();
-    }
-
-    var tArray = new Array(tCount);
-
-    for (var i = 0; i < tCount; i++) {
-      tArray[i] = FILLSTYLE.load(pReader, pWithAlpha, pIsMorph);
-    }
-
-    return tArray;
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  var mStructs = global.quickswf.structs;
-  mStructs.SHAPERECORD = SHAPERECORD;
-  mStructs.EDGERECORD = EDGERECORD;
-  mStructs.STYLECHANGERECORD = STYLECHANGERECORD;
-  var FILLSTYLE = mStructs.FILLSTYLE;
-  var LINESTYLE = mStructs.LINESTYLE;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.SHAPERECORD}
-   */
-  function SHAPERECORD() {
-
-  }
-
-  /**
-   * Loads a SHAPERECORD type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @return {quickswf.structs.SHAPERECORD} The loaded SHAPERECORD.
-   */
-  SHAPERECORD.load = function(pReader) {
-    var tShapeRecord = new SHAPERECORD();
-
-    return tShapeRecord;
-  };
-
-  /**
-   * Loads multple SHAPERECORDs.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {quickswf.Shape} pShape The Shape these SHAPERECORDs belong to.
-   * @param {bool} pWithAlpha True if parsing alpha is needed.
-   * @param {bool} pIsMorph True if morph shape.
-   * @return {Array.<quickswf.structs.SHAPERECORD>} The loaded SHAPERECORDs.
-   */
-  SHAPERECORD.loadMultiple = function(pReader, pShape, pWithAlpha, pIsMorph) {
-    var tRecords = new Array();
-    var i = 0;
-    var tStyleChanged;
-
-    for (;;) {
-      if (pReader.getUBits(1) === 0) { // Is edge flag
-        if (pReader.peekBits(5) === 0) { // End of records.
-          pReader.getUBits(5);
-
-          break;
-        } else {
-          tStyleChanged = tRecords[i++] = parseStyleChanged(pReader, pShape.numberOfFillBits, pShape.numberOfLineBits, pWithAlpha, pIsMorph);
-          pShape.numberOfFillBits = tStyleChanged.fillBits;
-          pShape.numberOfLineBits = tStyleChanged.lineBits;
-        }
-      } else {
-        if (pReader.getUBits(1) === 1) { // Is straight record
-          tRecords[i++] = parseStraightEdge(pReader);
-        } else {
-          tRecords[i++] = parseCurvedEdge(pReader);
-        }
-      }
-    }
-
-    pReader.align();
-
-    return tRecords;
-  };
-
-  function EDGERECORD(pType, pDeltaX, pDeltaY, pDeltaControlX, pDeltaControlY) {
-    this.type = pType;
-    this.deltaX = pDeltaX;
-    this.deltaY = pDeltaY;
-    this.deltaControlX = pDeltaControlX;
-    this.deltaControlY = pDeltaControlY;
-  }
-
-  function STYLECHANGERECORD(pNumberOfFillBits, pNumberOfLineBits) {
-    this.type = 1;
-    this.hasMove = false;
-    this.moveDeltaX = 0;
-    this.moveDeltaY = 0;
-    this.fillStyle0 = -1;
-    this.fillStyle1 = -1;
-    this.lineStyle = -1;
-    this.fillBits = pNumberOfFillBits;
-    this.lineBits = pNumberOfLineBits;
-    this.fillStyles = null;
-    this.lineStyles = null;
-  }
-
-  function parseStraightEdge(pReader) {
-    var tNumberOfBits = pReader.getUBits(4) + 2;
-    var tGeneralLineFlag = pReader.getUBits(1);
-    var tVerticalLineFlag = 0;
-
-    if (tGeneralLineFlag === 0) {
-      tVerticalLineFlag = pReader.getUBits(1);
-    }
-
-    var tDeltaX = 0;
-    var tDeltaY = 0;
-
-    if (tGeneralLineFlag === 1 || tVerticalLineFlag === 0) {
-      tDeltaX = pReader.getBits(tNumberOfBits);
-    }
-
-    if (tGeneralLineFlag === 1 || tVerticalLineFlag === 1) {
-      tDeltaY = pReader.getBits(tNumberOfBits);
-    }
-
-    return new EDGERECORD(3, tDeltaX, tDeltaY, 0, 0);
-  }
-
-  function parseCurvedEdge(pReader) {
-    var tNumberOfBits = pReader.getUBits(4) + 2;
-    var tDeltaControlX = pReader.getBits(tNumberOfBits);
-    var tDeltaControlY = pReader.getBits(tNumberOfBits);
-    var tDeltaX = pReader.getBits(tNumberOfBits);
-    var tDeltaY = pReader.getBits(tNumberOfBits);
-
-    return new EDGERECORD(2, tDeltaX, tDeltaY, tDeltaControlX, tDeltaControlY);
-  }
-
-  function parseStyleChanged(pReader, pNumberOfFillBits, pNumberOfLineBits, pWithAlpha, pIsMorph) {
-    var tNewStyles = pReader.getUBits(1);
-    var tNewLineStyle = pReader.getUBits(1);
-    var tNewFillStyle1 = pReader.getUBits(1);
-    var tNewFillStyle0 = pReader.getUBits(1);
-    var tNewMoveTo = pReader.getUBits(1);
-
-    var tResult = new STYLECHANGERECORD(pNumberOfFillBits, pNumberOfLineBits);
-
-    if (tNewMoveTo === 1) {
-      var tMoveBits = pReader.getUBits(5);
-      tResult.hasMove = true;
-      tResult.moveDeltaX = pReader.getBits(tMoveBits);
-      tResult.moveDeltaY = pReader.getBits(tMoveBits);
-    }
-
-    if (tNewFillStyle0 === 1) {
-      tResult.fillStyle0 = pReader.getUBits(pNumberOfFillBits);
-    }
-
-    if (tNewFillStyle1 === 1) {
-      tResult.fillStyle1 = pReader.getUBits(pNumberOfFillBits);
-    }
-
-    if (tNewLineStyle === 1) {
-      tResult.lineStyle = pReader.getUBits(pNumberOfLineBits);
-    }
-
-    if (tNewStyles === 1) {
-      pReader.align();
-      tResult.fillStyles = FILLSTYLE.loadMultiple(pReader, pWithAlpha, true, pIsMorph);
-      tResult.lineStyles = LINESTYLE.loadMultiple(pReader, pWithAlpha, true, pIsMorph);
-      pReader.align();
-      tResult.fillBits = pReader.getUBits(4);
-      tResult.lineBits = pReader.getUBits(4);
-    }
-
-    return tResult;
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['2'] = defineShape;
-  global.quickswf.Parser.prototype['22'] = defineShape2;
-  global.quickswf.Parser.prototype['32'] = defineShape3;
-
-  var mStructs = global.quickswf.structs;
-  mStructs.Shape = Shape;
-
-  var RECT = mStructs.RECT;
-  var FILLSTYLE = mStructs.FILLSTYLE;
-  var LINESTYLE = mStructs.LINESTYLE;
-  var SHAPERECORD = mStructs.SHAPERECORD;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.Shape}
-   */
-  function Shape() {
-    this.id = -1;
-    this.bounds = null;
-    this.fillStyles = new Array();
-    this.lineStyles = new Array();
-    this.numberOfFillBits = 0;
-    this.numberOfLineBits = 0;
-    this.records = new Array();
-  }
-
-  Shape.prototype.displayListType = 'DefineShape';
-
-  /**
-   * Loads a Shape type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {bool} pWithStyles True if styles need to parsed.
-   * @param {bool} pWithAlpha True if alpha needs to be parsed.
-   * @param {bool} pHasLargeFillCount True if this struct can have more than 256 styles.
-   * @return {quickswf.structs.Shape} The loaded Shape.
-   */
-  Shape.load = function(pReader, pWithStyles, pWithAlpha, pHasLargeFillCount) {
-    var tShape = new Shape();
-
-    if (pWithStyles) {
-      tShape.fillStyles = FILLSTYLE.loadMultiple(pReader, pWithAlpha, pHasLargeFillCount, false);
-      tShape.lineStyles = LINESTYLE.loadMultiple(pReader, pWithAlpha, pHasLargeFillCount, false);
-    } else {
-      tShape.fillStyles = [new FILLSTYLE(false)];
-      tShape.lineStyles = [new LINESTYLE(false)];
-    }
-
-    tShape.numberOfFillBits = pReader.getUBits(4);
-    tShape.numberOfLineBits = pReader.getUBits(4);
-    tShape.records = SHAPERECORD.loadMultiple(pReader, tShape, pWithAlpha);
-
-    return tShape;
-  };
-
-  function defineShape(pLength) {
-    parseShape(this, false, false);
-  }
-
-  function defineShape2(pLength) {
-    parseShape(this, false, true);
-  }
-
-  function defineShape3(pLength) {
-    parseShape(this, true, true);
-  }
-
-
-  function parseShape(pParser, pWithAlpha, pHasLargeFillCount) {
-    var tReader = pParser.r;
-    var tId = tReader.getUint16();
-    var tBounds = RECT.load(tReader);
-    var tShape = Shape.load(tReader, true, pWithAlpha, pHasLargeFillCount);
-
-    tShape.id = tId;
-    tShape.bounds = tBounds;
-
-    pParser.register(tShape.id, tShape);
-  }
-
-
-}(this));
-
-/**
- * @author Yoshihiro Yamazaki
- *
- * Copyright (C) 2012 QuickSWF project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['46'] = defineMorphShape;
-
-  var mStructs = global.quickswf.structs;
-  var RECT = mStructs.RECT;
-  var FILLSTYLE = mStructs.FILLSTYLE;
-  var LINESTYLE = mStructs.LINESTYLE;
-  var SHAPERECORD = mStructs.SHAPERECORD;
-  var STYLECHANGERECORD = mStructs.STYLECHANGERECORD;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.MorphShape}
-   */
-  function MorphShape() {
-    this.id = -1;
-    this.startBounds = null;
-    this.endBounds = null;
-    this.fillStyles = new Array();
-    this.lineStyles = new Array();
-    this.numberOfFillBits = 0;
-    this.numberOfLineBits = 0;
-    this.startEdges = new Array();
-    this.endEdges = new Array();
-  }
-
-  MorphShape.prototype.displayListType = 'DefineMorphShape';
-
-  /**
-   * Loads a MorphShape type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {number} pOffsetOfEndEdges Offset of EndEdges
-   * @param {bool} pWithStyles True if styles need to parsed.
-   * @return {quickswf.structs.MorphShape} The loaded MorphShape.
-   */
-  MorphShape.load = function(pReader, pOffsetOfEndEdges, pWithStyles) {
-    var tMorphShape = new MorphShape();
-
-    if (pWithStyles) {
-      tMorphShape.fillStyles = FILLSTYLE.loadMultiple(pReader, true, true, true);
-      tMorphShape.lineStyles = LINESTYLE.loadMultiple(pReader, true, true, true);
-    }
-
-    pReader.align();
-
-    tMorphShape.numberOfFillBits = pReader.getUBits(4);
-    tMorphShape.numberOfLineBits = pReader.getUBits(4);
-
-    var tStartEdges = tMorphShape.startEdges = SHAPERECORD.loadMultiple(pReader, tMorphShape, true, true);
-
-    pReader.seekTo(pOffsetOfEndEdges);
-
-    tMorphShape.numberOfFillBits = pReader.getUBits(4);
-    tMorphShape.numberOfLineBits = pReader.getUBits(4);
-
-    var tEndEdges = tMorphShape.endEdges = SHAPERECORD.loadMultiple(pReader, tMorphShape, true, true);
-
-    return tMorphShape;
-  };
-
-  function defineMorphShape(pLength) {
-    parseMorphShape(this);
-  }
-
-
-  function parseMorphShape(pParser) {
-    var tReader = pParser.r;
-    var tId = tReader.getUint16();
-    var tStartBounds = RECT.load(tReader);
-    var tEndBounds = RECT.load(tReader);
-    var tOffset = tReader.getUint32();
-    var tOffsetOfOffset = tReader.tell();
-
-    var tMorphShape = MorphShape.load(tReader, tOffsetOfOffset + tOffset, true, true);
-    tMorphShape.id = tId;
-    tMorphShape.startBounds = tStartBounds;
-    tMorphShape.endBounds = tEndBounds;
-
-    pParser.register(tId, tMorphShape);
-  }
-
-}(this));
-
-/**
- * @author Yoshihiro Yamazaki
- *
- * Copyright (C) 2012 QuickSWF project
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['11'] = defineText;
-  global.quickswf.Parser.prototype['33'] = defineText2;
-
-  var RECT = global.quickswf.structs.RECT;
-  var MATRIX = global.quickswf.structs.MATRIX;
-  var RGBA = global.quickswf.structs.RGBA;
-  var TEXTRECORD = global.quickswf.structs.TEXTRECORD;
-
-  /**
-   * @constructor
-   * @extends {Array}
-   * @class {quickswf.structs.Text}
-   */
-  function Text() {
-    this.fontID = -1;
-    this.textColor = new RGBA(255, 255, 255, 1);
-    this.xOffset = 0;
-    this.yOffset = 0;
-    this.textHeight = 240;
-    this.xAdvance = 0;
-    this.textrecords = null;
-  }
-
-  Text.prototype.displayListType = 'DefineText';
-
-  /**
-   * Loads a Text type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {bool} pWithAlpha True if parsing alpha is needed.
-   * @return {quickswf.structs.Text} The loaded Text.
-   */
-  Text.load = function(pReader, pWithAlpha) {
-    var tGlyphBits = pReader.getUint8();
-    var tAdvanceBits = pReader.getUint8();
-    var tText = new Text();
-    var tTextRecord_1stB;
-    var tTextRecords = new Array(0);
-
-    while ((tTextRecord_1stB = pReader.getUint8()) !== 0) {
-        var tTextRecord = TEXTRECORD.load(pReader, tTextRecord_1stB, pWithAlpha, tGlyphBits, tAdvanceBits, tText);
-        tTextRecords.push(tTextRecord);
-    }
-
-    tText.textrecords = tTextRecords;
-
-    return tText;
-  };
-
-  function defineText(pLength) {
-    parseText(this, false);
-  }
-
-  function defineText2(pLength) {
-    parseText(this, true);
-  }
-
-  function parseText(pParser, withAlpha) {
-    var tReader = pParser.r;
-    var tId = tReader.getUint16();
-    var tBounds = RECT.load(tReader);
-    var tMatrix = MATRIX.load(tReader);
-    var tText = Text.load(tReader, withAlpha);
-    tText.id = tId;
-    tText.bounds = tBounds;
-    tText.matrix = tMatrix;
-
-    pParser.register(tId, tText);
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.structs.CXFORM = CXFORM;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.CXFORM}
-   */
-  function CXFORM() {
-    this.rm = 256;
-    this.gm = 256;
-    this.bm = 256;
-    this.am = 256;
-
-    this.ra = 0;
-    this.ga = 0;
-    this.ba = 0;
-    this.aa = 0;
-  }
-
-  CXFORM.prototype.clone = function() {
-    var tColorTransform = new CXFORM();
-
-    tColorTransform.rm = this.rm;
-    tColorTransform.gm = this.gm;
-    tColorTransform.bm = this.bm;
-    tColorTransform.am = this.am;
-
-    tColorTransform.ra = this.ra;
-    tColorTransform.ga = this.ga;
-    tColorTransform.ba = this.ba;
-    tColorTransform.aa = this.aa;
-
-    return tColorTransform;
-  }
-
-  CXFORM.prototype.equals = function(pThat) {
-    if (pThat
-      && this.rm === pThat.rm
-      && this.gm === pThat.gm
-      && this.bm === pThat.bm
-      && this.am === pThat.am
-      && this.ra === pThat.ra
-      && this.ga === pThat.ga
-      && this.ba === pThat.ba
-      && this.aa === pThat.aa) {
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Loads a CXFORM type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {bool} pWithAlpha If this struct has alpha to load.
-   * @return {quickswf.structs.CXFORM} The loaded CXFORM.
-   */
-  CXFORM.load = function(pReader, pWithAlpha) {
-    var tHasAdditive = pReader.getUBits(1);
-    var tHasMultiplitive = pReader.getUBits(1);
-    var tNumberOfBits = pReader.getUBits(4);
-
-    var tTransform = new CXFORM();
-
-    if (tHasMultiplitive === 1) {
-      tTransform.rm = pReader.getBits(tNumberOfBits);
-      tTransform.gm = pReader.getBits(tNumberOfBits);
-      tTransform.bm = pReader.getBits(tNumberOfBits);
-      if (pWithAlpha === true) {
-        tTransform.am = pReader.getBits(tNumberOfBits);
-      }
-    }
-
-    if (tHasAdditive === 1) {
-      tTransform.ra = pReader.getBits(tNumberOfBits);
-      tTransform.ga = pReader.getBits(tNumberOfBits);
-      tTransform.ba = pReader.getBits(tNumberOfBits);
-      if (pWithAlpha === true) {
-        tTransform.aa = pReader.getBits(tNumberOfBits);
-      }
-    }
-
-    pReader.align();
-
-    return tTransform;
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['4'] = placeObject;
-  global.quickswf.Parser.prototype['26'] = placeObject2;
-
-  var MATRIX = global.quickswf.structs.MATRIX;
-  var CXFORM = global.quickswf.structs.CXFORM;
-  var CLIPACTIONS = global.quickswf.structs.CLIPACTIONS;
-
-  function placeObject(pLength) {
-    var tReader = this.r;
-    var tId = tReader.getUint16();
-    var tDepth = tReader.getUint16();
-    var tMatrix = MATRIX.load(tReader);
-
-    var tPackage = {
-      type: 'add',
-      id: tId,
-      matrix: tMatrix,
-      depth: tDepth,
-      name: null
-    };
-
-    this.add(tPackage);
-  }
-
-  function placeObject2(pLength) {
-    var tReader = this.r;
-    var tStartIndex = tReader.tell();
-
-    var tFlags = tReader.getUint8();
-    var tDepth = tReader.getUint16();
-
-    var tPackage = {
-      type: '',
-      id: -1,
-      matrix: null,
-      depth: tDepth,
-      name: null
-    };
-
-    var tColorTransform = null;
-    var tClipDepth = 0;
-    var tRatio = -1;
-
-    var tId;
-    if (tFlags & (1 << 1)) { // hasCharacter
-      tId = tPackage.id = tReader.getUint16();
-    }
-
-    if (tFlags & (1 << 2)) { // hasMatrix
-      tPackage.matrix = MATRIX.load(tReader);
-    }
-
-    if (tFlags & (1 << 3)) { // hasColorTransform
-      tColorTransform = CXFORM.load(tReader, true);
-    }
-
-    if (tFlags & (1 << 4)) { // hasRatio
-      tRatio = tReader.getUint16();
-    }
-
-    if (tFlags & (1 << 5)) { // hasName
-      tPackage.name = tReader.getString();
-    }
-
-    if (tFlags & (1 << 6)) {
-      tClipDepth = tReader.getUint16();
-    }
-
-    var tClipActions = null;
-    if (tFlags & (1 << 7)) {
-      tClipActions = CLIPACTIONS.load(tReader, this.swf.version);
-      this.add({
-        type: 'clipActions',
-        clipActions: tClipActions
-      });
-    }
-
-    var tMove = tFlags & 1;
-
-    if (tMove && tId !== void 0) {
-      tPackage.type = 'replace';
-      this.add(tPackage);
-    } else if (!tMove && tId !== void 0) {
-      tPackage.type = 'add';
-      this.add(tPackage);
-    } else if (tMove && tId === void 0 && tPackage.matrix) {
-      tPackage.type = 'move';
-      this.add(tPackage);
-    }
-
-    if (tClipDepth > 0) {
-      this.add({
-        type: 'clip',
-        depth: tDepth,
-        clipDepth: tClipDepth,
-        clipActions: tClipActions
-      });
-    }
-
-    if (tColorTransform !== null) {
-      this.add({
-         type: 'colorTransform',
-         depth: tDepth,
-         colorTransform: tColorTransform
-       });
-    }
-
-    if (tRatio !== -1) {
-      this.add({
-        type: 'ratio',
-        depth: tDepth,
-        ratio: tRatio
-      });
-    }
-
-    if (tReader.tell() < tStartIndex + pLength) {
-      /*
-      tClipActions = CLIPACTIONS.load(tReader, this.swf.version);
-      this.add({
-        type: 'clipActions',
-        clipActions: tClipActions
-      });
-      // It's not following the spec....
-      */
-    }
-  }
-
-}(this));
-
-/**
- * @author Kuu Miyazaki
- *
- * Copyright (C) 2012 QuickSWF project
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['7'] = defineButton;
-  global.quickswf.Parser.prototype['34'] = defineButton2;
-
-  var MATRIX = global.quickswf.structs.MATRIX;
-  var CXFORM = global.quickswf.structs.CXFORM;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.Button}
-   */
-  function Button(pId, pRecordList, pCondActionList, pTrackAsMenu) {
-    this.id = pId;
-    this.records = pRecordList;
-    this.condActions = pCondActionList;
-    this.isMenu = pTrackAsMenu;
-  }
-
-  Button.prototype.displayListType = 'DefineButton';
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.BUTTONRECORD}
-   */
-  function BUTTONRECORD(pId, pDepth, pMatrix, pStates, pCx, pFl, pBm) {
-    this.id = pId;
-    this.depth = pDepth;
-    this.matrix = pMatrix;
-    this.colorTransform = pCx;
-    this.filterList = pFl;
-    this.blendMode = pBm;
-    this.state = {
-        hitTest : (pStates >> 3) & 0x1,
-        down    : (pStates >> 2) & 0x1,
-        over    : (pStates >> 1) & 0x1,
-        up      : (pStates >> 0) & 0x1
-      };
-  }
-
-
-  /**
-   * Loads a BUTTONRECORD type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @return {quickswf.structs.BUTTONRECORD} The loaded BUTTONRECORD.
-   */
-  BUTTONRECORD.load = function(pReader, pWithinDB2) {
-    var tFlags  = pReader.getUint8();
-    var tId     = pReader.getUint16();
-    var tDepth  = pReader.getUint16();
-    var tMatrix = MATRIX.load(pReader);
-    var tButtonStates = tFlags & 0xf;
-    var tColorTransform = null;
-    var tHasBlendMode  = (tFlags >> 5) & 0x1;
-    var tHasFilterList = (tFlags >> 4) & 0x1;
-    var i, tFilterNum, tFilterId, tBytesToSkip;
-
-    if (pWithinDB2) {
-      tColorTransform = CXFORM.load(pReader, true);
-      if (tHasFilterList) {
-        // Just skipping...
-        tBytesToSkip = [23, 9, 15, 27, NaN, NaN, 80, NaN];
-        tFilterNum = pReader.getUint8();
-        for (i = 0; i < tFilterNum; i++) {
-          tFilterId = pReader.getUint8();
-          pReader.seek(tBytesToSkip[tFilterId]);
-        }
-      }
-      if (tHasBlendMode) {
-        // Just skipping...
-        pReader.seek(1);
-      }
-    }
-    return new BUTTONRECORD(tId, tDepth, tMatrix, tButtonStates,
-                tColorTransform, null, null);
-  };
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.BUTTONCONDACTION}
-   */
-  function BUTTONCONDACTION(pCond, pAction) {
-    this.cond = pCond;
-    this.action = pAction;
-  }
-
-
-  /**
-   * Loads a BUTTONCONDACTION type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @return {quickswf.structs.BUTTONCONDACTION} The loaded BUTTONCONDACTION.
-   */
-  BUTTONCONDACTION.load = function(pReader, pBounds) {
-    var tSize = pReader.getUint16();
-    var tFlags = pReader.getUint16();
-    var tIndex = pReader.tell();
-    var tLength = tSize ? tSize - 4 : pBounds - tIndex;
-    var tButtonAction = pReader.getByteArray(tLength);
-
-    var tCond = {
-        idleToOverDown    : (tFlags >>  7) & 0x1,
-        outDownToIdle     : (tFlags >>  6) & 0x1,
-        outDownToOverDown : (tFlags >>  5) & 0x1,
-        overDownToOutDown : (tFlags >>  4) & 0x1,
-        overDownToOverUp  : (tFlags >>  3) & 0x1,
-        overUpToOverDown  : (tFlags >>  2) & 0x1,
-        overUpToIdle      : (tFlags >>  1) & 0x1,
-        idleToOverUp      : (tFlags >>  0) & 0x1,
-        keyPress          : (tFlags >>  9) & 0x7f,
-        overDownToIdle    : (tFlags >>  8) & 0x1
-      };
-
-    return new BUTTONCONDACTION(tCond, tButtonAction);
-  };
-
-  function defineButton(pLength) {
-    var tReader = this.r;
-    var tBounds = tReader.tell() + pLength;
-    var tId = tReader.getUint16();
-
-    // Parse button records. (n >= 1)
-    var tButtonRecords = new Array();
-    do {
-      tButtonRecords.push(BUTTONRECORD.load(tReader, false));
-    } while (tReader.peekBits(8));
-    tReader.getUint8(); // Last one byte
-
-    // ActionScript
-    var tStart = tReader.tell();
-    var tButtonAction = tReader.extract(tStart, tBounds)
-    tReader.seekTo(tBounds);
-
-    // Store the button records to the dictionary.
-    var tCondAction = new BUTTONCONDACTION(null, tButtonAction);
-    this.register(tId, new Button(tId, tButtonRecords, [tCondAction], false));
-  }
-
-  function defineButton2(pLength) {
-    var tReader = this.r;
-    var tBounds = tReader.tell() + pLength;
-    var tId = tReader.getUint16();
-    var tFlags  = tReader.getUint8();
-    var tTrackAsMenu = tFlags & 1;
-    var tActionOffset = tReader.getUint16();
-
-    if (tActionOffset > 3 || tActionOffset === 0) {
-      // Parse button records. (n >= 1)
-      var tButtonRecords = new Array();
-      while (tReader.peekBits(8)) {
-        tButtonRecords.push(BUTTONRECORD.load(tReader, true));
-      }
-    }
-    tReader.getUint8(); // Last one byte
-
-    // Condition + ActionScript
-    var tButtonActions = new Array();
-    if (tActionOffset > 0) {
-      var tLast, tCondAction;
-      do {
-        tLast = tReader.peekBits(16) === 0;
-        tCondAction = BUTTONCONDACTION.load(tReader, tBounds);
-        tButtonActions.push(tCondAction);
-      } while (!tLast);
-    }
-    // Store the button records to the dictionary.
-    this.register(tId, new Button(tId, tButtonRecords, tButtonActions, tTrackAsMenu));
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['12'] = doAction;
-
-  function doAction(pLength) {
-    this.add({
-      type: 'script',
-      script: this.r.getByteArray(pLength)
-    });
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
  * @preserve
  *
  * Copyright (C) 2012 AlphabetJS Project.
@@ -2705,8 +430,7 @@ var theatre = {
 
 (function(global) {
 
-  var theatre = global.theatre,
-      swfcrew = theatre.crews.swf;
+  var swfcrew = theatre.crews.swf;
   var mASHandlers = swfcrew.ASHandlers;
 
   swfcrew.Player = Player;
@@ -2763,7 +487,7 @@ var theatre = {
      * A reference to all media loaded in QuickSWF.
      * @type {quickswf.utils.MediaLoader}
      */
-    this.media = pLoader.media;
+    this.media = pLoader.assetManfiest;
 
     /**
      * The ActionScript Loader that is used to load ActionScript bytecode.
@@ -2883,6 +607,8 @@ var theatre = {
     tRenderManagerProp.on('render', createOnRender(this));
 
     tStage.props.add(tRenderManagerProp);
+
+    tStage.props.add(new theatre.crews.audio.AudioManagerProp());
 
     if ('cacheRetryCooldown' in tOptions) {
       tRenderManagerProp.cacheManager.cooldownMax = (tOptions.cacheRetryCooldown * tLoader.swf.frameRate) | 0;
@@ -3252,6 +978,15 @@ var theatre = {
   };
 
 }(this));
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 TheatreScript Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+theatre.crews.audio = {};
 
 /**
  * @author Jason Parrott
@@ -4561,212 +2296,6 @@ theatre.crews.bounds = {};
 }(this));
 
 /**
- * @author Kuu Miyazaki
- *
- * Copyright (C) 2012 TheatreScript Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var theatre = global.theatre;
-
-  theatre.crews.audio = theatre.crews.audio || {};
-
-  var mAudioContext;
-  if ('webkitAudioContext' in global) {
-    var tUserAgent = navigator.userAgent.toLowerCase();
-    if (/(?:iphone|ipad|ipod)/.test(tUserAgent)) {
-      document.addEventListener('touchstart', function() {
-        mAudioContext = new webkitAudioContext();
-        var tO = mAudioContext.createOscillator();
-        tO.connect(mAudioContext.destination);
-        tO.start(0);
-        tO.stop(0);
-      }, false);
-    } else {
-      mAudioContext = new webkitAudioContext();
-    }
-  }
-
-  /**
-   * @class
-   * @extends {theatre.MediaProp}
-   */
-  var AudioProp = (function(pSuper) {
-    function AudioProp(pId, pAudio) {
-      pSuper.call(this);
-      this.type = 'Audio';
-      this.audioId = pId;
-      if (mAudioContext) {
-        // Web Audio API
-        console.log('Use Web Audio API.');
-        createSourceNode(this, pAudio);
-      } else {
-        // HTML Audio Element
-        console.log('Use HTML Audio Element.');
-        this.audioElement = pAudio;
-      }
-    }
-
-    AudioProp.prototype = Object.create(pSuper.prototype);
-    AudioProp.prototype.constructor = AudioProp;
-
-    return AudioProp;
-  })(theatre.MediaProp);
-
-  function createSourceNode(pProp, pBuffer) {
-    var tSource = pProp.sourceNode = mAudioContext.createBufferSource();
-    tSource.buffer = pBuffer;
-    tSource.connect(mAudioContext.destination);
-
-    return tSource;
-  }
-
-  theatre.crews.audio.AudioProp = AudioProp;
-
-  AudioProp.prototype.onAdd = function(pActor) {
-    this.actor = pActor;
-    // init
-    this.playbackState = theatre.MediaProp.PLAYBACK_STATE_READY;
-  };
-
-  AudioProp.prototype.onRemove = function() {
-    this.actor = null;
-    // term
-    this.playbackState = theatre.MediaProp.PLAYBACK_STATE_NOT_READY;
-  };
-
-  /**
-   * Overload this in your subclass to play back media data.
-   */
-  AudioProp.prototype.play = function() {
-console.log('AudioProp#play');
-    if (mAudioContext) {
-      if (this.sourceNode.playbackState === this.sourceNode.UNSCHEDULED_STATE) {
-        this.sourceNode.noteOn(0);
-      } else if (this.sourceNode.playbackState === this.sourceNode.FINISHED_STATE) {
-        createSourceNode(this, this.sourceNode.buffer);
-      }
-    } else {
-      this.audioElement.play();
-    }
-    this.playbackState = theatre.MediaProp.PLAYBACK_STATE_PLAYING;
-  };
-
-  /**
-   * Overload this in your subclass to stop the playback.
-   */
-  AudioProp.prototype.stop = function() {
-console.log('AudioProp#stop');
-    if (mAudioContext) {
-      if (this.sourceNode.playbackState === this.sourceNode.PLAYING_STATE) {
-        this.sourceNode.noteOff(0);
-      }
-    } else {
-      this.audioElement.pause();
-    }
-    this.playbackState = theatre.MediaProp.PLAYBACK_STATE_READY;
-  };
-
-  /**
-   * Overload this in your subclass to pause the playback.
-   */
-  AudioProp.prototype.pause = function() {
-    // pause here.
-    this.playbackState = theatre.MediaProp.PLAYBACK_STATE_PAUSED;
-  };
-
-  /**
-   * Overload this in your subclass to jump to a specific point in the playback.
-   * @param {Number} pPoint Specific point in the playback.
-   */
-  AudioProp.prototype.seek = function(pPoint) {
-    // seek here.
-  };
-
-}(this));
-
-/**
- * @author Kuu Miyazaki
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  var theatre = global.theatre;
-  var AudioProp = theatre.crews.audio.AudioProp;
-  var mActions = theatre.crews.swf.actions;
-
-  theatre.crews.swf.actionsMap.startSound = mActions.PREPARE_STARTSOUND = 0x105;
-  theatre.crews.swf.actionsMap.soundStreamBlock = mActions.PREPARE_SOUNDSTREAMBLOCK = 0x106;
-
-  /**
-   * Sets up playing back event sounds.
-   * @param {theatre.Actor} pSpriteActor The Sprite Actor the sound belongs to.
-   * @param {Object} pData The data to use to know haw to play back the sound.
-   */
-  theatre.Scene.registerPreparedCallback(
-    mActions.PREPARE_STARTSOUND,
-    function startSound(pSpriteActor, pData) {
-      var tId = pData.soundId,
-          tInfo = pData.soundInfo,
-          tSound = pSpriteActor.player.media.get('audio', tId + ''),
-          tProps = pSpriteActor.stage.props.get('Audio'), tAudioProp;
-
-      console.log('StartSound: id=' + tId);
-      console.log(tSound);
-      console.log(tInfo);
-
-      // Check if the same id's AudioProp already exists.
-      for (var i = 0, il = tProps.length; i < il; i++) {
-        if (tProps[i].audioId === tId) {
-          tAudioProp = tProps[i];
-        }
-      }
-
-      if (tInfo.syncStop) {
-          // Stop sound
-          if (tAudioProp) {
-            tAudioProp.stop();
-          }
-      } else {
-          // Create AudioProp
-          if (!tAudioProp) {
-            tAudioProp = new AudioProp(tId, tSound);
-            pSpriteActor.stage.props.add(tAudioProp);
-          }
-          if (tAudioProp.playbackState !== 'playing') {
-            // Start sound
-            tAudioProp.play();
-          }
-      }
-    }
-  );
-
-  /**
-   * Sets up playing back audio streams.
-   * @param {theatre.Actor} pSpriteActor The Sprite Actor the sound belongs to.
-   * @param {Object} pParams An object containing a dictionary-actor map object.
-   * @param {Object} pData The audio data.
-   */
-  theatre.Scene.registerPreparedCallback(
-    mActions.PREPARE_SOUNDSTREAMBLOCK,
-    function soundStreamBlock(pSpriteActor, pData) {
-      var tMetadata = pSpriteActor.player.soundStreamHead,
-          tSound = pData.soundData;
-
-      console.log('SoundStreamBlock:');
-      console.log(tMetadata);
-      console.log(tSound);
-
-      // Feed stream data
-    }
-  );
-}(this));
-
-/**
  * @author Jason Parrott
  *
  * Copyright (C) 2012 TheatreScript Project.
@@ -5091,7 +2620,48 @@ console.log('AudioProp#stop');
   };
 }(this));
 
-var benri = {};
+var benri = {
+  embed: function(pObject) {
+    for (var k in benri) {
+      if (benri.hasOwnProperty(k)) {
+        pObject[k] = benri[k];
+      }
+    }
+  }
+};
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 TheatreScript Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var theatre = global.theatre;
+  var benri = global.benri;
+
+  /**
+   * @class
+   * @extends {theatre.Prop}
+   */
+  var AudioManagerProp = (function(pSuper) {
+    function AudioManagerProp() {
+      pSuper.call(this);
+      this.type = 'audio';
+      this.context = new benri.media.audio.AudioContext();
+    }
+
+    AudioManagerProp.prototype = Object.create(pSuper.prototype);
+    AudioManagerProp.prototype.constructor = AudioManagerProp;
+
+    return AudioManagerProp;
+  })(theatre.Prop);
+
+  theatre.crews.audio.AudioManagerProp = AudioManagerProp;
+
+}(this));
+
 /**
  * @author Jason Parrott
  *
@@ -5103,903 +2673,85 @@ benri.util = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.util.pipe = {};
+benri.util.log = {
+  /*
+    We use the severity levels as described here
+    http://tools.ietf.org/html/rfc5424
+   */
+  LEVEL_PANIC: 0,
+  LEVEL_ALERT: 1,
+  LEVEL_CRIT: 2,
+  LEVEL_ERROR: 3,
+  LEVEL_WARN: 4,
+  LEVEL_NOTICE: 5,
+  LEVEL_INFO: 6,
+  LEVEL_DEBUG: 7
+};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-(function(global) {
+(function() {
 
-  var pipe = benri.util.pipe;
-  var Reference = pipe.Reference;
+  var log = benri.util.log;
+  
+  log.Adapter = Adapter;
 
-  pipe.Stage = Stage;
+  function Adapter(pOptions) {
+    pOptions = pOptions || {};
 
-  function Stage() {
-    this.globals = {};
-    this.ins = {};
-    this.outs = {};
-    this.ops = [];
+    this.level = 'level' in pOptions ? pOptions.level : log.LEVEL_DEBUG;
   }
 
-  Stage.fromAST = function(pAST) {
-    var tStage = new Stage();
-    var tASTObject;
-    var tObject;
-    var i, il, j, jl;
+  Adapter.prototype.log = function(pLevel, pMessage, pData) {
 
-    var tParts = ['glb', 'globals', 'inp', 'ins', 'out', 'outs'];
-    var tASTPart, tPart;
-
-    for (i = 0, il = tParts.length; i < il; i += 2) {
-      tASTPart = tParts[i];
-      tPart = tParts[i + 1];
-
-      if (tASTPart in pAST) {
-        tASTObject = pAST[tASTPart];
-        tObject = tStage[tPart];
-
-        for (j = 0, jl = tASTObject.length; j < jl; j++) {
-          tObject[tASTObject[j].name] = tASTObject[j].clazz;
-        }
-      }
-    }
-
-    tASTObject = pAST.children;
-
-
-    return tStage;
   };
 
-}(this));
+}());
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-(function(global) {
+ (function() {
 
-  function Property(pType) {
-    this.type = pType;
-  }
+  /**
+    * @class
+    * @extends {benri.util.log.Adapter}
+    */
+    var ConsoleAdapter = (function(pSuper) {
+     /**
+      * @constructor
+      * @param {Object} pOptions
+      */
+      function ConsoleAdapter(pOptions) {
+        pSuper.call(this, pOptions);
 
-  function Type(pInherits, pProperties, pOperators, pConstructor) {
-    this.inherits = pInherits;
-    this.properties = pProperties;
-    this.operators = pOperators;
-    this.constructor = pConstructor;
-  }
-
-  benri.util.pipe.runtime = {
-    Property: Property,
-    Type: Type
-  };
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var pipe = benri.util.pipe;
-
-  pipe.Pipeline = Pipeline;
-
-  function Pipeline() {
-    
-  }
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  benri.util.pipe.parse = parse;
-
-  function parse(pSources, pStartType) {
-    var STATE_STATEMENT = 0,
-        STATE_NAME_START = 1,
-        STATE_NAME = 2,
-        STATE_BLOCK_START = 3,
-        STATE_BLOCK = 4,
-        STATE_BLOCK_END = 5,
-        STATE_TYPE = 6,
-        STATE_EXPRESSION_LEFT = 7,
-        STATE_EXPRESSION_OP = 8,
-        STATE_EXPRESSION_RIGHT = 9,
-        STATE_NUMBER = 10,
-        STATE_STAGE_STATEMENT = 11,
-        STATE_STAGE_DEFINITION = 12;
-
-    var tLine = 1;
-    var tCol = 1;
-
-    var tState = STATE_STATEMENT;
-
-    var tBlocks;
-    var tCurrentBlock = tBlocks = {
-      type: 'blk',
-      name: pStartType || 'ano',
-      children: []
-    };
-
-    var tBlockStack = [];
-    var tExpressionStack = [];
-
-    var i = 0;
-
-    var tExpression = null;
-    var tLeft, tOp, tRight;
-    var tNumberIsFloat;
-    var tName, tType, tBlockType, tNumber;
-    var tChar;
-    var tDefinitionScope;
-
-    var fromCharCode = String.fromCharCode;
-
-    function isSpace(pChar) {
-      return pChar === 0x20 || pChar === 0x09;
-    }
-
-    function isNewline(pChar) {
-      return pChar === 0x0A || pChar === 0x0C || pChar === 0xD;
-    }
-
-    function isNewlineOrSpace(pChar) {
-      return isNewline(pChar) || isSpace(pChar);
-    }
-
-    function isValidNameChar(pChar) {
-      return (
-        (pChar >= 0x41 && pChar <= 0x5A) || // A-Z
-        (pChar >= 0x61 && pChar <= 0x7A) || // a-z
-        (pChar >= 0x30 && pChar <= 0x39) || // 0-9
-        pChar === 0x5F // _
-      );
-    }
-
-    function isValidNameCharFirst(pChar) {
-      return (
-        (pChar >= 0x41 && pChar <= 0x5A) || // A-Z
-        (pChar >= 0x61 && pChar <= 0x7A) || // a-z
-        pChar === 0x5F || // _
-        pChar === 0x21 // !
-      );
-    }
-
-    // Valid ops chars are !+-*/<>=&^|
-    function isValidOpChar(pChar) {
-      return (
-        pChar === 0x21 ||
-        pChar === 0x2B ||
-        pChar === 0x2D ||
-        pChar === 0x2A ||
-        pChar === 0x2F ||
-        pChar === 0x3C ||
-        pChar === 0x3E ||
-        pChar === 0x3D ||
-        pChar === 0x26 ||
-        pChar === 0x5E ||
-        pChar === 0x7C
-      );
-    }
-
-    var mValidOps = [
-      '+',
-      '-',
-      '=',
-      '*',
-      '/',
-      '&',
-      '|',
-      '^',
-      '>',
-      '<',
-      '!=',
-      '==',
-      '>=',
-      '<=',
-      '&&',
-      '||'
-    ];
-
-    function isValidOp(pOp) {
-      return mValidOps.indexOf(pOp) !== -1;
-    }
-
-    function isDigit(pChar) {
-      return pChar >= 0x30 && pChar <= 0x39;
-    }
-
-    function consume() {
-      tChar = pSources.charCodeAt(++i) || 0;
-
-      if (isNewline(tChar)) {
-        tLine++;
-        tCol = 1;
-      } else {
-        tCol++;
+        this.impl = new (benri.impl.get('log.console').best)();
       }
 
-      return tChar;
-    }
+      var tProto = ConsoleAdapter.prototype = Object.create(pSuper.prototype);
+      tProto.constructor = ConsoleAdapter;
 
-    function error(pMsg) {
-      throw new Error('Line ' + tLine + ' column ' + tCol + ': ' + pMsg);
-    }
-
-    function enterExpression() {
-      tExpressionStack.push(tExpression);
-
-      tExpression = {
-        left: null,
-        op: null,
-        right: null
+      tProto.log = function(pLevel, pMessage, pData) {
+        this.impl.log(pLevel, pMessage, pData);
       };
 
-      tState = STATE_EXPRESSION_LEFT;
-    }
+      return ConsoleAdapter;
+    })(benri.util.log.Adapter); 
 
-    function exitExpression() {
-      var tCurrentExpression = tExpression;
-      tExpression = tExpressionStack.pop();
+    benri.util.log.ConsoleAdapter = ConsoleAdapter;
 
-      if (tCurrentExpression.op === null) {
-        emit(tCurrentExpression.left);
-      } else {
-        emit(tCurrentExpression);
-      }
-    }
-
-    function exitAllExpressions() {
-      while (tExpression !== null) {
-        exitExpression();
-      }
-    }
-
-    function discardExpression() {
-      tExpression = tExpressionStack.pop();
-    }
-
-    function isInsideIdx() {
-      if (tExpression && tExpression.op && tExpression.op.type === 'idx') {
-        return true;
-      }
-
-      var tStackExpression;
-
-      for (var i = tExpressionStack.length - 1; i >= 1; i--) {
-        tStackExpression = tExpressionStack[i];
-
-        if (tStackExpression.op && tStackExpression.op.type === 'idx') {
-          return true;
-        }
-      }
-
-      return false;
-    }
-
-    function emit(pAST) {
-      if (tExpression !== null) {
-        if (tExpression.left === null) {
-          tExpression.left = pAST;
-
-          if (isNewline(tChar)) {
-            exitExpression();
-            tState = STATE_STATEMENT;
-          } else {
-            tState = STATE_EXPRESSION_OP;
-            tOp = '';
-          }
-        } else if (tExpression.op === null) {
-          if (isNewline(tChar)) {
-            error('Newline where operator was expected.');
-          }
-
-          tExpression.op = pAST;
-          tState = STATE_EXPRESSION_RIGHT;
-        } else {
-          if (isSpace(tChar)) {
-            enterExpression();
-            emit(pAST);
-          } else if (isNewline(tChar)) {
-            tExpression.right = pAST;
-            exitExpression();
-          } else if (tChar === 0x5D && isInsideIdx()) {
-            consume();
-            tExpression.right = pAST;
-            exitExpression();
-          } else if (tChar === 0) {
-            // end of the file
-            tExpression.right = pAST;
-            exitExpression();
-          } else {
-            error('Unknown character at right-side expression.');
-          }
-        }
-      } else {
-        tCurrentBlock.children.push(pAST);
-        tState = STATE_STATEMENT;
-      }
-    }
-
-    function enterBlock(pBlock) {
-      tCurrentBlock.children.push(pBlock);
-      tBlockStack.push(tCurrentBlock);
-      tCurrentBlock = pBlock;
-    }
-
-    function exitBlock() {
-      tCurrentBlock = tBlockStack.pop();
-    }
-
-    tChar = pSources.charCodeAt(0);
-
-    main: while (tChar !== 0) {
-      switch (tState) {
-        case STATE_STATEMENT:
-          if (isNewlineOrSpace(tChar)) {
-            break;
-          } else if (tChar === 0x7B) { // {
-            tBlockType = 'ano';
-            tState = STATE_BLOCK_START;
-          } else if (tChar === 0x7D) { // }
-            tState = STATE_BLOCK_END;
-          } else if (false) { // handle IF statements and FOR and such
-            
-          } else if (tCurrentBlock.name === 'stg') {
-            tState = STATE_STAGE_STATEMENT;
-          } else {
-            enterExpression();
-          }
-
-          continue main;
-        case STATE_BLOCK_START:
-          if (tChar === 0x7B) {
-            consume();
-
-            if (isNewline(tChar)) {
-              enterBlock({
-                type: 'blk',
-                name: tBlockType,
-                children: []
-              });
-
-              tState = STATE_STATEMENT;
-            } else {
-              error('Newline required after block start');
-            }
-          } else {
-            error('Expected { at start of block');
-          }
-
-          break;
-        case STATE_BLOCK_END:
-          if (tChar === 0x7D) {
-            consume();
-
-            if (isNewline(tChar) || tChar === 0) {
-              exitBlock();
-              tState = STATE_STATEMENT;
-            } else {
-              error('Newline required after block end');
-            }
-          } else {
-            error('Expected } at end of block');
-          }
-
-          break;
-        case STATE_NAME_START:
-          if (isValidNameCharFirst(tChar)) {
-            tName = fromCharCode(tChar);
-            tState = STATE_NAME;
-          } else {
-            error('Invalid first character in name.');
-          }
-
-          break;
-        case STATE_NAME:
-          while (isValidNameChar(tChar)) {
-            tName += fromCharCode(tChar);
-            consume();
-          }
-
-          if (tChar === 0x3A) {
-            // tChar === ':'
-            // type declaration
-            tType = '';
-            tState = STATE_TYPE;
-          } else if (tChar === 0x2E) {
-            // tChar === '.'
-            // property access
-            enterExpression();
-
-            emit({
-              type: 'ref',
-              name: tName
-            });
-            
-            emit({
-              type: 'prp'
-            });
-          } else if (tChar === 0x5B) {
-            // tChar === '['
-            // index access
-            enterExpression();
-
-            emit({
-              type: 'ref',
-              name: tName
-            });
-
-            emit({
-              type: 'idx'
-            });
-          } else {
-            emit({
-              type: 'ref',
-              name: tName
-            });
-          }
-
-          break;
-        case STATE_TYPE:
-          while (isValidNameChar(tChar)) {
-            tType += fromCharCode(tChar);
-            consume();
-          }
-          
-          emit({
-            type: 'dec',
-            clazz: tType,
-            name: tName
-          });
-
-          break;
-        case STATE_EXPRESSION_LEFT:
-          if (isValidNameCharFirst(tChar)) {
-            tState = STATE_NAME_START;
-            continue main;
-          } else {
-            error('Expected start of name');
-          }
-
-          break;
-        case STATE_EXPRESSION_OP:
-          while (true) {
-            if (isValidOpChar(tChar)) {
-              tOp += fromCharCode(tChar);
-            } else if (isValidOp(tOp)) {
-              emit({
-                type: tOp
-              });
-
-              break;
-            } else {
-              error('Invalid operator');
-            }
-
-            consume();
-          }
-
-          break;
-        case STATE_EXPRESSION_RIGHT:
-          if (isValidNameCharFirst(tChar)) {
-            tState = STATE_NAME_START;
-            continue main;
-          } else if (isDigit(tChar)) {
-            tState = STATE_NUMBER;
-            continue main;
-          } else if (tChar === 0x3A) { // :
-            // TODO: new object
-          } else {
-            error('Expected start of name or literal');
-          }
-
-          break;
-        case STATE_NUMBER:
-          tNumber = '';
-          tNumberIsFloat = false;
-
-          while (true) {
-            if (isDigit(tChar)) {
-              tNumber += fromCharCode(tChar);
-            } else if (tChar === 0x2E) {
-              if (tNumberIsFloat === true) {
-                // Already have a decimal. Abort
-                error('Invalid number format.');
-              }
-
-              tNumberIsFloat = true;
-              tNumber += '.';
-
-              consume();
-
-              if (!isDigit(tChar)) {
-                error('Invalid number format.');
-              }
-
-              continue;
-            } else {
-              emit({
-                type: 'num',
-                isFloat: tNumberIsFloat,
-                value: tNumberIsFloat ? parseFloat(tNumber, 10) : parseInt(tNumber, 10)
-              });
-
-              break;
-            }
-
-            consume();
-          }
-
-          break;
-        case STATE_STAGE_STATEMENT:
-          if (isNewlineOrSpace(tChar)) {
-            break;
-          } else if (tChar === 0x24) { // $
-            while (consume() === 0x24) {} // Eat all $
-
-            tState = STATE_STAGE_DEFINITION;
-            tDefinitionScope = 'glb';
-          } else if (tChar === 0x3C) { // <
-            while (consume() === 0x3C) {} // Eat all <
-            
-            tState = STATE_STAGE_DEFINITION;
-            tDefinitionScope = 'inp';
-          } else if (tChar === 0x3E) { // >
-            while (consume() === 0x3E) {} // Eat all >
-            
-            tState = STATE_STAGE_DEFINITION;
-            tDefinitionScope = 'out';
-          } else {
-            enterExpression();
-          }
-
-          continue main;
-        case STATE_STAGE_DEFINITION:
-          if (isNewlineOrSpace(tChar)) {
-            break;
-          } else if (tChar === 0x3D) { // =
-            while (consume() === 0x3D) {} // Eat all =
-            
-            tState = STATE_STAGE_STATEMENT;
-
-            continue main;
-          } else if (isValidNameCharFirst(tChar)) {
-            tName = fromCharCode(tChar);
-
-            while (isValidNameChar(consume())) {
-              tName += fromCharCode(tChar);
-            }
-
-            if (tChar !== 0x3A) { // :
-              error('Expected type declaration');
-            }
-
-            tType = '';
-
-            while (isValidNameChar(consume())) {
-              tType += fromCharCode(tChar);
-            }
-
-            if (!isNewline(tChar)) {
-              error('Expected newline after declaration');
-            }
-
-            if (!tCurrentBlock[tDefinitionScope]) {
-              tCurrentBlock[tDefinitionScope] = [];
-            }
-
-            tCurrentBlock[tDefinitionScope].push({
-              type: 'dec',
-              clazz: tType,
-              name: tName
-            });
-          } else {
-            tState = STATE_STAGE_STATEMENT;
-
-            continue main;
-          }
-
-          break;
-      }
-
-      consume();
-    }
-
-    return tBlocks;
-  };
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  benri.util.pipe.Linker = Linker;
-
-  function Linker(pExcludeCore) {
-
-  }
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  /*
-    
-  The basic types are as follows:
-
-    * n
-    * f[16|32|64]
-    * i[8|16|32]
-    * u[8|16|32]
-    * b
-
-  */
- 
-  var runtime = benri.util.pipe.runtime;
-
-  var Type = runtime.Type;
-  var Property = runtime.Property;
-
-  function directValueAddition(pInstance, pOther) {
-    return pInstance.value + pOther.value;
-  }
-
-  function directValueSubtraction(pInstance, pOther) {
-    return pInstance.value - pOther.value;
-  }
-
-  function directValueMultiplication(pInstance, pOther) {
-    return pInstance.value * pOther.value;
-  }
-
-  function directValueDivision(pInstance, pOther) {
-    return pInstance.value / pOther.value;
-  }
-
-  function directValueBitwiseAnd(pInstance, pOther) {
-    return pInstance.value & pOther.value;
-  }
-
-  function directValueBitwiseOr(pInstance, pOther) {
-    return pInstance.value | pOther.value;
-  }
-
-  function directValueBitwiseXor(pInstance, pOther) {
-    return pInstance.value ^ pOther.value;
-  }
-
-  var TypeNumber = new Type(
-    // inherits
-    [],
-
-    // properties
-    {},
-
-    // operators
-    {
-      '+': {
-        'n': directValueAddition
-      },
-
-      '-': {
-        'n': directValueSubtraction
-      },
-
-      '*': {
-        'n': directValueMultiplication
-      },
-
-      '/': {
-        'n': directValueDivision
-      },
-
-      '&': {
-        'n': directValueBitwiseAnd
-      },
-
-      '|': {
-        'n': directValueBitwiseOr
-      },
-
-      '^': {
-        'n': directValueBitwiseXor
-      }
-    },
-
-    // constructor
-    function(pInstance, pValue) {
-      pInstance.value = pValue || 0;
-    }
-  );
-
-  var TypeBool = new Type(
-    // inherits
-    [],
-
-    // properties
-    {},
-
-    // operators
-    {
-      '&': {
-        'b': directValueBitwiseAnd
-      },
-
-      '|': {
-        'b': directValueBitwiseOr
-      },
-
-      '^': {
-        'b': directValueBitwiseXor
-      }
-    },
-
-    // constructor
-    function(pInstance, pValue) {
-      pInstance.value = pValue ? true : false;
-    }
-  );
-
-  benri.util.pipe.core = {
-    n: TypeNumber,
-
-    f: new Type(['n'], {}, {}, null),
-    f16: new Type(['f'], {}, {}, null),
-    f32: new Type(['f'], {}, {}, null),
-    f64: new Type(['f'], {}, {}, null),
-
-    i: new Type(['n'], {}, {}, function(pInstance, pValue) {
-      this.value = (pInstance >> 0) & 0xFFFFFFFF;
-    }),
-
-    i8: new Type(['i'], {}, {}, function(pInstance, pValue) {
-      this.value = (pInstance >> 0) & 0xFF;
-    }),
-
-    i16: new Type(['i'], {}, {}, function(pInstance, pValue) {
-      this.value = (pInstance >> 0) & 0xFFFF;
-    }),
-
-    i32: new Type(['i'], {}, {}, function(pInstance, pValue) {
-      this.value = (pInstance >> 0) & 0xFFFFFFFF;
-    }),
-
-    u: new Type(['n'], {}, {}, function(pInstance, pValue) {
-      this.value = (pInstance >>> 0) & 0xFFFFFFFF;
-    }),
-
-    u8: new Type(['u'], {}, {}, function(pInstance, pValue) {
-      this.value = (pInstance >>> 0) & 0xFF;
-    }),
-
-    u16: new Type(['u'], {}, {}, function(pInstance, pValue) {
-      this.value = (pInstance >>> 0) & 0xFFFF;
-    }),
-
-    u32: new Type(['u'], {}, {}, function(pInstance, pValue) {
-      this.value = (pInstance >>> 0) & 0xFFFFFFFF;
-    }),
-
-    b: new Type([], {}, {}, function(pInstance, pValue) {
-      this.value = (pInstance >> 0) & 0xFFFFFFFF;
-    })
-  };
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var pipe = benri.util.pipe;
-  var core = pipe.core;
-  
-  pipe.Executable = Executable;
-
-
-  function Executable() {
-    this.reset();
-
-    var tTypes = this.types = {};
-
-    for (var k in core) {
-      tTypes[k] = core[k];
-    }
-  }
-
-  var tProto = Executable.prototype;
-
-  tProto.registerType = function(pName, pType) {
-    this.types[pName] = pType;
-  };
-
-  tProto.reset = function() {
-    this.globals = {};
-
-    var tGlobalScope = this.currentScope = new Scope();
-    this.scopes = [tGlobalScope];
-  };
-
-  tProto.registerAST = function(pName, pAST) {
-    var tCurrentScope = this.currentScope;
-
-
-  };
-
-  tProto.execute = function() {
-
-  };
-
-  function Scope() {
-    this.locals = {};
-    this.ins = {};
-    this.outs = {};
-    this.types = {};
-    this.ops = [];
-  }
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var pipe = benri.util.pipe;
-  var core = pipe.core;
-
-  pipe.Compiler = Compiler;
-
-  function Compiler(pFlags) {
-    this.flags = pFlags;
-  }
-
-  Compiler.prototype.compile = function(pAST) {
-    
-  };
-
-}(this));
-
-
+  }());
 /**
  * @author Jason Parrott
  *
@@ -6159,7 +2911,7 @@ benri.net = {};
    * @param {number} pStatus The HTTP status code
    * @param {string=''} pStatusText The HTTP status phrase
    * @param {string=''} pHeaders The HTTP headers in raw format
-   * @param {benri.io.Blob=} pBody A Blob representing the body
+   * @param {benri.content.Blob=} pBody A Blob representing the body
    *  of this response. If the response was of type text, the text
    *  must be properly decoded in to a valid JavaScript string.
    */
@@ -6977,6 +3729,261 @@ console.log('Alloc: num=' + (mAllocNum - tPool.length));
 }(this));
 
 /**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+benri.media = {};
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+benri.media.video = {};
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.benri.media.MediaContext = MediaContext;
+
+  /**
+   * A class that represents the context for playback of audio and video.
+   * @constructor
+   */
+  function MediaContext() {
+    this.table = {};
+  }
+
+  /**
+   * Adds media renderer to this context.
+   *
+   * @param {string} pId A unique identifier.
+   * @param {benri.media.MediaRenderer} pRenderer A media renderer object.
+   */
+  MediaContext.prototype.add = function (pId, pRenderer) {
+    this.table[pId] = pRenderer;
+  };
+
+  /**
+   * Removes media renderer from this context.
+   *
+   * @param {string} pId A unique identifier.
+   */
+  MediaContext.prototype.remove = function (pId) {
+    delete this.table[pId];
+  };
+
+  /**
+   * Returns media renderer.
+   *
+   * @param {string} pId A unique identifier.
+   * @return {benri.media.MediaRenderer} pRenderer A media renderer object.
+   */
+  MediaContext.prototype.get = function (pId) {
+    return this.table[pId];
+  };
+
+  /**
+   * Returns all media renderers.
+   * @return {Array} A list of media renderer objects.
+   */
+  MediaContext.prototype.getAll = function () {
+    var tTable = this.table, tList = [];
+
+    for (var k in tTable) {
+      tList.push(tTable[k]);
+    }
+    return tList;
+  };
+
+}(this));
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+benri.media.audio = {};
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.benri.media.audio.AudioListener = AudioListener;
+
+  /**
+   * A class representing the position and orientation of the person listening to the audio scene.
+   * @constructor
+   */
+  function AudioListener() {
+  }
+
+  /**
+   * Sets the position of the listener in a 3D cartesian coordinate space.
+   *
+   * @param {pPosition} An object with properties {x, y ,z} that represents the position of the listener.
+   */
+  AudioListener.prototype.setPosition = function (pPosition) {
+  };
+
+  /**
+   * Describes which direction the listener is pointing in the 3D cartesian coordinate space.
+   *
+   * @param {pFront} An object with properties {x, y ,z} that represents a front direction vector.
+   * @param {pUp} An object with properties {x, y, z} that represents an up direction vector.
+   */
+  AudioListener.prototype.setOrientation = function (pFront, pUp) {
+  };
+
+  /**
+   * Sets the velocity vector that controls both the direction of travel and the speed in 3D space.
+   *
+   * @param {pDirection} An object with properties {x, y ,z} that indicates direction of travel and intensity.
+   */
+  AudioListener.prototype.setVelocity = function (pDirection) {
+  };
+}(this));
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+
+  var benri = global.benri;
+
+  var AudioContext = (function(pSuper) {
+
+    /**
+     * A class representing audio data ready for playback.
+     * @constructor
+     */
+    function AudioContext() {
+      pSuper.call(this);
+      this.ducking = false;
+    }
+
+    AudioContext.prototype = Object.create(pSuper.prototype);
+    AudioContext.prototype.constructor = AudioContext;
+
+    return AudioContext;
+
+  }(benri.media.MediaContext));
+
+  benri.media.audio.AudioContext = AudioContext;
+
+  /**
+   * @override
+   * pOptions holds the following options:
+   *  ducking: {object} Holds volume information with the following format:
+   *    {
+   *      min: 0.0,
+   *      max: 1.0,
+   *    }
+   */
+  AudioContext.prototype.add = function (pId, pRenderer, pOptions) {
+    var tOptions = pOptions || {},
+        tEntry = {
+          renderer: pRenderer
+        };
+    tEntry.min = tOptions.min === void 0 ? 0.0 : tOptions.min;
+    tEntry.max = tOptions.max === void 0 ? 1.0 : tOptions.max;
+    this.table[pId] = tEntry;
+  };
+
+  /**
+   * @override
+   */
+  AudioContext.prototype.get = function (pId) {
+    var tEntry = this.table[pId];
+    return tEntry ? tEntry.renderer : null;
+  };
+
+  /**
+   * @override
+   */
+  AudioContext.prototype.getAll = function () {
+    var tTable = this.table, tList = [];
+
+    for (var k in tTable) {
+      tList.push(tTable[k].renderer);
+    }
+    return tList;
+  };
+
+  /**
+   * Applies ducking effect.
+   * Ducking means lowering the volume of secondary audio tracks when the primary track starts,
+   * and lifting the volume again when the primary track is finished.
+   *
+   * @return {Array} pPrimaries The list of ids of the primary audio tracks.
+   */
+  AudioContext.prototype.duck = function (pPrimaries) {
+    //TODO
+  };
+
+  /**
+   * Returns AudioListener object that represents the position and orientation of the person listening to the audio scene.
+   *
+   * @return {benri.media.audio.AudioListener} The listener object for use of 3D spatial sound.
+   */
+  AudioContext.prototype.getListener = function () {
+    //TODO
+  };
+
+  /**
+   * Enables specific feature(s).
+   * @param {string|Array} pFeature A string (or list of string) of the name of the feature to enable.
+   * The following features are supported:
+   *    'compressor' : Enables the compressor that implements a dynamics compression effect.
+   *    TODO Add features.
+   */
+  AudioContext.prototype.enable = function (pFeature) {
+    if (pFeature instanceof global.Array) {
+      for (var i = 0, il = pFeature.length; i < il; i++) {
+        this.enable(pFeature[i]);
+      }
+    } else {
+      //TODO
+    }
+  };
+
+  /**
+   * Disables specific feature(s).
+   * @param {string|Array} pFeature A string (or list of string) of the name of the feature to disable.
+   */
+  AudioContext.prototype.disable = function (pFeature) {
+    if (pFeature instanceof global.Array) {
+      for (var i = 0, il = pFeature.length; i < il; i++) {
+        this.disable(pFeature[i]);
+      }
+    } else {
+      //TODO
+    }
+  };
+
+}(this));
+
+/**
  * @author Jason Parrott
  *
  * Copyright (C) 2013 BenriJS.
@@ -6992,1176 +3999,6 @@ benri.io = {};
  */
 
 benri.io.compression = {};
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  var mOverride = false;
-
-  var io = global.benri.io;
-
-  if (!mOverride && global.ArrayBuffer) {
-    io.ArrayBuffer = global.ArrayBuffer;
-  } else {
-    io.ArrayBuffer = ArrayBuffer;
-  }
-
-  function ArrayBuffer(pByteLength) {
-    var tBuffer = new Array(pByteLength);
-
-    // Force V8 to make an internal object of the
-    // correct size.
-    this[pByteLength - 1] = 0;
-
-    for (var i = 0; i < pByteLength; i++) {
-      this[i] = 0;
-    }
-
-    Object.defineProperty(this, 'byteLength', {
-      get: function() {
-        return pByteLength;
-      }
-    });
-  }
-
-  ArrayBuffer.prototype.slice = function(pBegin, pEnd) {
-    var tBuffer = new ArrayBuffer(pEnd - pBegin);
-
-    for (var i = 0; pBegin <= pEnd; i++, pBegin++) {
-      tBuffer[i] = this[pBegin];
-    }
-
-    return tBuffer;
-  };
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var mOverride = false;
-
-  var io = global.benri.io;
-
-  var GlobalArrayBuffer = global.ArrayBuffer;
-  var GlobalUint8Array = global.Uint8Array;
-
-  var ArrayBuffer = io.ArrayBuffer;
-
-  io._ArrayBufferView = ArrayBufferView;
-
-  if (!mOverride && global.Uint8Array) {
-    var tDummyU = new global.Uint8Array(0);
-    io.ArrayBufferView = tDummyU.__proto__.__proto__.constructor;
-    io.Int8Array = global.Int8Array;
-    io.Uint8Array = global.Uint8Array;
-    io.Uint8ClampedArray = global.Uint8ClampedArray;
-    io.Int16Array = global.Int16Array;
-    io.Uint16Array = global.Uint16Array;
-    io.Int32Array = global.Int32Array;
-    io.Uint32Array = global.Uint32Array;
-    io.Float32Array = global.Float32Array;
-    io.Float64Array = global.Float64Array;
-  } else {
-    io.ArrayBufferView = ArrayBufferView;
-    io.Int8Array = Int8Array;
-    io.Uint8Array = Uint8Array;
-    io.Uint8ClampedArray = Uint8ClampedArray;
-    io.Int16Array = Int16Array;
-    io.Uint16Array = Uint16Array;
-    io.Int32Array = Int32Array;
-    io.Uint32Array = Uint32Array;
-    io.Float32Array = Float32Array;
-    io.Float64Array = Float64Array;
-  }
-
-  function ArrayBufferView(pBuffer, pByteOffset, pByteLength) {
-    Object.defineProperty(this, 'buffer', {
-      get: function() {
-        return pBuffer;
-      }
-    });
-
-    Object.defineProperty(this, 'byteOffset', {
-      get: function() {
-        return pByteOffset;
-      }
-    });
-
-    Object.defineProperty(this, 'byteLength', {
-      get: function() {
-        return pByteLength;
-      }
-    });
-  }
-
-  ArrayBufferView.prototype.constructor = null;
-
-
-  function createIndicies(pObject, pLength, pGetter, pSetter) {
-    for (var i = 0; i < pLength; i++) {
-      Object.defineProperty(pObject, i, {
-        get: (function(pIndex) {
-          return function() {
-            return pGetter(pIndex);
-          }
-        }(i)),
-        set: (function(pIndex) {
-          return function(pValue) {
-            return pSetter(pIndex, pValue);
-          }
-        }(i)),
-        enumerable: true,
-        configurable: false
-      });
-    }
-  }
-
-
-  function TypedArray(pLengthOrArrayOrBuffer, pByteOffset, pLength, pIsSigned) {
-    var tBuffer;
-    var tByteOffset;
-    var tByteLength;
-    var tLength;
-    var tBytesPerElement = this.constructor.BYTES_PER_ELEMENT;
-    var tBufferByteLength;
-
-    if (pLengthOrArrayOrBuffer instanceof ArrayBuffer) {
-      tBuffer = pLengthOrArrayOrBuffer;
-      tBufferByteLength = tBuffer.byteLength;
-
-      if (typeof pByteOffset === 'number') {
-        tByteOffset = pByteOffset;
-      } else {
-        tByteOffset = 0;
-      }
-
-      if (tByteOffset % tBytesPerElement !== 0) {
-        throw new Error('Bad byte offset');
-      }
-
-      if (typeof pLength === 'number') {
-        tLength = pLength;
-        tByteLength = pLength * tBytesPerElement;
-      } else {
-        tByteLength = tLength = tBufferByteLength - tByteOffset;
-
-        if (tLength % tBytesPerElement !== 0) {
-          throw new Error('Bad length');
-        }
-
-        tLength /= tBytesPerElement;
-      }
-
-      if (tByteOffset + tByteLength > tBuffer.byteLength) {
-        throw new Error('Out of range');
-      }
-
-    } else if (pLengthOrArrayOrBuffer instanceof ArrayBufferView || pLengthOrArrayOrBuffer instanceof Array) {
-      tLength = pLengthOrArrayOrBuffer.length;
-      tBufferByteLength = tByteLength = tLength * tBytesPerElement;
-      tBuffer = new ArrayBuffer(tByteLength);
-      tByteOffset = 0;
-
-      this.set(pLengthOrArrayOrBuffer, 0);
-    } else if (typeof pLengthOrArrayOrBuffer === 'number') {
-      tBufferByteLength = tByteLength = pLengthOrArrayOrBuffer * tBytesPerElement;
-      tBuffer = new ArrayBuffer(tByteLength);
-      tByteOffset = 0;
-      tLength = pLengthOrArrayOrBuffer;
-    } else {
-      throw new Error('Invalid constructor');
-    }
-
-    Object.defineProperty(this, 'length', {
-      get: function() {
-        return tLength;
-      }
-    });
-
-    function getter(pIndex) {
-      var tArrayBuffer = tBuffer;
-      pIndex = pIndex * tBytesPerElement + tByteOffset;
-
-      if (pIndex > tBufferByteLength) {
-        throw new Error('Out of range');
-      }
-
-      var tValue = 0;
-
-      for (var tLength = pIndex + tBytesPerElement; pIndex < tLength; pIndex++) {
-        tValue = (tValue << 8) | tArrayBuffer[pIndex];
-      }
-
-      if (!pIsSigned) {
-        tValue = tValue >>> 0;
-      } else {
-        tValue -= Math.pow(2, tBytesPerElement * 8);
-      }
-
-      return tValue;
-    }
-
-    function setter(pIndex, pValue) {
-      var tArrayBuffer = tBuffer;
-      pIndex = pIndex * tBytesPerElement + tByteOffset;
-
-      if (pIndex > tBufferByteLength) {
-        throw new Error('Out of range');
-      }
-
-      for (var tIndex = pIndex + tBytesPerElement - 1; tIndex >= pIndex; tIndex--) {
-        tArrayBuffer[tIndex] = pValue & 0xFF;
-        pValue = pValue >> 8;
-      }
-
-      if (pIsSigned) {
-        if (pValue < 0) {
-          pValue += Math.pow(2, tBytesPerElement * 8);
-          pValue |= 1 << (tBytesPerElement * 8 - 1);
-        }
-      }
-    }
-
-    createIndicies(this, tByteLength, getter, setter);
-
-    return {
-      buffer: tBuffer,
-      byteOffset: tByteOffset,
-      byteLength: tByteLength
-    }
-  }
-
-  var TypedArraySet = function set(pArray, pOffset) {
-    pOffset = pOffset || 0;
-
-    if (pOffset + pArray.byteLength > this.byteLength) {
-      throw new Error('Out of range');
-    }
-
-    for (var i = 0, tLength = pArray.length; pOffset < tLength; i++, pOffset++) {
-      this[pOffset] = pArray[i];
-    }
-  };
-
-  var TypedArraySubarray = function subarray(pBegin, pEnd) {
-    var tLength = this.length;
-    pBegin = pBegin || 0;
-    pEnd = pEnd || tLength;
-
-    if (pBegin < 0) {
-      pBegin = tLength + pBegin;
-    }
-
-    if (pEnd < 0) {
-      pEnd = tLength + pEnd;
-    }
-
-    return new this.constructor(this.buffer, (this.byteOffset + pBegin) * this.constructor.BYTES_PER_ELEMENT, pEnd - pBegin);
-  };
-
-  function setup(pClass, pBytes) {
-    pClass.prototype = Object.create(ArrayBufferView.prototype);
-    pClass.prototype.constructor = pClass;
-    pClass.prototype.set = TypedArraySet;
-    pClass.prototype.subarray = TypedArraySubarray;
-
-    pClass.BYTES_PER_ELEMENT = pBytes;
-  }
-
-
-  function Int8Array(pLengthOrArrayOrBuffer, pByteOffset, pByteLength) {
-    var tData = TypedArray.call(this, pLengthOrArrayOrBuffer, pByteOffset, pByteLength, true);
-    ArrayBufferView.call(this, tData.buffer, tData.byteOffset, tData.byteLength);
-  }
-  setup(Int8Array, 1);
-
-  function Uint8Array(pLengthOrArrayOrBuffer, pByteOffset, pByteLength) {
-    var tData = TypedArray.call(this, pLengthOrArrayOrBuffer, pByteOffset, pByteLength, false);
-    ArrayBufferView.call(this, tData.buffer, tData.byteOffset, tData.byteLength);
-  }
-  setup(Uint8Array, 1);
-
-  function Uint8ClampedArray(pLengthOrArrayOrBuffer, pByteOffset, pByteLength) {
-    var tData = TypedArray.call(this, pLengthOrArrayOrBuffer, pByteOffset, pByteLength, false);
-    ArrayBufferView.call(this, tData.buffer, tData.byteOffset, tData.byteLength);
-  }
-  setup(Uint8ClampedArray, 1);
-
-  function Int16Array(pLengthOrArrayOrBuffer, pByteOffset, pByteLength) {
-    var tData = TypedArray.call(this, pLengthOrArrayOrBuffer, pByteOffset, pByteLength, true);
-    ArrayBufferView.call(this, tData.buffer, tData.byteOffset, tData.byteLength);
-  }
-  setup(Int16Array, 2);
-
-  function Uint16Array(pLengthOrArrayOrBuffer, pByteOffset, pByteLength) {
-    var tData = TypedArray.call(this, pLengthOrArrayOrBuffer, pByteOffset, pByteLength, false);
-    ArrayBufferView.call(this, tData.buffer, tData.byteOffset, tData.byteLength);
-  }
-  setup(Uint16Array, 2);
-
-  function Int32Array(pLengthOrArrayOrBuffer, pByteOffset, pByteLength) {
-    var tData = TypedArray.call(this, pLengthOrArrayOrBuffer, pByteOffset, pByteLength, true);
-    ArrayBufferView.call(this, tData.buffer, tData.byteOffset, tData.byteLength);
-  }
-  setup(Int32Array, 4);
-
-  function Uint32Array(pLengthOrArrayOrBuffer, pByteOffset, pByteLength) {
-    var tData = TypedArray.call(this, pLengthOrArrayOrBuffer, pByteOffset, pByteLength, false);
-    ArrayBufferView.call(this, tData.buffer, tData.byteOffset, tData.byteLength);
-  }
-  setup(Uint32Array, 4);
-
-  function Float32Array(pLengthOrArrayOrBuffer, pByteOffset, pByteLength) {
-    throw new Error('Not implemented');
-    var tData = TypedArray.call(this, pLengthOrArrayOrBuffer, pByteOffset, pByteLength, true);
-    ArrayBufferView.call(this, tData.buffer, tData.byteOffset, tData.byteLength);
-  }
-  //setup(Float32Array, 4);
-
-  function Float64Array(pLengthOrArrayOrBuffer, pByteOffset, pByteLength) {
-    throw new Error('Not implemented');
-    var tData = TypedArray.call(this, pLengthOrArrayOrBuffer, pByteOffset, pByteLength, true);
-    ArrayBufferView.call(this, tData.buffer, tData.byteOffset, tData.byteLength);
-  }
-  //setup(Float64Array, 8);
-
-}(this));
-/**
- * @author Yuta Imaya
- * @author Jason Parrott (Slight namespace modifications)
- *
- * Copyright (C) 2012 Yuta Imaya.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  var CRC32 = quickswf.utils.CRC32 = {};
-
-  /**
-   * CRC32 ハッシュ値を取得
-   * @param {!Uint8Array} data data byte array.
-   * @param {number=} pos data position.
-   * @param {number=} length data length.
-   * @return {number} CRC32.
-   */
-  CRC32.calc = function(data, pos, length) {
-    return CRC32.update(data, 0, pos, length);
-  };
-
-  /**
-   * CRC32ハッシュ値を更新
-   * @param {!Uint8Array} data data byte array.
-   * @param {number} crc CRC32.
-   * @param {number=} pos data position.
-   * @param {number=} length data length.
-   * @return {number} CRC32.
-   */
-  CRC32.update = function(data, crc, pos, length) {
-    var table = CRC32.Table;
-    var i = (typeof pos === 'number') ? pos : (pos = 0);
-    var il = (typeof length === 'number') ? length : data.length;
-
-    crc ^= 0xffffffff;
-
-    // loop unrolling for performance
-    for (i = il & 7; i--; ++pos) {
-      crc = (crc >>> 8) ^ table[(crc ^ data[pos]) & 0xff];
-    }
-    for (i = il >> 3; i--; pos += 8) {
-      crc = (crc >>> 8) ^ table[(crc ^ data[pos    ]) & 0xff];
-      crc = (crc >>> 8) ^ table[(crc ^ data[pos + 1]) & 0xff];
-      crc = (crc >>> 8) ^ table[(crc ^ data[pos + 2]) & 0xff];
-      crc = (crc >>> 8) ^ table[(crc ^ data[pos + 3]) & 0xff];
-      crc = (crc >>> 8) ^ table[(crc ^ data[pos + 4]) & 0xff];
-      crc = (crc >>> 8) ^ table[(crc ^ data[pos + 5]) & 0xff];
-      crc = (crc >>> 8) ^ table[(crc ^ data[pos + 6]) & 0xff];
-      crc = (crc >>> 8) ^ table[(crc ^ data[pos + 7]) & 0xff];
-    }
-
-    return (crc ^ 0xffffffff) >>> 0;
-  };
-
-  CRC32.Table = (function() {
-    /** @type {!(Array.<number>|Uint32Array)} */
-    var table = new benri.io.Uint32Array(256);
-    /** @type {number} */
-    var c;
-    /** @type {number} */
-    var i;
-    /** @type {number} */
-    var j;
-
-    for (i = 0; i < 256; ++i) {
-      c = i;
-      for (j = 0; j < 8; ++j) {
-        c = (c & 1) ? (0xedB88320 ^ (c >>> 1)) : (c >>> 1);
-      }
-      table[i] = c >>> 0;
-    }
-
-    return table;
-  }());
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var mOverride = true;
-
-  var io = global.benri.io;
-  var ArrayBufferView = io._ArrayBufferView;
-  var Uint8Array = io.Uint8Array;
-
-  if (!mOverride && global.Uint8Array) {
-    io.DataView = global.DataView;
-  } else {
-    io.DataView = DataView;
-  }
-
-  function DataView(pBuffer, pByteOffset, pByteLength) {
-    pByteOffset = pByteOffset || 0;
-
-    if (typeof pByteLength !== 'number') {
-      pByteLength = pBuffer.byteLength - pByteOffset;
-    }
-
-    if (pByteOffset + pByteLength > pBuffer.byteLength) {
-      throw new Error('Out of bounds');
-    }
-
-    ArrayBufferView.call(this, pBuffer, pByteOffset, pByteLength);
-
-    this._buffer = new Uint8Array(pBuffer, pByteOffset, pByteLength);
-  }
-
-  var tDataViewProto = DataView.prototype;
-
-  function assertDataViewSize(pDataView, pOffset, pSize) {
-    if (pOffset + pSize >= pDataView.byteLength) {
-      throw new Error('Index out of bounds');
-    }
-  }
-
-  tDataViewProto.getInt8 = function(pOffset) {
-    //assertDataViewSize(this, pOffset, 0);
-
-    var tByte = this._buffer[pOffset];
-
-    if (tByte >> 7) {
-      return tByte - (1 << 8);
-    }
-
-    return tByte;
-  };
-
-  tDataViewProto.getUint8 = function(pOffset) {
-    //assertDataViewSize(this, pOffset, 0);
-
-    return this._buffer[pOffset];
-  };
-
-  // Note because I always forget.
-  // Little Endian is when the left-most bit is the least significant
-  // Regular thinking is Big Endian. *sigh *
-
-  tDataViewProto.getInt16 = function(pOffset, pLittleEndian) {
-    var tResult = this.getUint16(pOffset, pLittleEndian);
-
-    if (tResult >> 15) {
-      return tResult - (1 << 16);
-    }
-
-    return tResult;
-  };
-
-  tDataViewProto.getUint16 = function(pOffset, pLittleEndian) {
-    var tSize = 1;
-
-    //assertDataViewSize(this, pOffset, tSize);
-
-    var tBuffer = this._buffer;
-
-    if (pLittleEndian) {
-      pOffset = pOffset + tSize;
-      tSize = -tSize;
-    }
-
-    return (tBuffer[pOffset] << 8) | tBuffer[pOffset + tSize];
-  };
-
-  tDataViewProto.getInt32 = function(pOffset, pLittleEndian) {
-    var tResult = this.getUint32(pOffset, pLittleEndian);
-
-    if (tResult >> 31) {
-      return tResult - (1 << 16) * (1 << 16);
-    }
-
-    return tResult;
-  };
-
-  tDataViewProto.getUint32 = function(pOffset, pLittleEndian) {
-    var tSize = 3;
-
-    //assertDataViewSize(this, pOffset, tSize);
-
-    var tBuffer = this._buffer;
-    var tMultiplier = 1;
-
-    if (pLittleEndian) {
-      pOffset = pOffset + tSize;
-      tMultiplier = -1;
-    }
-
-    return (
-      ((tBuffer[pOffset] << 24) |
-      (tBuffer[pOffset + 1 * tMultiplier] << 16) |
-      (tBuffer[pOffset + 2 * tMultiplier] << 8) |
-      (tBuffer[pOffset + 3 * tMultiplier])) >>> 0);
-  };
-
-  tDataViewProto.getFloat32 = function(pOffset, pLittleEndian) {
-    var tBytes = this.getUint32(pOffset, pLittleEndian);
-
-    var tSign = tBytes >> 31 ? -1 : 1;
-    var tExponent = (tBytes >> 23) & 0xFF;
-    var tMantissa = tBytes & 0x7FFFFF;
-
-    if (tExponent === 0) {
-      if (tMantissa === 0) {
-        return 0;
-      } else {
-        return tSign * Math.pow(2, tExponent - 127) * (tMantissa * Math.pow(2, -22));
-      }
-    } else if (tExponent === 255) {
-      if (tMantissa === 0) {
-        return tSign * Infinity;
-      } else {
-        return tSign * NaN;
-      }
-    } else {
-      return tSign * Math.pow(2, tExponent - 127) * (1 + (tMantissa * Math.pow(2, -23)));
-    }
-  };
-
-  tDataViewProto.getFloat64 = function(pOffset, pLittleEndian) {
-    var tBytesFirst, tBytesLast;
-
-    if (pLittleEndian) {
-      tBytesFirst = this.getUint32(pOffset, pLittleEndian);
-      tBytesLast = this.getUint32(pOffset + 4, pLittleEndian);
-    } else {
-      tBytesLast = this.getUint32(pOffset, pLittleEndian);
-      tBytesFirst = this.getUint32(pOffset + 4, pLittleEndian);
-    }
-
-    var tSign = tBytesFirst >> 31 ? -1 : 1;
-    var tExponent = (tBytesFirst >> 20) & 0x7FF;
-    var tMantissa = (tBytesFirst & 0x3FF) + tBytesLast;
-
-    if (tExponent === 0) {
-      if (tMantissa === 0) {
-        return 0;
-      } else {
-        return tSign * Math.pow(2, tExponent - 1023) * (tMantissa * Math.pow(2, -51));
-      }
-    } else if (tExponent === 2047) {
-      if (tMantissa === 0) {
-        return tSign * Infinity;
-      } else {
-        return tSign * NaN;
-      }
-    } else {
-      return tSign * Math.pow(2, tExponent - 1023) * (1 + (tMantissa * Math.pow(2, -52)));
-    }
-  };
-
-  tDataViewProto.setInt8 = function(pOffset, pValue) {
-    assertDataViewSize(this, pOffset, 0);
-
-    if (pValue < 0) {
-      pValue += 1 << 8;
-      this._buffer[pOffset] = 0x80 | (pValue & 0x7F);
-    } else {
-      this._buffer[pOffset] = pValue & 0xFF;
-    }
-  };
-
-  tDataViewProto.setUint8 = function(pOffset, pValue) {
-    assertDataViewSize(this, pOffset, 0);
-
-    this._buffer[pOffset] = pValue & 0xFF;
-  };
-
-  tDataViewProto.setInt16 = function(pOffset, pValue, pLittleEndian) {
-    var tSize = 1;
-
-    assertDataViewSize(this, pOffset, tSize);
-
-    if (pLittleEndian) {
-      pOffset = pOffset + tSize;
-      tSize = -tSize;
-    }
-
-    var tBuffer = this._buffer;
-
-    if (pValue < 0) {
-      pValue += 1 << 16;
-      pValue |= 0x8000;
-    }
-
-    tBuffer[pOffset] = (pValue & 0xFF00) >> 8;
-    tBuffer[pOffset + tSize] = pValue & 0xFF;
-  };
-
-  tDataViewProto.setUint16 = function(pOffset, pValue, pLittleEndian) {
-    var tSize = 1;
-
-    assertDataViewSize(this, pOffset, tSize);
-
-    if (pLittleEndian) {
-      pOffset = pOffset + tSize;
-      tSize = -tSize;
-    }
-
-    var tBuffer = this._buffer;
-
-    tBuffer[pOffset] = (pValue & 0xFF00) >> 8;
-    tBuffer[pOffset + tSize] = pValue & 0xFF;
-  };
-
-  tDataViewProto.setInt32 = function(pOffset, pValue, pLittleEndian) {
-    var tSize = 3;
-
-    assertDataViewSize(this, pOffset, tSize);
-
-    var tMultiplier = 1;
-    var tBuffer = this._buffer;
-
-    if (pLittleEndian) {
-      pOffset = pOffset + tSize;
-      tMultiplier = -1;
-    }
-
-    if (pValue < 0) {
-      pValue += (1 << 16) * (1 << 16);
-      pValue |= 0x80000000;
-    }
-
-    tBuffer[pOffset] = (pValue & 0xFF000000) >> 24;
-    tBuffer[pOffset + 1 * tMultiplier] = (pValue & 0xFF0000) >> 16;
-    tBuffer[pOffset + 2 * tMultiplier] = (pValue & 0xFF00) >> 8;
-    tBuffer[pOffset + 3 * tMultiplier] = pValue & 0xFF;
-  };
-
-  tDataViewProto.setUint32 = function(pOffset, pValue, pLittleEndian) {
-    var tSize = 3;
-
-    assertDataViewSize(this, pOffset, tSize);
-
-    var tMultiplier = 1;
-    var tBuffer = this._buffer;
-
-    if (pLittleEndian) {
-      pOffset = pOffset + tSize;
-      tMultiplier = -1;
-    }
-
-    tBuffer[pOffset] = (pValue & 0xFF000000) >> 24;
-    tBuffer[pOffset + 1 * tMultiplier] = (pValue & 0xFF0000) >> 16;
-    tBuffer[pOffset + 2 * tMultiplier] = (pValue & 0xFF00) >> 8;
-    tBuffer[pOffset + 3 * tMultiplier] = pValue & 0xFF;
-  };
-
-  tDataViewProto.setFloat32 = function(pOffset, pValue, pLittleEndian) {
-    var tSize = 3;
-
-    assertDataViewSize(this, pOffset, tSize);
-
-    throw new Error('Unimplemented');
-  };
-
-  tDataViewProto.setFloat64 = function(pOffset, pValue, pLittleEndian) {
-    var tSize = 7;
-
-    assertDataViewSize(this, pOffset, tSize);
-
-    throw new Error('Unimplemented');
-  };
-
-}(this));
-/**
- * @author Kuu Miyazaki
- *
- * Copyright (C) 2012 QuickSWF project
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['14'] = defineSound;
-  global.quickswf.Parser.prototype['15'] = startSound;
-  global.quickswf.Parser.prototype['18'] = soundStreamHead;
-  global.quickswf.Parser.prototype['45'] = soundStreamHead;
-  global.quickswf.Parser.prototype['19'] = soundStreamBlock;
-
-  var Uint8Array = benri.io.Uint8Array;
-  var DataView = benri.io.DataView;
-  var ArrayBuffer = benri.io.ArrayBuffer;
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.EventSound}
-   */
-  function EventSound(pFmt, pFs, pDepth, pCh, pLen, pData) {
-    this.soundFormat = pFmt; // Coding format ('0'=PCM, '1'=ADPCM, '2'=MP3, '3'=PCM(LSB first))
-    this.soundRate = pFs; // Sampling rate ('0'=5.5kHz, '1'=11kHz, '2'=22kHz, '3'=44kHz)
-    this.soundSize = pDepth; // Bit depth ('0'=8bit, '1'=16bit)
-    this.soundType = pCh; // Number of channels ('0'=mono, '1'=stereo)
-    this.soundSampleCount = pLen; // Number of samples (for stereo, number of sample pairs)
-    this.soundData = pData; // Byte array
-  }
-
-  /**
-   * Loads a EventSound type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {quickswf.Reader} pBounds Start of the next tag.
-   * @return {quickswf.structs.EventSound} The loaded EventSound.
-   */
-  EventSound.load = function(pReader, pBounds) {
-    var tFmt = pReader.getUBits(4);
-    var tFs = pReader.getUBits(2);
-    var tDepth = pReader.getUBits(1);
-    var tCh = pReader.getUBits(1);
-    var tLen = pReader.getUint32();
-    var tMetaData = new SoundMetadata(tFmt, tFs, tDepth, tCh, tLen, 0);
-    var tData = SoundData.load(pReader, tMetaData, pBounds);
-
-    return new EventSound(tFmt, tFs, tDepth, tCh, tLen, tData);
-  };
-
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.SoundData}
-   */
-  function SoundData(pData, pRaw, pType) {
-    this.raw = pRaw;
-    for (var k in pData) {
-      if (pData[k] !== pRaw) {
-        this[k] = pData[k];
-      }
-    }
-    this.mimeType = pType;
-  }
-
-  /**
-   * Loads a SoundData type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @param {quickswf.Reader} pBounds Start of the next tag.
-   * @return {quickswf.structs.EventSound} The loaded SoundData.
-   */
-  SoundData.load = function(pReader, pMeta, pBounds) {
-    var tFmt = pMeta.soundCompression,
-        tData, tLength, tOffset, tRaw, tType;
-
-    if (tFmt === 0 || tFmt === 3) {
-console.log('+++ PCM');
-      // PCM
-      tOffset = pReader.tell();
-      tLength = pBounds - tOffset;
-      tData = pReader.getByteArray(tLength);
-      /*
-       * Need some conversion:
-       *  - Number of channels:
-       *        flag ('0'=mono, '1'=stereo)
-       *                => Number (channel num)
-       *  - Sampling rate:
-       *        flag ('0'=5.5kHz, '1'=11kHz, '2'=22kHz, '3'=44kHz)
-       *                => Number (Hz)
-       *  - Bit depth:
-       *        flag ('0'=8bits, '1'=16bits)
-       *                => Number (bits/sample)
-       */
-      tRaw = createRIFFChunk(1/*PCM*/, pMeta.soundType + 1, 5500 << pMeta.soundRate,
-              (pMeta.soundSize + 1) * 8, tData, tLength);
-      tType = 'audio/wave';
-      tData = {};
-      tData.offset = 0;
-    } else if (tFmt === 1) {
-console.log('+++ ADPCM');
-      // ADPCM
-      tData = {};
-      tData.adpcmCodeSize = pReader.getUBits(2);
-      tOffset = pReader.tell();
-      tLength = pBounds - tOffset;
-      tData.adpcmPackets = pReader.getByteArray(tLength);
-      /*
-       *  - Bit depth:
-       *        flag ('0'=2bits, '1'=3bits, '2'=4bits, '3'=5bits/sample)
-       *                => Number (bits/sample)
-       */
-      tRaw = createRIFFChunk(2/*ADPCM*/, pMeta.soundType + 1, 5500 << pMeta.soundRate,
-              tData.adpcmCodeSize + 2, tData.adpcmPackets, tLength);
-      tData.offset = 0;
-      tType = 'audio/x-wav';
-    } else if (tFmt === 2) {
-console.log('+++ MP3');
-      // MP3
-      tData = {};
-      tData.seekSamples = pReader.getInt16();
-      tOffset = pReader.tell();
-      tRaw = tData.mp3Frames = pReader.slice(tOffset, pBounds);
-      tData.offset = tOffset;
-      tType = 'audio/mpeg';
-    }
-
-    pReader.seekTo(pBounds);
-
-    return new SoundData(tData, tRaw, tType);
-  };
-
-  /**
-   * Wraps up the PCM data in RIFF chunk (i.e. WAVE file.)
-   * @param {Number}  pFmt Format type (PCM=1, ADPCM=2)
-   * @param {Number}  pCh Number of channels.
-   * @param {Number}  pFs Sampling rate (n samples per sec.)
-   * @param {Number}  pDepth Length of a single sample in bits.
-   * @param {Uint8Array}  pData Sound data.
-   * @param {Number}  pLength Length of the sound data in bytes.
-   * @return {Uint8Array} RIFF chunk (i.e. WAVE file.)
-   */
-  function createRIFFChunk(pFmt, pCh, pFs, pDepth, pData, pLength) {
-
-    var tRIFF = new Uint8Array(44 + pLength),
-        tCurr = 0, tIntBuf = new ArrayBuffer(4),
-        tView = new DataView(tIntBuf, 0, 4),
-        tBlockSize = pDepth / 8 * pCh,
-        tBytesPerSec = tBlockSize * pFs,
-        appendChars = function (pStr) {
-            for (var i = 0, il = pStr.length; i < il; i++) {
-              tRIFF[tCurr++] = pStr.charCodeAt(i);
-            }},
-        appendInt32 = function (pInt) {
-            tView.setInt32(0, pInt, true);
-
-            for (var i = 0; i < 4; i++) {
-              tRIFF[tCurr++] = tView.getInt8(i);
-            }},
-        appendInt16 = function (pInt) {
-            tView.setInt16(0, pInt, true);
-
-            for (var i = 0; i < 2; i++) {
-              tRIFF[tCurr++] = tView.getInt8(i);
-            }};
-
-    // RIFF chunk
-    appendChars('RIFF');
-    appendInt32(36 + pLength); // total size
-    appendChars('WAVE');
-    // format chunk
-    appendChars('fmt ');
-    appendInt32(16); // chunk size
-    appendInt16(pFmt); // wave format type (PCM=1)
-    appendInt16(pCh);  // number of channels (mono=1, streo=2)
-    appendInt32(pFs);  // samples per sec
-    appendInt32(tBytesPerSec); // bytes per sec (block size * samples per sec)
-    appendInt16(tBlockSize); // block size (bits per sample / 8 * number of channels)
-    appendInt16(pDepth); // bits per sample (8bit or 16bit)
-    // data chunk
-    appendChars('data');
-    appendInt32(pLength); // chunk size
-    tRIFF.set(pData, 44);
-
-    return tRIFF;
-  }
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.SOUNDINFO}
-   */
-  function SOUNDINFO(pStop, pNoMul, pEnv, pLoop, pOut, pIn) {
-    this.syncStop = pStop; // Stop the sound now.
-    this.syncNoMultiple = pNoMul; // Don't start the sound if already playing.
-    this.hasEnvelope = pEnv; // Has envelope info.
-    this.hasLoops = pLoop; // Has loop info.
-    this.hasOutPoint = pOut; // Has out-point info.
-    this.hasInPoint = pIn; // Has in-point infor.
-  }
-
-  /**
-   * Loads a SOUNDINFO type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @return {quickswf.structs.SOUNDINFO} The loaded SOUNDINFO.
-   */
-  SOUNDINFO.load = function(pReader) {
-    pReader.getUBits(2); // Skip reserved bits
-    var tStop = (pReader.getUBits(1) === 1);
-    var tNoMul = (pReader.getUBits(1) === 1);
-    var tEnv = (pReader.getUBits(1) === 1);
-    var tLoop = (pReader.getUBits(1) === 1);
-    var tOut = (pReader.getUBits(1) === 1);
-    var tIn = (pReader.getUBits(1) === 1);
-    var soundInfo = new SOUNDINFO(tStop, tNoMul, tEnv, tLoop, tOut, tIn);
-    // Number of samples to skip at beginning of sound.
-    tIn && (soundInfo.inPoint = pReader.getUint32());
-    // Position in samples of last sample to play.
-    tOut && (soundInfo.outPoint = pReader.getUint32());
-    // Sound loop count.
-    tLoop && (soundInfo.loopCount = pReader.getUint16());
-
-    if (tEnv) { // disable this for now...
-      // Sound Envelope point count.
-      soundInfo.envPoints = pReader.getUint8();
-      soundInfo.envelopeRecords = new Array(soundInfo.envPoints);
-
-      for (var i = 0, il = soundInfo.envPoints; i < il; i++) {
-        // Sound Envelope records.
-        soundInfo.envelopeRecords[i] = {};
-        soundInfo.envelopeRecords[i].pos44 = pReader.getUint32();
-        soundInfo.envelopeRecords[i].leftLevel = pReader.getUint16();
-        soundInfo.envelopeRecords[i].rightLevel = pReader.getUint16();
-      }
-    }
-
-    return soundInfo;
-  };
-
-  /**
-   * @constructor
-   * @class {quickswf.structs.SoundStreamHead}
-   */
-  function SoundMetadata(pFmt, pFs, pDepth, pCh, pLen, pLatency) {
-    this.soundCompression = pFmt; // Coding format ('0'=PCM, '1'=ADPCM, '2'=MP3, '3'=PCM(LSB first))
-    this.soundRate = pFs; // Sampling rate ('0'=5.5kHz, '1'=11kHz, '2'=22kHz, '3'=44kHz)
-    this.soundSize = pDepth; // Bit depth ('0'=8bit, '1'=16bit)
-    this.soundType = pCh; // Number of channels ('0'=mono, '1'=stereo)
-    this.soundSampleCount = pLen; // Number of samples (for stereo, number of sample pairs)
-    this.latencySeek = pLatency; // The value here sould match MP3's SeekSamples field in the first SoundStreamBlock.
-  }
-
-  /**
-   * Loads a SoundMetadata type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @return {quickswf.structs.EventSound} The loaded SoundMetadata.
-   */
-  SoundMetadata.load = function(pReader) {
-    pReader.getUBits(4); // Skip reserved bits
-    pReader.getUBits(4); // Skip advisory bits (PlaybackSoundXxx)
-    var tFmt = pReader.getUBits(4);
-    var tFs = pReader.getUBits(2);
-    var tDepth = pReader.getUBits(1);
-    var tCh = pReader.getUBits(1);
-    var tLen = pReader.getUint16();
-    var tLatency = (tFmt !== 2 ? void 0 : pReader.getInt16());
-
-    return new SoundMetadata(tFmt, tFs, tDepth, tCh, tLen, tLatency);
-  };
-
-  function defineSound(pLength) {
-    var tReader = this.r, tBounds = tReader.tell() + pLength;
-    var tId = tReader.getUint16();
-    var tSound = EventSound.load(tReader, tBounds);
-    tSound.id = tId;
-    var tObj = tSound.soundData;
-
-    this.swf.mediaLoader.load(tId, tObj.raw, tObj.mimeType);
-  }
-
-  function startSound(pLength) {
-    var tReader = this.r;
-    var tId = tReader.getUint16();
-    var tSoundInfo = SOUNDINFO.load(tReader);
-
-    this.add({
-      type: 'startSound',
-      soundId: tId,
-      soundInfo: tSoundInfo
-    });
-  }
-
-  function soundStreamHead(pLength) {
-    var tReader = this.r;
-    //this.swf.streamSoundMetadata = SoundStreamHead.load(tReader);
-    tReader.seek(pLength);
-  }
-
-  function soundStreamBlock(pLength) {
-    var tMetaData = this.swf.streamSoundMetadata;
-
-    if (tMetaData) {
-      var tFmt = tMetaData.soundCompression;
-      var tReader = this.r, tBounds = tReader.tell() + pLength;
-      var tSound, tSampleCount;
-
-      if (tFmt === 2) {
-        // MP3
-        tSampleCount = pReader.getUint16();
-      }
-      tSound = SoundData.load(tReader, tMetaData, tBounds);
-      tSound.sampleCount = tSampleCount;
-
-      this.add({
-        type: 'soundStreamBlock',
-        soundData: tSound
-      });
-    } else {
-      this.r.seek(pLength);
-    }
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var benri = global.benri;
-  var io = benri.io;
-  var ArrayBufferView = io.ArrayBufferView;
-  var ArrayBuffer = io.ArrayBuffer;
-  var Uint8Array = io.Uint8Array;
-
-  io.Blob = Blob;
-
-  function convertArrayToBuffer(pArray) {
-    var tSize = 0;
-    var tData;
-    var i, il = pArray.length;
-    var j, jl;
-    var tOffset = 0;
-    var tArrayBuffer;
-    var tUint8Array;
-    var tTempArrayBuffer;
-    var tTempUint8Array;
-
-    for (i = 0; i < il; i++) {
-      tData = pArray[i];
-
-      if (tData instanceof ArrayBufferView) {
-        tSize += tData.byteLength;
-      } else {
-        tSize += tData.length;
-      }
-    }
-
-    tArrayBuffer = new ArrayBuffer(tSize);
-    tUint8Array = new Uint8Array(tArrayBuffer);
-
-    for (i = 0; i < il; i++) {
-      tData = pArray[i];
-      jl = tData.byteLength;
-
-      if (tData instanceof ArrayBufferView) {
-        tTempUint8Array = new Uint8Array(tData.buffer, tData.offset, jl);
-
-        for (j = 0; j < jl; j++) {
-          tUint8Array[tOffset + j] = tTempUint8Array[j];
-        }
-      } else {
-        for (j = 0; j < jl; j++) {
-          tUint8Array[tOffset + j] = tData[j] & 0xFF;
-        }
-      }
-
-      tOffset += jl;
-    }
-
-    return tArrayBuffer;
-  }
-
-  function Blob(pBuffer, pType) {
-    this.type = pType || '';
-    this.setBuffer(pBuffer);
-  };
-
-  Blob.prototype.setBuffer = function(pBuffer) {
-    if (pBuffer instanceof ArrayBuffer) {
-      this._buffer = pBuffer;
-    } else if (pBuffer instanceof Array) {
-      this._buffer = convertArrayToBuffer(pBuffer);
-    } else {
-      this._buffer = null;
-    }
-  };
-
-  Blob.prototype.getBuffer = function() {
-    return this._buffer;
-  };
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var benri = global.benri;
-  var Uint8Array = benri.io.Uint8Array;
-
-  /**
-   * @class
-   * @extends {benri.io.Blob}
-   */
-  var TextBlob = (function(pSuper) {
-    /**
-     * @constructor
-     * @param {string} pText
-     */
-    function TextBlob(pText, pType) {
-      pSuper.call(this, null, pType || 'plain/text');
-      this.text = pText || '';
-    }
-
-    TextBlob.prototype = Object.create(pSuper.prototype);
-    TextBlob.prototype.constructor = TextBlob;
-
-    TextBlob.prototype.getBuffer = function() {
-      if (this._buffer !== null) {
-        return this._buffer;
-      }
-
-      var i = 0;
-      var tText = this.text;
-      var il = tText.length;
-      var tBuffer = new Uint8Array(il);
-
-      for (; i < il; i++) {
-        tBuffer[i] = tText.charCodeAt(i) & 0xFF;
-      }
-
-      return tBuffer.buffer;
-    };
-
-    return TextBlob;
-  })(benri.io.Blob);
-
-  benri.io.TextBlob = TextBlob;
-
-}(this));
 /**
  * @author Jason Parrott
  *
@@ -8699,6 +4536,116 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
 }(this));
 
 /**
+ * @author Guangyao Liu
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  GradientStyle.TYPE_LINEAR = 1;
+  GradientStyle.TYPE_RADIAL = 2;
+
+  function GradientStyle(pType) {
+    /**
+     * The type of this GradientStyle
+     * @type {number}
+     */
+    if (pType !== GradientStyle.TYPE_LINEAR && pType !== GradientStyle.TYPE_RADIAL) {
+      this.type = GradientStyle.TYPE_LINEAR;
+    } else {
+      this.type = pType;
+    }
+
+    /**
+     * The color stops of gradient
+     * @type {array}
+     */
+    this.colorStops = [];
+
+    /**
+     * The color ratio stop of gradient
+     * Maximum value is 1.
+     * @type {array}
+     */
+    this.colorRatioStops = [];
+
+    /**
+     * The stop colors of gradient
+     * @type {array}
+     */
+    this.stopColors = [];
+
+    /**
+     * The position of start point
+     * @type {Point}
+     */
+    this.startPoint = null;
+
+    /**
+     * The position of end point
+     * @type {Point}
+     */
+    this.endPoint = null;
+
+    /**
+     * The radius of start circle (only for radial gradient)
+     * @type {number=0}
+     */
+    this.startRadius = 0;
+
+    /**
+     * The radius of end circle (only for radial gradient)
+     * @type {number=0}
+     */
+    this.endRadius = 0;
+
+    /**
+     * The identifier of this gradient style
+     * @type {string}
+     */
+    this.signature = '';
+  }
+
+  GradientStyle.prototype.generateSignature = function () {
+    var tSignature = this.startPoint + '$' +
+                     this.endPoint;
+
+    var tColorStops = this.colorStops;
+    var tStopColors = this.stopColors;
+    var i = 0, il = tColorStops.length;
+
+    for (; i < il; i++) {
+      tSignature += '$' + tColorStops[i]; // +
+      //            '$' + tStopColors[i].toCSSString();
+      // Color is excluded here considering it could be overwritten by ColorTransform later
+    }
+
+    if (this.type === GradientStyle.TYPE_RADIAL) {
+      tSignature += '$' + this.startRadius + 
+                    '$' + this.endRadius;
+    }
+
+    this.signature = tSignature;
+
+    return tSignature;
+  };
+
+  GradientStyle.prototype.convertToRatio = function (pNormalizer) {
+    var tColorStops = this.colorStops;
+    var tColorRatioStops = this.colorRatioStops;
+
+    for (var i = 0, il = tColorStops.length; i < il; i++) {
+      tColorRatioStops[i] = tColorStops[i] / pNormalizer;
+    }
+  };
+
+  global.benri.graphics.draw.GradientStyle = GradientStyle;
+
+}(this));
+
+/**
  * @author Kuu Miyazaki
  *
  * Copyright (C) 2013 BenriJS Project.
@@ -9177,11 +5124,8 @@ benri.graphics.shader.fragment.RadialGradientShader = benri.graphics.shader.frag
 
   ].join('\n'), // sources
   {
-    startPoint: benri.geometry.Point,
-    radius: Number,
-    matrix: benri.geometry.Matrix2D,
-    positions: Array,
-    positionColors: Array
+    gradientStyle: benri.graphics.draw.GradientStyle,
+    matrix: benri.geometry.Matrix2D
   } // uniforms
 );
 
@@ -9201,11 +5145,8 @@ benri.graphics.shader.fragment.LinearGradientShader = benri.graphics.shader.frag
 
   ].join('\n'), // sources
   {
-    startPoint: benri.geometry.Point,
-    endPoint: benri.geometry.Point,
-    matrix: benri.geometry.Matrix2D,
-    positions: Array,
-    positionColors: Array
+    gradientStyle: benri.graphics.draw.GradientStyle,
+    matrix: benri.geometry.Matrix2D
   } // uniforms
 );
 
@@ -9228,7 +5169,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
   ].join('\n'), // sources
   {
     tileMode: String,
-    image: benri.graphics.draw.AbstractImage,
+    image: benri.graphics.Image,
     matrix: benri.geometry.Matrix2D
   } // uniforms
 );
@@ -9570,9 +5511,13 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
     }
 
     return tArray;
-  }
+  };
 
+  Point.prototype.toString = function () {
+    return this.x + ',' + this.y;
+  };
 }(this));
+
 /**
  * @author Jason Parrott
  *
@@ -12140,9 +8085,9 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
   };
 
   mHandlers.StopSounds = function StopSounds() {
-    var tAudioProps = this.root.stage.props.get('Audio');
-    for (var i = 0, il = tAudioProps.length; i < il; i++) {
-      tAudioProps[i].stop();
+    var tAudioRenderers = this.root.stage.props.audio.context.getAll();
+    for (var i = 0, il = tAudioRenderers.length; i < il; i++) {
+      tAudioRenderers[i].stop();
     }
   };
 
@@ -12618,6 +8563,10 @@ benri.event = {};
   function EventEmitter(pInstance) {
     pInstance = pInstance || this;
 
+    if ('_events' in pInstance) {
+      return;
+    }
+
     pInstance._events = {};
 
     pInstance.on = on;
@@ -12625,6 +8574,10 @@ benri.event = {};
     pInstance.ignore = ignore;
     pInstance.emit = emit;
   }
+
+  EventEmitter.isEmitter = function(pInstance) {
+    return '_events' in pInstance;
+  };
 
   /**
    * Register an event handler for the given event name.
@@ -14923,14 +10876,20 @@ benri.event = {};
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-(function(global) {
+(function() {
 
-  global.benri.mem.Keeper = Keeper;
+  benri.mem.Keeper = Keeper;
 
-  var deepCopy = benri.util.deepCopy;
   var EventEmitter = benri.event.EventEmitter;
+  var LinkedNode = benri.util.LinkedNode;
 
   function KeepKey() {
+  }
+
+  function KeeperInstance() {
+    this.keys = null;
+    this.shouldDestroy = false;
+    this.isDestroyed = false;
   }
 
   /**
@@ -14940,27 +10899,23 @@ benri.event = {};
    */
   function Keeper(pInstance) {
     pInstance = pInstance || this;
-    pInstance._keepKeys = [];
-    pInstance._shouldDestroy = false;
-    pInstance._isDestroyed = false;
-    pInstance._keeperEvent = new EventEmitter();
+
+    pInstance._keeper = new KeeperInstance();
+
+    if (EventEmitter.isEmitter(pInstance) === false) {
+      EventEmitter(pInstance);
+    }
+
     pInstance.keep = keep;
     pInstance.release = release;
     pInstance.destroy = destroy;
-    pInstance.onDestroy = onDestroy;
-    pInstance.ignoreDestroy = ignoreDestroy;
-
-    if (!('clone' in pInstance)) {
-      pInstance.clone = clone;
-    }
   };
 
   Keeper.isKeeper = function(pObject) {
     return (
       pObject !== null &&
       pObject !== void 0 &&
-      pObject._keepKeys &&
-      pObject.keep
+      '_keeper' in pObject
     );
   };
 
@@ -14970,7 +10925,14 @@ benri.event = {};
    */
   function keep() {
     var tKeepKey = new KeepKey();
-    this._keepKeys.push(tKeepKey);
+    var tKeeper = this._keeper;
+
+    if (tKeeper.keys === null) {
+      tKeeper.keys = new LinkedNode(tKeepKey, null);
+    } else {
+      tKeeper.keys.add(tKeepKey)
+    }
+
     return tKeepKey;
   }
 
@@ -14979,17 +10941,35 @@ benri.event = {};
    * @param  {KeepKey} pKeepKey A key returned by the corresponding keep()
    */
   function release(pKeepKey) {
-    var tKeepKeys = this._keepKeys;
-    var tIndex = tKeepKeys.indexOf(pKeepKey);
+    var tKeeper = this._keeper;
+    var tNode = tKeeper.keys;
+    var tRoot = tNode;
+    var tNext;
 
-    if (~tIndex) {
-      tKeepKeys.splice(tIndex, 1);
-
-      if (this._shouldDestroy && this._isDestroyed === false && tKeepKeys.length === 0) {
-        this._isDestroyed = true;
-        this._keeperEvent.emit('destroy');
-      }
+    if (tNode === null) {
+      return;
     }
+
+    do {
+      tNext = tNode.next;
+
+      if (tNode.data === pKeepKey) {  
+        tNode.remove();
+
+        if (tNode === tRoot) {
+          tKeeper.keys = tNext;
+
+          if (tNext === null) {
+            if (tKeeper.shouldDestroy === true && tKeeper.isDestroyed === false) {
+              tKeeper.isDestroyed = true;
+              this.emit('destroy');
+            }
+
+            return;
+          }
+        }
+      }
+    } while ((tNode = tNext) !== null);
   }
 
   /**
@@ -14997,232 +10977,231 @@ benri.event = {};
    * Destroyed objects cannot be used in the future.
    */
   function destroy() {
+    var tKeeper = this._keeper;
 
-    if (this._shouldDestroy === true) {
+    if (tKeeper.shouldDestroy === true) {
       return;
     }
 
-    this._shouldDestroy = true;
+    tKeeper.shouldDestroy = true;
 
-    if (this._keepKeys.length === 0) {
-      this._isDestroyed = true;
-      this._keeperEvent.emit('destroy');
+    if (tKeeper.keys === null) {
+      tKeeper.isDestroyed = true;
+      this.emit('destroy');
     }
   }
 
-  /**
-   * Registers a function to be called when this instance is destroyed.
-   * @param pListener A function to be called on destroy.
-   *  Note that 'this' inside the function depends on whether the Keeper is used as constructor.
-   */
-  function onDestroy(pListener) {
-    var tSelf = this;
-    var tWrapper = pListener.__keeperListener = function () {
-      pListener.call(tSelf);
-      delete pListener.__keeperListener;
-    };
-    this._keeperEvent.onFor('destroy', tWrapper, 1);
-  }
-
-  /**
-   * Unregisters a function to be called when this instance is destroyed.
-   * @param pListener A function to be unregistered.
-   */
-  function ignoreDestroy(pListener) {
-    this._keeperEvent.ignore('destroy', pListener.__keeperListener);
-  }
-
-  function clone() {
-    var tNewObject = {};
-    var tKeys = Object.keys(this);
-    var tKey;
-
-    for (var i = 0, il = tKeys.length; i < il; i++) {
-      tKey = tKeys[i];
-
-      if (tKey !== '_keeperEvent' && tKey !== '_keepKeys') {
-        tNewObject[tKey] = deepCopy(this[tKey]);
-      }
-    }
-
-    this._keeperEvent = new EventEmitter();
-    this._keepKeys = [];
-  }
-
-}(this));
+}());
 
 /**
- * @author Jason Parrott
+ * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS.
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var Keeper = benri.mem.Keeper;
+  var EventEmitter = benri.event.EventEmitter;
 
-  function AbstractImage(pWidth, pHeight) {
-    this._width = pWidth;
-    this._height = pHeight;
-    Keeper(this);
+  global.benri.media.MediaRenderer = MediaRenderer;
+
+  /**
+   * A class that consumes media data.
+   * @constructor
+   * @param {benri.media.MediaData} Media data to render.
+   */
+  function MediaRenderer() {
+    this.playbackState = MediaRenderer.PLAYBACK_STATE_READY;
+    EventEmitter(this);
   }
 
-  AbstractImage.prototype.getWidth = function() {
-    return this._width;
+  MediaRenderer.PLAYBACK_STATE_NOT_READY         = 0;
+  MediaRenderer.PLAYBACK_STATE_READY             = 1;
+  MediaRenderer.PLAYBACK_STATE_PLAYING           = 2;
+  MediaRenderer.PLAYBACK_STATE_PAUSED            = 3;
+
+  /**
+   * Starts the playback.
+   * @param {object} An object holding key-value pairs of playback options.
+   *    Following options are supproted:
+   *    {
+   *      startTime: {Number} Playback offset in milliseconds.
+   *      loop: {Boolean} Whether to loop.
+   *    }
+   */
+  MediaRenderer.prototype.play = function(pOptions) {
   };
 
-  AbstractImage.prototype.getHeight = function() {
-    return this._height;
+  /**
+   * Stops the playback.
+   */
+  MediaRenderer.prototype.stop = function() {
   };
 
-  AbstractImage.prototype.getBytes = function(pX, pY, pWidth, pHeight, pStride) {
-
+  /**
+   * Pauses the playback.
+   */
+  MediaRenderer.prototype.pause = function() {
   };
 
-  AbstractImage.prototype.setBytes = function(pBytes, pX, pY, pWidth, pHeight, pStride) {
-
+  /**
+   * Resumes the playback.
+   */
+  MediaRenderer.prototype.resume = function() {
   };
 
-  AbstractImage.prototype.clone = function() {
-    var tWidth = this.getWidth();
-    var tHeight = this.getHeight();
-    var tNewImage = new this.constructor(tWidth, tHeight);
-
-    tNewImage.setBytes(this.getBytes(0, 0, tWidth, tHeight), 0, 0, tWidth, tHeight);
-
-    return tNewImage;
+  /**
+   * Moves the playback position.
+   * @param {Number} pTime A specific point in the playback time in milliseconds.
+   */
+  MediaRenderer.prototype.seekTo = function(pTime) {
   };
 
-  global.benri.graphics.draw.AbstractImage = AbstractImage;
+  /**
+   * Returns the current playback time.
+   * @return {Number} Current playback point in milliseconds.
+   */
+  MediaRenderer.prototype.getPlaybackTime = function() {
+  };
+
+  /**
+   * Gets current volume.
+   * @return {Number} Volume from 0.0 to 1.0.
+   */
+  MediaRenderer.prototype.getVolume = function() {
+  };
+
+  /**
+   * Sets the volume.
+   * @param {Number} Volume from 0.0 to 1.0.
+   */
+  MediaRenderer.prototype.setVolume = function(pVolume) {
+  };
 
 }(this));
 
 /**
- * @author Jason Parrott
+ * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
   var benri = global.benri;
+  var mImplClass;
 
   /**
    * @class
-   * @extends {benri.graphics.draw.AbstractImage}
+   * @extends {benri.media.MediaRenderer}
    */
-  var Texture = (function(pSuper) {
-    /**
-     * @constructor
-     * @param {[type]} pSurface
-     */
-    function Texture(pSurface, pWidth, pHeight, pImage) {
-      pSuper.call(this, pWidth, pHeight);
-
-      this.id = -1;
-
-      this.surface = pSurface;
-
-      pSurface.registerTexture(this);
-      this.setImage(pImage);
-
-      this.onDestroy(onDestroy);
+  var AudioRenderer = (function(pSuper) {
+    function AudioRenderer(pAudioData) {
+      pSuper.call(this);
+      this.audio = pAudioData;
     }
 
-    Texture.prototype = Object.create(pSuper.prototype);
-    Texture.prototype.constructor = Texture;
+    AudioRenderer.prototype = Object.create(pSuper.prototype);
+    AudioRenderer.prototype.constructor = AudioRenderer;
 
-    Texture.prototype.getBytes = function(pX, pY, pWidth, pHeight, pStride) {
-      return this.surface.getTextureBytes(this, pX, pY, pWidth, pHeight, pStride);
-    };
+    return AudioRenderer;
+  })(benri.media.MediaRenderer);
 
-    Texture.prototype.setBytes = function(pBytes, pX, pY, pWidth, pHeight, pStride) {
-      this.surface.setTextureBytes(this, pBytes, pX, pY, pWidth, pHeight, pStride);
-    };
+  benri.media.audio.AudioRenderer = AudioRenderer;
 
-    /**
-     * Sets the backing Image of this texture.
-     * As a rule, once you set an Image to a Texture,
-     * the passed Image's getBytes and setBytes results
-     * will become undefined and should never be used.
-     * This is to allow cross platform methods of handling
-     * what exactly a texture is and how it deals with
-     * the backing Image.
-     * @param {benri.graphics.draw.AbstractImage} pImage
-     */
-    Texture.prototype.setImage = function(pImage) {
-      this.surface.setTextureImage(this, pImage);
-    };
-  
-    function onDestroy() {
-      this.surface.destroyTexture(this);
+  /**
+   * A class method to return an impl object.
+   */
+  AudioRenderer.create = function(pAudioData) {
+    if (mImplClass === void 0) {
+      mImplClass = benri.impl.get('media.audio.AudioRenderer').best;
     }
+    return new mImplClass(pAudioData);
+  };
 
-    return Texture;
-  })(benri.graphics.draw.AbstractImage);
 
-  benri.graphics.render.Texture = Texture;
+  // Append something specific to audio.
 
 }(this));
 
 /**
- * @author Jason Parrott
+ * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS.
+ * Copyright (C) 2012 Jason Parrott.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
-
 (function(global) {
 
+  var theatre = global.theatre;
+  var benri = global.benri;
+  var MediaRenderer = benri.media.MediaRenderer;
+  var AudioRenderer = benri.media.audio.AudioRenderer;
+  var mActions = theatre.crews.swf.actions;
+
+
+  theatre.crews.swf.actionsMap.startSound = mActions.PREPARE_STARTSOUND = 0x105;
+  theatre.crews.swf.actionsMap.soundStreamBlock = mActions.PREPARE_SOUNDSTREAMBLOCK = 0x106;
+
   /**
-   * @class
-   * @extends {benri.graphics.draw.AbstractImage}
+   * Sets up playing back event sounds.
+   * @param {theatre.Actor} pSpriteActor The Sprite Actor the sound belongs to.
+   * @param {Object} pData The data to use to know haw to play back the sound.
    */
-  var BitmapImage = (function(pSuper) {
-    /**
-     * @constructor
-     * @param {number} pWidth
-     * @param {number} pHeight
-     * @param {benri.typedarray.Uint8Array=} pBytes
-     */
-    function BitmapImage(pWidth, pHeight, pBytes) {
-      pSuper.call(this, pWidth, pHeight);
-      this._bytes = pBytes;
+  theatre.Scene.registerPreparedCallback(
+    mActions.PREPARE_STARTSOUND,
+    function startSound(pSpriteActor, pData) {
+      var tId = pData.soundId,
+          tInfo = pData.soundInfo,
+          tSound = pSpriteActor.player.media.get(tId + ''),
+          tAudioContext = pSpriteActor.stage.props.audio.context,
+          tRenderer = tAudioContext.get(tId);
+
+      //console.log('StartSound: id=' + tId);
+      //console.log(tSound);
+      //console.log(tInfo);
+
+      if (tInfo.syncStop) {
+          // Stop sound
+          if (tRenderer) {
+            tRenderer.stop();
+          }
+      } else {
+          // Create AudioProp
+          if (!tRenderer) {
+            tRenderer = AudioRenderer.create(tSound);
+            tAudioContext.add(tId, tRenderer);
+          }
+          if (tRenderer.playbackState !== MediaRenderer.PLAYBACK_STATE_PLAYING) {
+            // Start sound
+            tRenderer.play();
+          }
+      }
     }
+  );
 
-    BitmapImage.prototype = Object.create(pSuper.prototype);
-    BitmapImage.prototype.constructor = BitmapImage;
+  /**
+   * Sets up playing back audio streams.
+   * @param {theatre.Actor} pSpriteActor The Sprite Actor the sound belongs to.
+   * @param {Object} pParams An object containing a dictionary-actor map object.
+   * @param {Object} pData The audio data.
+   */
+  theatre.Scene.registerPreparedCallback(
+    mActions.PREPARE_SOUNDSTREAMBLOCK,
+    function soundStreamBlock(pSpriteActor, pData) {
+      var tMetadata = pSpriteActor.player.soundStreamHead,
+          tSound = pData.soundData;
 
-    BitmapImage.prototype.getBytes = function(pX, pY, pWidth, pHeight, pStride) {
-      if (!pX) {
-        pX = 0;
-      }
+      //console.log('SoundStreamBlock:');
+      //console.log(tMetadata);
+      //console.log(tSound);
 
-      if (!pY) {
-        pY = 0;
-      }
-
-      if (!pWidth) {
-        pWidth = tDOMImage.getWidth();
-      }
-
-      if (!pHeight) {
-        pHeight = tDOMImage.getHeight();
-      }
-    };
-
-    BitmapImage.prototype.setBytes = function(pBytes, pX, pY, pWidth, pHeight, pStride) {
-
-    };
-
-    return BitmapImage;
-  })(benri.graphics.draw.AbstractImage);
-
-  global.benri.graphics.draw.BitmapImage = BitmapImage;
-
+      // Feed stream data
+    }
+  );
 }(this));
+
 /**
  * @author Jason Parrott
  *
@@ -15237,59 +11216,60 @@ benri.event = {};
 
   benri.event.EventEmitter(impl);
 
+  /**
+   * Add a new implementation
+   * @param {string} pId       A unique ID
+   * @param {function} pCallback A callback function
+   */
   impl.add = function(pId, pCallback) {
     impl.on('getimpl.' + pId, pCallback);
   };
 
-  impl.get = function(pId, pTags) {
+  /**
+   * Get an implementation of the given ID.
+   * @param  {string} pId    A unique ID
+   * @param  {object} pHints Hints
+   */
+  impl.get = function(pId, pHints) {
     var tImpls = [];
 
-    pTags = pTags || [];
-
-    function add(pClass, pSupportedTags) {
-      var tScore = 0;
-      var i, il;
-
-      if (pSupportedTags) {
-        var tTags = pTags;
-        for (i = 0, il = pSupportedTags.length; i < il; i++) {
-          if (tTags.indexOf(pSupportedTags[i]) !== -1) {
-            tScore++;
-          }
-        }
-      }
-
+    /**
+     * Add an implementation for this get request.
+     * Set a score to automatically choose the best
+     * choice for the implementation.
+     * @param {function} pClass The class for the implmentation
+     * @param {number} pScore A score for how important this implementation is
+     */
+    function add(pClass, pScore) {
       tImpls.push({
         clazz: pClass,
-        tags: pSupportedTags,
-        score: tScore
+        score: pScore
       });
     }
 
     impl.emit('getimpl.' + pId, {
       id: pId,
-      add: add
+      add: add,
+      hints: pHints
     });
 
     if (tImpls.length === 0) {
       return null;
     }
 
-    tImpls.sort(function(pA, pB) {
-      var tAScore = pA.score;
-      var tBScore = pB.score;
+    var tBestImpl = tImpls[0].clazz;
+    var tBestScore = tImpls[0].score;
 
-      if (tAScore > tBScore) {
-        return -1;
-      } else if (tAScore < tBScore) {
-        return 1;
+    for (var i = 1, il = tImpls.length; i < il; i++) {
+      if (tImpls[i].score >= tBestScore) {
+        tBestScore = tImpls[i].score;
+        tBestImpl = tImpls[i].clazz;
       }
-
-      return 0;
-    });
+    }
 
     return {
-      best: tImpls[0],
+      best: tBestImpl,
+      bestScore: tBestScore,
       list: tImpls
     };
   };
@@ -15318,11 +11298,422 @@ benri.event = {};
       throw new Error('No encoder for type.');
     }
 
-    this._impl = new tImpl.best.clazz();
+    this._impl = new tImpl.best();
   }
 
   Encoder.prototype.encode = function(pString) {
     return this._impl.encode(pString);
+  };
+
+}(this));
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function() {
+
+  var impl = benri.impl;
+
+  benri.text.Decoder = Decoder;
+
+  function Decoder(pType) {
+    this.type = pType;
+
+    var tImpl = impl.get('text.decoder.' + pType);
+
+    if (tImpl === null) {
+      throw new Error('No decoder for type.');
+    }
+
+    this._impl = new tImpl.best();
+  }
+
+  Decoder.prototype.decode = function(pBuffer, pOffset, pEndIndex) {
+    pOffset = pOffset || 0;
+    return this._impl.decode(pBuffer, pOffset, pEndIndex || (pBuffer.size - pOffset));
+  };
+
+}());
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var impl = benri.impl;
+
+  benri.mem.MemoryMetrics = MemoryMetrics;
+
+  /**
+   * @constructor
+   * A class for getting metrics from various
+   * types of memory. Defaults to 'sys'.
+   * @param {Array.<string>=['sys']} pTypeHints
+   */
+  function MemoryMetrics(pTypeHints) {
+    this._impl = new (impl.get('mem.metrics', pTypeHints ? pTypeHints : {type: 'sys'}).best)(pTypeHints);
+  }
+
+  /**
+   * Returns all statistics available from the 
+   * current implementation as an object.
+   * @return {Object}
+   */
+  MemoryMetrics.prototype.getAll = function() {
+    return this._impl.getAll();
+  };
+ 
+  /**
+   * Returns the total amount of memory from the 
+   * current implementation as an object.
+   * @return {number}
+   */
+  MemoryMetrics.prototype.getTotal = function() {
+    return this._impl.getTotal();
+  };
+
+  /**
+   * Returns the amount of memory available from the 
+   * current implementation as an object.
+   * @return {number}
+   */
+  MemoryMetrics.prototype.getFree = function() {
+    return this._impl.getTotal();
+  };
+
+  /**
+   * Returns the amount of memory currently used from the 
+   * current implementation as an object.
+   * @return {number}
+   */
+  MemoryMetrics.prototype.getUsed = function() {
+    return this._impl.getTotal() - this._impl.getFree();
+  };
+
+  /**
+   * Checks if there is enought free memory.
+   * @return {boolean} True if there is NOT enought memory.
+   */
+  MemoryMetrics.prototype.isTight = function() {
+    return this._impl.isTight();
+  };
+
+  /**
+   * Gives a hint about memory usage.
+   * @param {number} The amount of used memory.
+   *  Negative number means returning no longer used memory.
+   */
+  MemoryMetrics.prototype.use = function(pAmount) {
+    return this._impl.use(pAmount);
+  };
+
+  /**
+   * NameSpace to hold system supervisors.
+   */
+  benri.mem.metrics = {};
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var benri = global.benri;
+  var mem = benri.mem;
+  var MemoryMetrics = mem.MemoryMetrics;
+
+  /**
+   * Memory supervisor - API usage overview
+   *
+   * Below is the basic usage of the APIs.
+   *
+   *  // Define a type.
+   *  function Class(x, y) {
+   *    this.x = x;
+   *    this.y = y;
+   *  }
+   *  
+   *  // Create a pool for the type. (see the definition of InstancePool.)
+   *  var mPool = new InstancePool({
+   *    refill : function (pPool, pData) {  
+   *      var tPool = pPool.list;
+   *      if (!tPool) {
+   *        tPool = pPool.list = [];
+   *      }
+   *      for (var i = 0; i < 10; i++) {
+   *        tPool[i].push(new Class(256, 256));      
+   *      }
+   *    },
+   *    obtain : function (pPool, pData, pArgs) {  
+   *      var tPool = pPool.list;
+   *      var tInstance = tPool.pop();
+   *      if (!tInstance) {
+   *        return null;
+   *      }
+   *      tInstance.x = pArgs[0];
+   *      tInstance.y = pArgs[1];
+   *      return tInstance;
+   *    },
+   *    recycle : function (pPool, pData, pInstance) {  
+   *      var tPool = pPool.list;
+   *      tPool.push(pInstance);
+   *    }
+   *  });
+   *  
+   *  // Wrap the pool's methods around your type.
+   *  Class.obtain = function (x, y) {
+   *    var tInstance = mPool.obtain([x, y]);
+   *    tInstance.recycle = function () {
+   *      delete this.recycle;
+   *      mPool.recycle(this);
+   *    };
+   *    return tInstance;
+   *  };
+   *
+   *  // Obtain an instance from the pool.
+   *  var tInstance = Class.obtain(128, 128);
+   *
+   *  // Return the instance back to the pool.
+   *  tInstance.recycle();
+   *
+   *  // You can bind your pool to memory supervisor.
+   *  // 'benri.mem.getDefaultSupervisor' returns the system-wide, pre-defined supervisor.
+   *  mPool.setOptions({supervisor : benri.mem.getDefaultSupervisor()});
+   *
+   *  // Now, obtain() can return null.
+   *  var tInstance = Class.obtain(256, 256);
+   *  if (!tInstance) {
+   *    console.error('Out of memory.');
+   *  }
+   *
+   *  // You can create your own supervisor and set it to the pool.
+   *  // Each supervisor is in charge of scheduling memory cleanup and statistics data collection.
+   *  var mPool = new InstancePool({
+   *    supervisor : new MemorySupervisor(), // supervisor
+   *    refill : function (pPool) {  
+   *      ...;
+   *    },
+   *  });
+   *  
+   */
+
+  mem.MemorySupervisor = MemorySupervisor;
+
+  /**
+   * Class that keeps watch on the state of system memory.
+   *
+   * @constructor
+   * @param  {object} pOptions An object that contains key-value pairs of parameters.
+   *
+   *    Valid options are:
+   *
+   *      metricsTypeHints {string} Type of memory metrics (default='sys'.)
+   *
+   *      cleanUpInterval {number} If specified, memory clean-up will occur in the inteval specified here in milliseconds.
+   *                               If not specified, no clean-up will occur.
+   *
+   *      statisticsInterval {number} If specified, field statistics data will be collected in the inteval specified here in minutes.
+   *                                  If not specified, no statistics data will be collected.
+   *
+   *      broadcastLowMemory {bool} Whether to send 'lowMem' event. (default='false'.)
+   *
+   */
+  function MemorySupervisor(pOptions) {
+
+    pOptions = pOptions || {};
+
+    /**
+     * Provides information about system memory state.
+     * @type {MemoryMetrics}
+     */
+    this._metricsType = pOptions.metricsTypeHints;
+    this._metrics = null; // Deferred creation.
+
+    /**
+     * Memory clean-up occurs in the inteval specified here in milli-second.
+     * Zero or negative value means no clean-up should occur.
+     * @type {number}
+     */
+    this._cleanUpInterval = pOptions.cleanUpInterval || 0;
+
+    /**
+     * Id of the timer that cleans up memory.
+     * @type {number}
+     */
+    this._cleanUpTimer;
+
+    /**
+     * Field statistics data is collected in the inteval specified here in minutes.
+     * Zero or negative value means no statistics data should be collected.
+     * @type {number}
+     */
+    this._statisticsInterval = pOptions.statisticsInterval || 0;
+
+    /**
+     * Id of the timer that collects statistics data.
+     * @type {number}
+     */
+    this._statisticsTimer;
+
+    /**
+     * Whether to send 'lowMem' event.
+     * @type {bool}
+     */
+    this._broadcastLowMemory = pOptions.broadcastLowMemory || false;
+
+    benri.event.EventEmitter(this);
+
+    // Starts timer when the first time a client registers an event listener.
+    var tSelf = this;
+    var tOn = this.on;
+    this.on = function (pName, pListener, pCount) {
+      if (pName === 'cleanup' || pName === 'statistics') {
+        tSelf._startTimerIfStopped(pName);
+      }
+      tOn.call(tSelf, pName, pListener, pCount);
+    };
+  }
+
+  MemorySupervisor.prototype._startTimerIfStopped  = function (pType) {
+    var tSelf = this;
+
+    if (pType === void 0 || pType === 'cleanup') {
+      if (!this ._cleanUpTimer && this._cleanUpInterval > 0) {
+        // Starts cleanup timer.
+        this._cleanUpTimer = global.setInterval(function () {
+          tSelf.emit('cleanup');
+        }, tSelf._cleanUpInterval);
+      }
+    }
+
+    if (pType === void 0 || pType === 'statistics') {
+      if (!this ._statisticsTimer && this._statisticsInterval > 0) {
+        // Starts statistics timer.
+        this._statisticsTimer = global.setInterval(function () {
+          tSelf.emit('statistics');
+        }, this._statisticsInterval * 60 * 1000);
+      }
+    }
+  };
+
+  function _createMetrics() {
+    var tMetrics, tType = this._metricsType;
+
+    if (mem.metrics['sys'] === void 0) {
+      // Create default system supervisor.
+      mem.metrics['sys'] = new MemoryMetrics({type: 'sys'});
+    }
+
+    tMetrics = mem.metrics[tType || 'sys'];
+    return tMetrics || new MemoryMetrics({type: tType});
+  }
+
+
+  /**
+   * Wrapper for MemoryMetrics method.
+   * @see MemoryMetrics.isTight
+   */
+  MemorySupervisor.prototype.isTight = function () {
+    var tMetrics = this._metrics || _createMetrics();
+    return tMetrics.isTight();
+  };
+
+  /**
+   * Wrapper for MemoryMetrics method.
+   * @see MemoryMetrics.use
+   */
+  MemorySupervisor.prototype.use = function (pSize) {
+    var tMetrics = this._metrics || _createMetrics();
+    tMetrics.use(pSize);
+  };
+
+  /**
+   * Issues memory related events.
+   * @param {string} pTag The tag attached to the event.
+   */
+  MemorySupervisor.prototype.requestMemory = function (pTag) {
+    if (this._broadcastLowMemory) {
+      this.emit('lowMem-' + (pTag ? pTag : 'generic'));
+    }
+  };
+
+
+  var mDefaultSupervisor = null;
+
+  var mDefaultNativeSupervisor = null;
+
+  /**
+   * Factory method to get the default system supervisor.
+   */
+  mem.getDefaultSupervisor = function () {
+
+    if (!mDefaultSupervisor) {
+      mDefaultSupervisor = new MemorySupervisor({
+        metricsTypeHits : 'sys',
+        cleanUpInterval : 60000,
+        //statisticsInterval : 3
+      });
+    }
+    return mDefaultSupervisor;
+  };
+
+  /**
+   * Factory method to get the default native supervisor.
+   */
+  mem.getDefaultNativeSupervisor = function () {
+
+    if (!mDefaultNativeSupervisor) {
+      mDefaultNativeSupervisor = new MemorySupervisor({
+        metricsTypeHints : 'native',
+        cleanUpInterval : 60000,
+        broadcastLowMemory: true,
+        //statisticsInterval : 3
+      });
+    }
+    return mDefaultNativeSupervisor;
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var benri = global.benri;
+  var impl = benri.impl;
+
+  benri.io.compression.Inflator = Inflator;
+
+  function Inflator(pType) {
+    this.type = pType;
+
+    var tImpl = impl.get('io.compression.inflator.' + pType);
+
+    if (tImpl === null) {
+      throw new Error('No inflator for type.');
+    }
+
+    this._impl = new tImpl.best();
+  }
+
+  Inflator.prototype.inflate = function(pBuffer, pOptions) {
+    return this._impl.inflate(pBuffer, pOptions);
   };
 
 }(this));
@@ -15338,315 +11729,383 @@ benri.event = {};
   var benri = global.benri;
   var impl = benri.impl;
 
-  benri.text.Decoder = Decoder;
+  benri.io.compression.Deflator = Deflator;
 
-  function Decoder(pType) {
+  function Deflator(pType) {
     this.type = pType;
 
-    var tImpl = impl.get('text.decoder.' + pType);
+    var tImpl = impl.get('io.compression.deflator.' + pType);
 
     if (tImpl === null) {
-      throw new Error('No decoder for type.');
+      throw new Error('No deflator for type.');
     }
 
-    this._impl = new tImpl.best.clazz();
+    this._impl = new tImpl.best();
   }
 
-  Decoder.prototype.decode = function(pArrayBuffer, pOffset, pLength) {
-    return this._impl.decode(pArrayBuffer, pOffset || 0, pLength || pArrayBuffer.length);
+  Deflator.prototype.deflate = function(pBuffer, pOptions) {
+    return this._impl.deflate(pBuffer, pOptions);
   };
 
 }(this));
 /**
- * @author Yoshihiro Yamazaki
+ * @author Jason Parrott
  *
- * Copyright (C) 2012 Yoshihiro Yamazaki
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
-(function(global) {
 
-  global.quickswf.Parser.prototype['10'] = defineFont;
-  global.quickswf.Parser.prototype['48'] = defineFont2;
+(function() {
 
-  var RECT = global.quickswf.structs.RECT;
-  var Shape = global.quickswf.structs.Shape;
-  var KERNINGRECORD = global.quickswf.structs.KERNINGRECORD;;
-  var benri = global.benri;
-  var io = benri.io;
-  var ArrayBuffer = io.ArrayBuffer;
-  var Uint8Array = io.Uint8Array;
-  var Decoder = benri.text.Decoder;
+  var getImpl = benri.impl.get;
 
-  /**
-   * @constructor
-   * @extends {Array}
-   * @class {quickswf.structs.Font}
-   */
-  function Font() {
-    this.id = -1;
-    this.shiftJIS = false;
-    this.smalltext = false;
-    this.ansi = false;
-    this.italic = false;
-    this.bold = false;
-    this.langCode = 0;
-    this.name = null;
-    this.codeTable = null;
-    this.ascent = 0;
-    this.descent = 0;
-    this.leading = 0;
-    this.advanceTable = null;
-    this.boundsTable = null;
-    this.kerningTable = null;
-    this.lookupTable = null;
-    this.shapes = null;
+  benri.io.Buffer = Buffer;
+
+  function Buffer(pImpl, pData, pSize) {
+    this._impl = pImpl;
+    this.data = pData;
+
+    this.size = this.length = pSize;
+
+    this.getInt8 = getInt8;
+    this.getUint8 = getUint8;
+    this.getInt16 = getInt16;
+    this.getUint16 = getUint16;
+    this.getInt32 = getInt32;
+    this.getUint32 = getUint32;
+    this.getFloat32 = getFloat32;
+    this.getFloat64 = getFloat64;
+
+    this.setInt8 = setInt8;
+    this.setUint8 = setUint8;
+    this.setInt16 = setInt16;
+    this.setUint16 = setUint16;
+    this.setInt32 = setInt32;
+    this.setUint32 = setUint32;
+    this.setFloat32 = setFloat32;
+    this.setFloat64 = setFloat64;
+
+    this.copy = copy;
+    this.copyTo = copyTo;
+    this.copyFrom = copyFrom;
+    this.toString = toString;
+    this.toArray = toArray;
   }
 
-  /**
-   * Loads a Font type.
-   * @param {quickswf.Reader} pReader The reader to use.
-   * @return {quickswf.structs.Font} The loaded Font.
-   */
-  Font.load = function(pReader, pOffsetOfOffsetTable, pOffsetTable) {
-    var tFont = new Font();
-    if (pOffsetOfOffsetTable === null) {
-      return tFont;
-    }
-    var tNumGlyphs = pOffsetTable.length;
-    var tGlyphShapeTable = new Array(tNumGlyphs);
-    for (var i = 0 ; i < tNumGlyphs ; i++) {
-      pReader.seekTo(pOffsetOfOffsetTable + pOffsetTable[i]);
-      var tShape = Shape.load(pReader, false, false, false);
-      tGlyphShapeTable[i] = tShape;
-    }
-    tFont.shapes = tGlyphShapeTable;
-    return tFont;
+  var mImpl = null;
+
+  Buffer.create = function(pSize) {
+    var tImpl = mImpl === null ? (mImpl = getImpl('io.buffer').best) : mImpl;
+    var tData = tImpl.create(pSize);
+
+    return new Buffer(tImpl, tData, tData.length);
+  }
+
+  Buffer.fromArray = function(pArray) {
+    var tImpl = mImpl === null ? (mImpl = getImpl('io.buffer').best) : mImpl;
+    var tData = tImpl.fromArray(pArray);
+
+    return new Buffer(tImpl, tData, tData.length);
   };
 
-  function defineFont(pLength) {
-    parseFont(this);
-  }
+  Buffer.fromString = function(pString, pEncoding) {
+    return (new benri.text.Encoder(pEncoding || 'ascii')).encode(pString);
+  };
 
-  function defineFont2(pLength) {
-    parseFont2(this);
-  }
+  Buffer.fromParts = function(pParts) {
+    var tImpl = mImpl === null ? (mImpl = getImpl('io.buffer').best) : mImpl;
 
-  function parseFont(pParser) {
-    var tReader = pParser.r;
-    var tId = tReader.getUint16();
-    var tOffsetOfOffsetTable = tReader.tell();
-    var tOfOffsetTable_0 = tReader.getUint16();
-    var tNumGlyphs = tOfOffsetTable_0 / 2;
-    var tOffsetTable = new Array(tNumGlyphs);
-    tOffsetTable[0] = tOfOffsetTable_0;
+    var tPart;
+    var i;
+    var il = pParts.length;
+    var tBuffers = [];
+    var tSize = 0;
 
-    for (var i = 1 ; i < tNumGlyphs ; i++) {
-      tOffsetTable[i] = tReader.getUint16();
-    }
+    for (i = 0; i < il; i++) {
+      tPart = pParts[i];
 
-    var tFont = Font.load(tReader, tOffsetOfOffsetTable, tOffsetTable);
-
-    tFont.id = tId;
-
-    pParser.swf.fonts[tId] = tFont;
-  }
-
-  function parseFont2(pParser) {
-    var tReader = pParser.r;
-    var tId = tReader.getUint16();
-    var tFlags = tReader.getUint8();
-    var tFontFlagsHasLayout   = (tFlags & 0x80) ? true : false;
-    var tFontFlagsShiftJIS    = (tFlags & 0x40) ? true : false;
-    var tFontFlagsSmallText   = (tFlags & 0x20) ? true : false;
-    var tFontFlagsANSI        = (tFlags & 0x10) ? true : false;
-    var tFontFlagsWideOffsets = (tFlags & 0x08) ? true : false;
-    var tFontFlagsWideCodes   = (tFlags & 0x04) ? true : false;
-    var tFontFlagsItalic      = (tFlags & 0x02) ? true : false;
-    var tFontFlagsBold        = (tFlags & 0x01) ? true : false;
-    var tLangCode = tReader.getUint8();
-    var tFontNameLen = tReader.getUint8();
-    var tFontName = (tFontNameLen > 0) ? tReader.getString(tFontNameLen) : null;
-    var hasMultibyteChar = function(pStr) {
-      for (var i = 0, il = pStr.length; i < il; i++) {
-        if (pStr.charCodeAt(i) > 0x7F) {
-          return true;
-        }
-      }
-      return false;
-    };
-
-    if (hasMultibyteChar(tFontName) || tFontName.indexOf('_?') === 0) {
-      // _????: Flash Pro generates this magical font name if Japanese font is used in English OS.
-
-      // Font name with multibyte-string tends not to be supported.:
-      // TODO: We need to find appropreate font family for Japanese chars.
-      tFontName = 'Osaka';
-    }
-
-    var tNumGlyphs = tReader.getUint16();
-    var tFontAscent = 0;
-    var tFontDescent = 0;
-    var tFontLeading = 0;
-    var tKerningCount = 0;
-    var tFontKerningTable = null;
-
-    if (tNumGlyphs === 0) { // no Glyphs
-      var tFont = Font.load(tReader, null, null);
-      // Need to skip CodeTableOffset?
-      //tFontFlagsWideOffsets ? tReader.getUint32() : tReader.getUint16();
-      tFont.id = tId;
-      tFont.shiftJIS = tFontFlagsShiftJIS;
-      tFont.smalltext =tFontFlagsSmallText;
-      tFont.ansi = tFontFlagsANSI;
-      tFont.italic = tFontFlagsItalic;
-      tFont.bold = tFontFlagsBold;
-      tFont.langCode = tLangCode;
-      tFont.name = tFontName;
-      pParser.swf.fonts[tId] = tFont;
-      if (tFontFlagsHasLayout) {
-        tFontAscent = tReader.getInt16();
-        tFontDescent = tReader.getInt16();
-        tFontLeading = tReader.getInt16();
-
-        tKerningCount = tReader.getUint16();
-        tFontKerningTable = new Array(tKerningCount);
-
-        for (var i = 0 ; i < tKerningCount; i++) {
-          tFontKerningTable[i] = KERNINGRECORD.load(tReader, tFontFlagsWideCodes);
-        }
-        tFont.ascent = tFontAscent;
-        tFont.descent = tFontDescent;
-        tFont.leading = tFontLeading;
-        tFont.kerningTable = tFontKerningTable;
-      }
-      return ;
-    }
-    var tOffsetTable = new Array(tNumGlyphs);
-    var tCodeTableOffset = 0;
-    var tOffsetOfOffsetTable = tReader.tell();
-
-    if (tFontFlagsWideOffsets) {
-      for (var i = 0 ; i < tNumGlyphs ; i++) {
-        tOffsetTable[i] = tReader.getUint32();
+      if (tPart === null || tPart === void 0) {
+        continue;
       }
 
-      tCodeTableOffset = tReader.getUint32();
+      if (tPart instanceof Buffer) {
+        tBuffers.push(tPart);
+        tSize += tPart.size;
+      } else if (typeof tPart === 'string') {
+        tBuffers.push(Buffer.fromString(tPart, 'ascii'));
+        tSize += tPart.length;
+      } else {
+        tBuffers.push(Buffer.fromArray(tPart));
+        tSize += tPart.length;
+      }
+    }
+
+    var tBuffer = new Buffer(tImpl, tImpl.create(tSize), tSize);
+    var tOffset = 0;
+
+    for (i = 0, il = tBuffers.length; i < il; i++) {
+      tPart = tBuffers[i];
+
+      tBuffer.copyFrom(tPart, tOffset, 0, 0);
+
+      tOffset += tPart.size;
+    }
+
+    return tBuffer;
+  };
+
+  function copy(pOffset, pSize) {
+    return this.copyTo(pOffset, pOffset + pSize);
+  }
+
+  function copyTo(pOffset, pEndOffset) {
+    var tImpl = this._impl;
+    var tData = tImpl.copyTo(this.data, pOffset, pEndOffset);
+
+    return new Buffer(tImpl, tData, tData.length);
+  }
+
+  function copyFrom(pSourceBuffer, pDestOffset, pSourceOffset, pSize) {
+    var tImpl = this._impl;
+
+    tImpl.copyFrom(this.data, pSourceBuffer.data, pDestOffset || 0, pSourceOffset || 0, pSize || 0);
+  }
+
+  function toString(pEncoding) {
+    return (new benri.text.Decoder(pEncoding || 'ascii')).decode(this);
+  }
+
+  function toArray() {
+    var tSize = this.size;
+    var tBuffer = this.data;
+    var tArray = new Array(tSize);
+
+    for (var i = 0; i < tSize; i++) {
+      tArray[i] = tBuffer[i];
+    }
+
+    return tArray;
+  }
+
+  function getInt8(pOffset) {
+    var tByte = this.data[pOffset];
+
+    if (tByte >> 7) {
+      return tByte - (1 << 8);
+    }
+
+    return tByte;
+  };
+
+  function getUint8(pOffset) {
+    return this.data[pOffset];
+  };
+
+  // Note because I always forget.
+  // Little Endian is when the left-most bit is the least significant
+  // Regular thinking is Big Endian. *sigh *
+
+  function getInt16(pOffset, pLittleEndian) {
+    var tResult = this.getUint16(pOffset, pLittleEndian);
+
+    if (tResult >> 15) {
+      return tResult - (1 << 16);
+    }
+
+    return tResult;
+  };
+
+  function getUint16(pOffset, pLittleEndian) {
+    var tSize = 1;
+    var tBuffer = this.data;
+
+    if (pLittleEndian) {
+      pOffset = pOffset + tSize;
+      tSize = -tSize;
+    }
+
+    return (tBuffer[pOffset] << 8) | tBuffer[pOffset + tSize];
+  };
+
+  function getInt32(pOffset, pLittleEndian) {
+    var tResult = this.getUint32(pOffset, pLittleEndian);
+
+    if (tResult >> 31) {
+      return tResult - (1 << 16) * (1 << 16);
+    }
+
+    return tResult;
+  };
+
+  function getUint32(pOffset, pLittleEndian) {
+    var tSize = 3;
+    var tBuffer = this.data;
+    var tMultiplier = 1;
+
+    if (pLittleEndian) {
+      pOffset = pOffset + tSize;
+      tMultiplier = -1;
+    }
+
+    return (
+      ((tBuffer[pOffset] << 24) |
+      (tBuffer[pOffset + 1 * tMultiplier] << 16) |
+      (tBuffer[pOffset + 2 * tMultiplier] << 8) |
+      (tBuffer[pOffset + 3 * tMultiplier])) >>> 0);
+  };
+
+  function getFloat32(pOffset, pLittleEndian) {
+    var tBytes = this.getUint32(pOffset, pLittleEndian);
+
+    var tSign = tBytes >> 31 ? -1 : 1;
+    var tExponent = (tBytes >> 23) & 0xFF;
+    var tMantissa = tBytes & 0x7FFFFF;
+
+    if (tExponent === 0) {
+      if (tMantissa === 0) {
+        return 0;
+      } else {
+        return tSign * Math.pow(2, tExponent - 127) * (tMantissa * Math.pow(2, -22));
+      }
+    } else if (tExponent === 255) {
+      if (tMantissa === 0) {
+        return tSign * Infinity;
+      } else {
+        return tSign * NaN;
+      }
     } else {
-      for (var i = 0 ; i < tNumGlyphs ; i++) {
-        tOffsetTable[i] = tReader.getUint16();
-      }
+      return tSign * Math.pow(2, tExponent - 127) * (1 + (tMantissa * Math.pow(2, -23)));
+    }
+  };
 
-      tCodeTableOffset = tReader.getUint16();
+  function getFloat64(pOffset, pLittleEndian) {
+    var tBytesFirst, tBytesLast;
+
+    if (pLittleEndian) {
+      tBytesFirst = this.getUint32(pOffset, pLittleEndian);
+      tBytesLast = this.getUint32(pOffset + 4, pLittleEndian);
+    } else {
+      tBytesLast = this.getUint32(pOffset, pLittleEndian);
+      tBytesFirst = this.getUint32(pOffset + 4, pLittleEndian);
     }
 
-    var tFont = Font.load(tReader, tOffsetOfOffsetTable, tOffsetTable);
+    var tSign = tBytesFirst >> 31 ? -1 : 1;
+    var tExponent = (tBytesFirst >> 20) & 0x7FF;
+    var tMantissa = (tBytesFirst & 0x3FF) + tBytesLast;
 
-    tReader.seekTo(tOffsetOfOffsetTable + tCodeTableOffset);
-
-    var tCodeTable = new Array(tNumGlyphs);
-
-    if (tFontFlagsWideCodes) {
-      for (var i = 0 ; i < tNumGlyphs ; i++) {
-        tCodeTable[i] = tReader.getUint16();
+    if (tExponent === 0) {
+      if (tMantissa === 0) {
+        return 0;
+      } else {
+        return tSign * Math.pow(2, tExponent - 1023) * (tMantissa * Math.pow(2, -51));
+      }
+    } else if (tExponent === 2047) {
+      if (tMantissa === 0) {
+        return tSign * Infinity;
+      } else {
+        return tSign * NaN;
       }
     } else {
-      for (var i = 0 ; i < tNumGlyphs ; i++) {
-        tCodeTable[i] = tReader.getUint8();
-      }
+      return tSign * Math.pow(2, tExponent - 1023) * (1 + (tMantissa * Math.pow(2, -52)));
     }
+  };
 
-    var tFontAdvanceTable = new Array(tNumGlyphs);
-    var tFontBoundsTable = new Array(tNumGlyphs);
-
-    if (tFontFlagsHasLayout) {
-      tFontAscent = tReader.getInt16();
-      tFontDescent = tReader.getInt16();
-      tFontLeading = tReader.getInt16();
-
-      for (var i = 0 ; i < tNumGlyphs ; i++) {
-        tFontAdvanceTable[i] = tReader.getInt16();
-      }
-
-      for (var i = 0 ; i < tNumGlyphs ; i++) {
-        tFontBoundsTable[i] = RECT.load(tReader);
-      }
-
-      tKerningCount = tReader.getUint16();
-      tFontKerningTable = new Array(tKerningCount);
-
-      for (var i = 0 ; i < tKerningCount; i++) {
-        tFontKerningTable[i] = KERNINGRECORD.load(tReader, tFontFlagsWideCodes);
-      }
-    }
-
-    tFont.id = tId;
-    tFont.shiftJIS = tFontFlagsShiftJIS;
-    tFont.smalltext =tFontFlagsSmallText;
-    tFont.ansi = tFontFlagsANSI;
-    tFont.italic = tFontFlagsItalic;
-    tFont.bold = tFontFlagsBold;
-    tFont.langCode = tLangCode;
-    tFont.name = tFontName;
-    tFont.ascent = tFontAscent;
-    tFont.descent = tFontDescent;
-    tFont.leading = tFontLeading;
-    tFont.advanceTable = tFontAdvanceTable;
-    tFont.boundsTable = tFontBoundsTable;
-    tFont.kerningTable = tFontKerningTable;
-
-    var buildLookupTable = function (pCodeTable) {
-      // Create a lookup table for searching glyphs by char code.
-      var tTable = new Object();
-      var tShapes = tFont.shapes;
-
-      for (var i = 0; i < tNumGlyphs; i++) {
-        var tEntry = new Object();
-        tEntry.shape = tShapes[i];
-
-        if (tFontFlagsHasLayout) {
-          tEntry.advance = tFontAdvanceTable[i];
-          tEntry.bounds = tFontBoundsTable[i];
-        }
-
-        tTable[pCodeTable[i] + ''] = tEntry;
-      }
-
-      return tTable;
-    };
-
-    if (tFontFlagsShiftJIS && tCodeTable) {
-      // Converts the code table into UCS characters.
-      var tLength = tCodeTable.length, tCharCode;
-      var tBuffer = new ArrayBuffer(tLength * 2);
-      var tUint8Array = new Uint8Array(tBuffer);
-      for (var i = 0, j = 0, il = tLength; i < il; i++) {
-        tCharCode = tCodeTable[i];
-        if (tCharCode < 256) {
-          tUint8Array[j++] = tCharCode;
-        } else if (tCharCode < 65536) {
-          tUint8Array[j++] = (tCharCode >> 8) & 0xff;
-          tUint8Array[j++] = tCharCode & 0xff;
-        }
-      }
-      var tDecoder = new Decoder('shift_jis');
-      var tString = tDecoder.decode(tUint8Array);
-      var tCharCodeArray = new Array();
-      for (var i = 0; i < tLength; i++) {
-        if (tCharCode = tString.charCodeAt(i)) {
-          tCharCodeArray.push(tCharCode);
-        }
-      }
-      tFont.codeTable = tCharCodeArray;
-      tFont.lookupTable = buildLookupTable(tCharCodeArray);
+  function setInt8(pOffset, pValue) {
+    if (pValue < 0) {
+      pValue += 1 << 8;
+      this.data[pOffset] = 0x80 | (pValue & 0x7F);
     } else {
-      tFont.codeTable = tCodeTable;
-      tFont.lookupTable = buildLookupTable(tCodeTable);
+      this.data[pOffset] = pValue & 0xFF;
     }
-    pParser.swf.fonts[tId] = tFont;
-  }
+  };
 
-}(this));
+  function setUint8(pOffset, pValue) {
+    this.data[pOffset] = pValue & 0xFF;
+  };
 
+  function setInt16(pOffset, pValue, pLittleEndian) {
+    var tSize = 1;
+
+    if (pLittleEndian) {
+      pOffset = pOffset + tSize;
+      tSize = -tSize;
+    }
+
+    var tBuffer = this.data;
+
+    if (pValue < 0) {
+      pValue += 1 << 16;
+      pValue |= 0x8000;
+    }
+
+    tBuffer[pOffset] = (pValue & 0xFF00) >> 8;
+    tBuffer[pOffset + tSize] = pValue & 0xFF;
+  };
+
+  function setUint16(pOffset, pValue, pLittleEndian) {
+    var tSize = 1;
+
+    if (pLittleEndian) {
+      pOffset = pOffset + tSize;
+      tSize = -tSize;
+    }
+
+    var tBuffer = this.data;
+
+    tBuffer[pOffset] = (pValue & 0xFF00) >> 8;
+    tBuffer[pOffset + tSize] = pValue & 0xFF;
+  };
+
+  function setInt32(pOffset, pValue, pLittleEndian) {
+    var tSize = 3;
+    var tMultiplier = 1;
+    var tBuffer = this.data;
+
+    if (pLittleEndian) {
+      pOffset = pOffset + tSize;
+      tMultiplier = -1;
+    }
+
+    if (pValue < 0) {
+      pValue += (1 << 16) * (1 << 16);
+      pValue |= 0x80000000;
+    }
+
+    tBuffer[pOffset] = (pValue & 0xFF000000) >> 24;
+    tBuffer[pOffset + 1 * tMultiplier] = (pValue & 0xFF0000) >> 16;
+    tBuffer[pOffset + 2 * tMultiplier] = (pValue & 0xFF00) >> 8;
+    tBuffer[pOffset + 3 * tMultiplier] = pValue & 0xFF;
+  };
+
+  function setUint32(pOffset, pValue, pLittleEndian) {
+    var tSize = 3;
+    var tMultiplier = 1;
+    var tBuffer = this.data;
+
+    if (pLittleEndian) {
+      pOffset = pOffset + tSize;
+      tMultiplier = -1;
+    }
+
+    tBuffer[pOffset] = (pValue & 0xFF000000) >> 24;
+    tBuffer[pOffset + 1 * tMultiplier] = (pValue & 0xFF0000) >> 16;
+    tBuffer[pOffset + 2 * tMultiplier] = (pValue & 0xFF00) >> 8;
+    tBuffer[pOffset + 3 * tMultiplier] = pValue & 0xFF;
+  };
+
+  function setFloat32(pOffset, pValue, pLittleEndian) {
+    var tSize = 3;
+
+    throw new Error('Unimplemented');
+  };
+
+  function setFloat64(pOffset, pValue, pLittleEndian) {
+    var tSize = 7;
+
+    throw new Error('Unimplemented');
+  };
+
+}());
 /**
  * @author Jason Parrott
  *
@@ -15656,8 +12115,9 @@ benri.event = {};
 
 (function(global) {
 
-  global.benri.net.URLQuery = URLQuery;
-  var Decoder = global.benri.text.Decoder;
+  benri.net.URLQuery = URLQuery;
+  var Decoder = benri.text.Decoder;
+  var Buffer = benri.io.Buffer;
 
   function NameValuePair(pName, pValue) {
     this.name = pName;
@@ -15703,17 +12163,16 @@ benri.event = {};
 
       for (i = 0, il = tEncodedArray.length; i < il; i++) {
         tSplitedPart = tEncodedArray[i];
-//        tSubEncodedArray.push(parseInt(tSplitedPart.substr(0, 2), 16));
         tSubEncodedArray.push(('0x' + tSplitedPart.substr(0, 2)) | 0);
         if (tSplitedPart.length > 2) {
-          tDecodedResult += tDecoder.decode(tSubEncodedArray);
+          tDecodedResult += tDecoder.decode(Buffer.fromArray(tSubEncodedArray));
           tDecodedResult += tSplitedPart.substr(2);
           tSubEncodedArray = [];
         }
       }
       
       if (tSubEncodedArray.length > 0) {
-        tDecodedResult += tDecoder.decode(tSubEncodedArray);
+        tDecodedResult += tDecoder.decode(Buffer.fromArray(tSubEncodedArray));
       }
 
       return tDecodedResult;
@@ -16038,95 +12497,6 @@ benri.event = {};
     return tString;
   };
 
-  /*function URL(pString, pBase) {
-    var tParts = parseURL(this, pString, pBase);
-
-    this.base = pBase ? parseURL(pBase) : null;
-  }
-
-  var SCHEME_START = 1,
-      SCHEME = 2,
-      NO_SCHEME = 3;
-
-  // http://url.spec.whatwg.org/
-  function parseURL(pURL, pInput, pBase, pStateOverride) {
-    var tScheme = '',
-        tSchemeData = '',
-        tUsername = '',
-        tPort = '',
-        tPassword = null,
-        tHost = null,
-        tQuery = null,
-        tFragment = null,
-        tPath = [],
-        tRelative = false;
-
-    pInput = pInput.trim();
-    var tInputLength = pInput.length;
-
-    var tState = pStateOverride || SCHEME_START;
-
-    var tBase = pBase || null;
-    var tBuffer = '';
-    var tAtFlag = false;
-    var tBracketsFlag = false;
-    var tIndex = 0;
-    var tC;
-
-    function isAlpha(pCode) {
-      return (
-        (pCode >= 0x41 && pCode <= 0x5A) ||
-        (pCode >= 0x61 && pCode <= 0x7A)
-      );
-    }
-
-    function isNumeric(pCode) {
-      return pCode >= 0x30 && pCode <= 0x39;
-    }
-
-    function isAlphaNumeric(pCode) {
-      return isAlpha(pCode) && isNumeric(pCode);
-    }
-
-    function isHex(pCode) {
-      return isNumeric(pCode) || (
-        (pCode >= 0x41 && pCode <= 0x46) ||
-        (pCode >= 0x61 && pCode <= 0x66)
-      );
-    }
-
-    function s(pCode) {
-      return String.fromCharCode(pCode);
-    }
-
-    function error() {
-      throw new Error('Invalid URL');
-    }
-
-    do {
-      tC = pInput.charCodeAt(tIndex);
-
-      switch (tState) {
-        case SCHEME_START:
-          if (isAlpha(tC)) {
-            tBuffer += s(tC).toLowerCase();
-            tState = SCHEME;
-          } else if (pStateOverride === void 0) {
-            tState = NO_SCHEME;
-            tIndex--;
-          } else {
-            error();
-          }
-          break;
-        case SCHEME:
-
-          break;
-      }
-
-
-    } while ((++tIndex) < tInputLength);
-  }*/
-
 }(this));
 
 /**
@@ -16138,27 +12508,13 @@ benri.event = {};
 
 (function(global) {
 
-  var benri = global.benri;
   var io = benri.io;
-  var Uint8Array = io.Uint8Array;
-  var DataView = io.DataView;
-  var ArrayBufferView = io.ArrayBufferView;
+  var Buffer = io.Buffer;
   var Decoder = benri.text.Decoder;
   io.Reader = Reader;
 
-  // A source here is something that implements the
-  // getXX API of TypedArray's DataView class.
-
   function Reader(pSource) {
-    if (!(pSource instanceof DataView)) {
-      if (pSource instanceof ArrayBufferView) {
-        this.source = new DataView(pSource.buffer, pSource.byteOffset, pSource.byteLength);
-      } else {
-        this.source = new DataView(pSource);
-      }
-    } else {
-      this.source = pSource;
-    }
+    this.source = pSource;
 
     this._index = 0;
 
@@ -16170,38 +12526,30 @@ benri.event = {};
   var tProto = Reader.prototype;
 
   tProto.getLength = function() {
-    return this.source.byteLength;
+    return this.source.size;
   };
 
-  tProto.extract = function(pIndex, pEndIndex) {
-    var tSource = this.source;
-    return new Uint8Array(tSource.buffer, tSource.byteOffset + pIndex, pEndIndex - pIndex);
-  };
-
-  tProto.slice = function(pIndex, pEndIndex) {
-    var tSource = this.source, tNewArray;
-    if ('slice' in tSource.buffer) {
-      return new Uint8Array(tSource.buffer.slice(tSource.byteOffset + pIndex, tSource.byteOffset + pEndIndex));
-    } else {
-      tNewArray = new Uint8Array(pEndIndex - pIndex);
-      tNewArray.set(this.extract(pIndex, pEndIndex));
-      return tNewArray;
-    }
-  };
-
-  tProto.getByteArray = function(pLength) {
+  tProto.getCopy = function(pLength) {
     var tIndex = this._index;
-    var tBytes = this.extract(tIndex, tIndex + pLength);
+    var tBuffer = this.source.copy(tIndex, pLength);
 
     this._index = tIndex + pLength;
 
-    return tBytes;
+    return tBuffer;
+  };
+
+  tProto.getCopyTo = function(pEndIndex) {
+    var tBuffer = this.source.copyTo(this._index, pEndIndex);
+
+    this._index = pEndIndex;
+
+    return tBuffer;
   };
 
   tProto.seek = function(pOffset) {
     var tNewIndex = this._index + pOffset;
 
-    if (tNewIndex > this.source.byteLength) {
+    if (tNewIndex > this.source.size) {
       throw new Error('Index out of bounds');
     }
 
@@ -16209,7 +12557,7 @@ benri.event = {};
   };
 
   tProto.seekTo = function(pIndex) {
-    if (pIndex > this.source.byteLength) {
+    if (pIndex > this.source.size) {
       throw new Error('Index out of bounds');
     }
 
@@ -16292,14 +12640,14 @@ benri.event = {};
 
     var tIndex = this._index;
     var tSource = this.source;
-    var tOffset = tSource.byteOffset;
-    var tUint8Array = new Uint8Array(tSource.buffer, tOffset + tIndex);
-    var tLength = pLength ? pLength : tUint8Array.length;
+    var tData = tSource.data;
+    var tLength = pLength ? pLength : tSource.size;
     var tStringLength = pLength;
 
-    for (var i = 0; i < tLength; i++) {
-      if (tUint8Array[i] === 0) {
-        tStringLength = i;
+    for (var i = tIndex; i < tLength; i++) {
+      if (tData[i] === 0) {
+        tStringLength = i - tIndex;
+        
         break;
       }
     }
@@ -16312,190 +12660,9 @@ benri.event = {};
       return '';
     } else {
       this._index += pLength || (tStringLength + 1);
-      return tDecoder.decode(tUint8Array, 0, tStringLength);
+      return tDecoder.decode(tSource, tIndex, tIndex + tStringLength);
     }
   };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 QuickSWF Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  /**
-   * @class
-   * @extends {benri.io.Reader}
-   */
-  var SWFReader = (function(pSuper) {
-    /**
-     * @constructor
-     */
-    function SWFReader(pSource) {
-      pSuper.call(this, pSource);
-
-      this.encoding = 'utf-8';
-
-      /**
-       * The current bit buffer.
-       * @type {number}
-       * @private
-       */
-      this._bitBuffer = 0;
-
-      /**
-       * The current bit buffer length;
-       * @type {number}
-       * @private
-       */
-      this._bitBufferLength = 0;
-    }
-
-    var Uint8Array = global.benri.io.Uint8Array;
-
-    var tSuperProto = pSuper.prototype;
-    var tProto = SWFReader.prototype = Object.create(tSuperProto);
-    tProto.constructor = SWFReader;
-
-    /**
-     * Align the current bits to the nearest large byte.
-     */
-    tProto.align = function() {
-      if (this._bitBufferLength !== 0) {
-        this._bitBuffer = 0;
-        this._bitBufferLength = 0;
-      }
-    };
-
-    /**
-     * Peeks a bits, not modifying the state of this Reader.
-     * @param {number} pNumber The number of bits to peek at.
-     * @return {number} The bits.
-     */
-    tProto.peekBits = function(pNumber) {
-      //var tBuffer = new Uint8Array(this.source.buffer),
-      var tByteIndex = this.tell(),
-          tBitBuffer = this._bitBuffer,
-          tBitBufferLength = this._bitBufferLength;
-
-      var tTmp = 0;
-
-      while (tBitBufferLength < pNumber) {
-        tTmp = this.getUint8(); // tBuffer[tByteIndex++];
-
-        tBitBuffer = (tBitBuffer << 8) | tTmp;
-        tBitBufferLength += 8;
-      }
-
-      tTmp = tBitBuffer >>> (tBitBufferLength - pNumber);
-
-      this.seekTo(tByteIndex);
-
-      return tTmp;
-    };
-
-    /**
-     * Reads bits.
-     * @param {number} pNumber The number of bits to read.
-     * @return {number} The bits.
-     */
-    tProto.getUBits = function(pNumber) {
-      //var tBuffer = new Uint8Array(this.source.buffer),
-      var tByteIndex = this.tell(),
-          tBitBuffer = this._bitBuffer,
-          tBitBufferLength = this._bitBufferLength;
-
-      var tByteLength = 8;
-      var tResult = tBitBuffer;
-
-      while (tBitBufferLength + tByteLength < pNumber) {
-
-        tBitBuffer = this.getUint8();
-
-        tResult = (tResult << tByteLength) | tBitBuffer;
-
-        tBitBufferLength += tByteLength;
-      }
-
-      if (tBitBufferLength < pNumber) {
-        tBitBuffer = this.getUint8();
-        
-        tResult = (tResult << (pNumber - tBitBufferLength)) | (tBitBuffer >>> (tBitBufferLength + tByteLength - pNumber));
-
-        tBitBufferLength = tBitBufferLength + tByteLength - pNumber;
-
-        tBitBuffer = tBitBuffer & ((1 << tBitBufferLength) - 1);
-
-      } else {
-        tResult = tBitBuffer >>> (tBitBufferLength - pNumber);
-
-        tBitBufferLength -= pNumber;
-
-        tBitBuffer &= ((1 << tBitBufferLength) - 1);
-      }
-
-      this._bitBuffer = tBitBuffer;
-      this._bitBufferLength = tBitBufferLength;
-
-      return tResult;
-    };
-
-    /**
-     * Reads a signed number from bits.
-     * @param {number} pNumber The number of bits to read.
-     * @return {number} The bits.
-     */
-    tProto.getBits = function(pNumber) {
-      var tResult = this.getUBits(pNumber);
-      if (tResult >> (pNumber - 1)) {
-        // TODO: Will this every be over 31?
-        tResult -= 1 << pNumber;
-      }
-      return tResult;
-    };
-
-    /**
-     * Reads a fixed point from bits with a precision of 8.
-     * @param {number} pNumber The number of bits to read.
-     * @return {number} The fixed point.
-     */
-    tProto.getFixedPoint8 = function(pNumber) {
-      return this.getBits(pNumber) * 0.00390625;
-    };
-
-    /**
-     * Reads a fixed point from bits with a precision of 16.
-     * @param {number} pNumber The number of bits to read.
-     * @return {number} The fixed point.
-     */
-    tProto.getFixedPoint16 = function(pNumber) {
-      return this.getBits(pNumber) * 0.0000152587890625;
-    };
-
-    tProto.getInt16 = function() {
-      return tSuperProto.getInt16.call(this, true);
-    };
-
-    tProto.getUint16 = function() {
-      return tSuperProto.getUint16.call(this, true);
-    };
-
-    tProto.getInt32 = function() {
-      return tSuperProto.getInt32.call(this, true);
-    };
-
-    tProto.getUint32 = function() {
-      return tSuperProto.getUint32.call(this, true);
-    };
-
-    return SWFReader;
-  })(benri.io.Reader);
-
-  global.quickswf.SWFReader = SWFReader;
 
 }(this));
 
@@ -17237,86 +13404,49 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var impl = benri.impl;
-
-  benri.mem.MemoryMetrics = MemoryMetrics;
-
-  /**
-   * @constructor
-   * A class for getting metrics from various
-   * types of memory. Defaults to 'sys'.
-   * @param {Array.<string>=['sys']} pTypeHints
-   */
-  function MemoryMetrics(pTypeHints) {
-    this._impl = new (impl.get('mem.metrics', pTypeHints ? pTypeHints : ['sys']).best.clazz)(pTypeHints);
+  if (!('console' in global)) {
+    return;
   }
 
-  /**
-   * Returns all statistics available from the 
-   * current implementation as an object.
-   * @return {Object}
-   */
-  MemoryMetrics.prototype.getAll = function() {
-    return this._impl.getAll();
-  };
- 
-  /**
-   * Returns the total amount of memory from the 
-   * current implementation as an object.
-   * @return {number}
-   */
-  MemoryMetrics.prototype.getTotal = function() {
-    return this._impl.getTotal();
-  };
+  benri.impl.add('log.console', function(pData) {
+    pData.add(ConsoleImpl);
+  });
 
-  /**
-   * Returns the amount of memory available from the 
-   * current implementation as an object.
-   * @return {number}
-   */
-  MemoryMetrics.prototype.getFree = function() {
-    return this._impl.getTotal();
-  };
+  function ConsoleImpl() {
+    this.log = logImpl;
+  }
 
-  /**
-   * Returns the amount of memory currently used from the 
-   * current implementation as an object.
-   * @return {number}
-   */
-  MemoryMetrics.prototype.getUsed = function() {
-    return this._impl.getTotal() - this._impl.getFree();
-  };
+  var log = benri.util.log;
 
-  /**
-   * Checks if there is enought free memory.
-   * @return {boolean} True if there is NOT enought memory.
-   */
-  MemoryMetrics.prototype.isTight = function() {
-    return this._impl.isTight();
-  };
+  var mLevelMap = [];
 
-  /**
-   * Gives a hint about memory usage.
-   * @param {number} The amount of used memory.
-   *  Negative number means returning no longer used memory.
-   */
-  MemoryMetrics.prototype.use = function(pAmount) {
-    return this._impl.use(pAmount);
-  };
+  mLevelMap[log.LEVEL_PANIC] =
+  mLevelMap[log.LEVEL_ALERT] =
+  mLevelMap[log.LEVEL_CRIT] =
+  mLevelMap[log.LEVEL_ERROR] = 'error';
 
-  /**
-   * NameSpace to hold system supervisors.
-   */
-  benri.mem.metrics = {};
+  mLevelMap[log.LEVEL_WARN] = 'warn';
+
+  mLevelMap[log.LEVEL_NOTICE] =
+  mLevelMap[log.LEVEL_INFO] = 'info';
+
+  mLevelMap[log.LEVEL_DEBUG] = 'debug';
+
+  function logImpl(pLevel, pMessage, pData) {
+    if (pData === void 0) {
+      console[mLevelMap[pLevel]](pMessage);
+    } else {
+      console[mLevelMap[pLevel]](pMessage, pData);
+    }
+  }
 
 }(this));
-
 /**
  * @author Jason Parrott
  *
@@ -17326,333 +13456,157 @@ benri.event = {};
 
 (function(global) {
 
-  var benri = global.benri;
-  var mem = benri.mem;
-  var MemoryMetrics = mem.MemoryMetrics;
+  var URL = global.URL || global.webkitURL;
+  var createObjectURL = URL ? URL.createObjectURL : null;
+  var revokeObjectURL = URL ? URL.revokeObjectURL : revokeObjectURL;
+  var GlobalBlob = global.Blob;
+  var GlobalBlobBuilder = null;
 
-  /**
-   * Memory supervisor - API usage overview
-   *
-   * Below is the basic usage of the APIs.
-   *
-   *  // Define a type.
-   *  function Class(x, y) {
-   *    this.x = x;
-   *    this.y = y;
-   *  }
-   *  
-   *  // Create a pool for the type. (see the definition of InstancePool.)
-   *  var mPool = new InstancePool({
-   *    refill : function (pPool, pData) {  
-   *      var tPool = pPool.list;
-   *      if (!tPool) {
-   *        tPool = pPool.list = [];
-   *      }
-   *      for (var i = 0; i < 10; i++) {
-   *        tPool[i].push(new Class(256, 256));      
-   *      }
-   *    },
-   *    obtain : function (pPool, pData, pArgs) {  
-   *      var tPool = pPool.list;
-   *      var tInstance = tPool.pop();
-   *      if (!tInstance) {
-   *        return null;
-   *      }
-   *      tInstance.x = pArgs[0];
-   *      tInstance.y = pArgs[1];
-   *      return tInstance;
-   *    },
-   *    recycle : function (pPool, pData, pInstance) {  
-   *      var tPool = pPool.list;
-   *      tPool.push(pInstance);
-   *    }
-   *  });
-   *  
-   *  // Wrap the pool's methods around your type.
-   *  Class.obtain = function (x, y) {
-   *    var tInstance = mPool.obtain([x, y]);
-   *    tInstance.recycle = function () {
-   *      delete this.recycle;
-   *      mPool.recycle(this);
-   *    };
-   *    return tInstance;
-   *  };
-   *
-   *  // Obtain an instance from the pool.
-   *  var tInstance = Class.obtain(128, 128);
-   *
-   *  // Return the instance back to the pool.
-   *  tInstance.recycle();
-   *
-   *  // You can bind your pool to memory supervisor.
-   *  // 'benri.mem.getDefaultSupervisor' returns the system-wide, pre-defined supervisor.
-   *  mPool.setOptions({supervisor : benri.mem.getDefaultSupervisor()});
-   *
-   *  // Now, obtain() can return null.
-   *  var tInstance = Class.obtain(256, 256);
-   *  if (!tInstance) {
-   *    console.error('Out of memory.');
-   *  }
-   *
-   *  // You can create your own supervisor and set it to the pool.
-   *  // Each supervisor is in charge of scheduling memory cleanup and statistics data collection.
-   *  var mPool = new InstancePool({
-   *    supervisor : new MemorySupervisor(), // supervisor
-   *    refill : function (pPool) {  
-   *      ...;
-   *    },
-   *  });
-   *  
-   */
+  var mHaveBlob = GlobalBlob !== void 0;
+  var mTypedArrayBug = /(?:iPhone|iPad).+?Version\/6/.test(global.navigator.userAgent);
 
-  mem.MemorySupervisor = MemorySupervisor;
+  if (mHaveBlob) {
+    if (mTypedArrayBug) {
+      GlobalBlob = WebBlob;
+    } else {
+      try {
+        new GlobalBlob([], {});
+      } catch (e) {
+        mHaveBlobConstructor = false;
+        GlobalBlob = WebBlob;
+        GlobalBlobBuilder = global.BlobBuilder 
+            || global.WebKitBlobBuilder 
+            || global.MozBlobBuilder 
+            || global.MSBlobBuilder;
+      }
+    }
+  }
 
-  /**
-   * Class that keeps watch on the state of system memory.
-   *
-   * @constructor
-   * @param  {object} pOptions An object that contains key-value pairs of parameters.
-   *
-   *    Valid options are:
-   *
-   *      metricsTypeHints {string} Type of memory metrics (default='sys'.)
-   *
-   *      cleanUpInterval {number} If specified, memory clean-up will occur in the inteval specified here in milliseconds.
-   *                               If not specified, no clean-up will occur.
-   *
-   *      statisticsInterval {number} If specified, field statistics data will be collected in the inteval specified here in minutes.
-   *                                  If not specified, no statistics data will be collected.
-   *
-   *      broadcastLowMemory {bool} Whether to send 'lowMem' event. (default='false'.)
-   *
-   */
-  function MemorySupervisor(pOptions) {
+  function WebBlob(pParts, pOptions) {
+    var i, il, j, jl;
+    var tNewArray;
+    var tDataI;
+    var tBuilder;
+    var tBuffer, tNewBuffer;
 
+    pParts = pParts || [];
     pOptions = pOptions || {};
 
-    /**
-     * Provides information about system memory state.
-     * @type {MemoryMetrics}
-     */
-    this._metricsType = pOptions.metricsTypeHints;
-    this._metrics = null; // Deferred creation.
+    this.type = pOptions.type;
 
-    /**
-     * Memory clean-up occurs in the inteval specified here in milli-second.
-     * Zero or negative value means no clean-up should occur.
-     * @type {number}
-     */
-    this._cleanUpInterval = pOptions.cleanUpInterval || 0;
+    il = pParts.length;
 
-    /**
-     * Id of the timer that cleans up memory.
-     * @type {number}
-     */
-    this._cleanUpTimer;
+    if (mHaveBlob) {
+      if (mTypedArrayBug) {
+        var tClone = new Array(il);
 
-    /**
-     * Field statistics data is collected in the inteval specified here in minutes.
-     * Zero or negative value means no statistics data should be collected.
-     * @type {number}
-     */
-    this._statisticsInterval = pOptions.statisticsInterval || 0;
+        for (i = 0; i < il; i++) {
+          tDataI = pParts[i];
+          tBuffer = tDataI.buffer;
 
-    /**
-     * Id of the timer that collects statistics data.
-     * @type {number}
-     */
-    this._statisticsTimer;
+          if (tBuffer && tBuffer instanceof ArrayBuffer) {
+            tNewArray = new Uint8Array(tDataI.byteLength);
+            tNewArray.set(tDataI);
 
-    /**
-     * Whether to send 'lowMem' event.
-     * @type {bool}
-     */
-    this._broadcastLowMemory = pOptions.broadcastLowMemory || false;
+            tClone[i] = tNewArray.buffer;
+          } else {
+            tClone[i] = tDataI;
+          }
+        }
 
-    benri.event.EventEmitter(this);
+        this.blob = new Blob(tClone, pOptions);
+        this.data = null;
+      } else {
+        tBuilder = new GlobalBlobBuilder();
 
-    // Starts timer when the first time a client registers an event listener.
-    var tSelf = this;
-    var tOn = this.on;
-    this.on = function (pName, pListener, pCount) {
-      if (pName === 'cleanup' || pName === 'statistics') {
-        tSelf._startTimerIfStopped(pName);
+        for (i = 0; i < il; i++) {
+          tDataI = pParts[i];
+
+          if (tDataI === null) continue;
+
+          tBuffer = tDataI.buffer;
+
+          if (tBuffer && tBuffer instanceof ArrayBuffer) {
+            tNewArray = new Uint8Array(tDataI.byteLength);
+            tNewArray.set(tDataI);
+            tBuilder.append(tNewArray.buffer);
+          } else {
+            tBuilder.append(tDataI);
+          }
+        }
+
+        this.blob = tBuilder.getBlob(pOptions.type);
+        this.data = null;
       }
-      tOn.call(tSelf, pName, pListener, pCount);
-    };
+    } else {
+      tBuffer = '';
+
+      for (i = 0; i < il; i++) {
+        tDataI = pParts[i];
+
+        if (tDataI === null) continue;
+
+        if (typeof tDataI === 'string') {
+          tBuffer += tDataI;
+
+          continue;
+        } else if (global.ArrayBuffer) {
+          if (tDataI instanceof ArrayBuffer) {
+            tDataI = new Uint8Array(tDataI);
+          } else if (tDataI.buffer && tDataI.buffer instanceof ArrayBuffer) {
+            tDataI = new Uint8Array(tDataI.buffer, tDataI.byteOffset, tDataI.byteLength);
+          }
+        }
+
+        for (j = 0, jl = tDataI.length; j < jl; j++) {
+          tBuffer += String.fromCharCode(tDataI[j] & 0xFF);
+        }
+      }
+
+      this.blob = null;
+      this.data = tBuffer;
+    }
   }
 
-  MemorySupervisor.prototype._startTimerIfStopped  = function (pType) {
-    var tSelf = this;
-
-    if (pType === void 0 || pType === 'cleanup') {
-      if (!this ._cleanUpTimer && this._cleanUpInterval > 0) {
-        // Starts cleanup timer.
-        this._cleanUpTimer = global.setInterval(function () {
-          tSelf.emit('cleanup');
-        }, tSelf._cleanUpInterval);
+  function createObjectURL(pBlob) {
+    if (mHaveBlob) {
+      if (createObjectURL === null) {
+        throw new Error('Had a Blob but no objectURL!');
       }
+
+      return createObjectURL(pBlob instanceof Blob ? pBlob : pBlob.blob);
     }
 
-    if (pType === void 0 || pType === 'statistics') {
-      if (!this ._statisticsTimer && this._statisticsInterval > 0) {
-        // Starts statistics timer.
-        this._statisticsTimer = global.setInterval(function () {
-          tSelf.emit('statistics');
-        }, this._statisticsInterval * 60 * 1000);
-      }
-    }
-  };
-
-  function _createMetrics() {
-    var tMetrics, tType = this._metricsType;
-
-    if (mem.metrics['sys'] === void 0) {
-      // Create default system supervisor.
-      mem.metrics['sys'] = new MemoryMetrics('sys');
-    }
-
-    tMetrics = mem.metrics[tType || 'sys'];
-    return tMetrics || new MemoryMetrics(tType);
+    return 'data:' + pBlob.type + ';base64,' + global.btoa(pBlob.data);
   }
 
-
-  /**
-   * Wrapper for MemoryMetrics method.
-   * @see MemoryMetrics.isTight
-   */
-  MemorySupervisor.prototype.isTight = function () {
-    var tMetrics = this._metrics || _createMetrics();
-    return tMetrics.isTight();
-  };
-
-  /**
-   * Wrapper for MemoryMetrics method.
-   * @see MemoryMetrics.use
-   */
-  MemorySupervisor.prototype.use = function (pSize) {
-    var tMetrics = this._metrics || _createMetrics();
-    tMetrics.use(pSize);
-  };
-
-  /**
-   * Issues memory related events.
-   * @param {string} pTag The tag attached to the event.
-   */
-  MemorySupervisor.prototype.requestMemory = function (pTag) {
-    if (this._broadcastLowMemory) {
-      this.emit('lowMem-' + (pTag ? pTag : 'generic'));
-    }
-  };
-
-
-  var mDefaultSupervisor = null;
-
-  var mDefaultNativeSupervisor = null;
-
-  /**
-   * Factory method to get the default system supervisor.
-   */
-  mem.getDefaultSupervisor = function () {
-
-    if (!mDefaultSupervisor) {
-      mDefaultSupervisor = new MemorySupervisor({
-        metricsTypeHits : 'sys',
-        cleanUpInterval : 60000,
-        //statisticsInterval : 3
-      });
-    }
-    return mDefaultSupervisor;
-  };
-
-  /**
-   * Factory method to get the default native supervisor.
-   */
-  mem.getDefaultNativeSupervisor = function () {
-
-    if (!mDefaultNativeSupervisor) {
-      mDefaultNativeSupervisor = new MemorySupervisor({
-        metricsTypeHints : 'native',
-        cleanUpInterval : 60000,
-        broadcastLowMemory: true,
-        //statisticsInterval : 3
-      });
-    }
-    return mDefaultNativeSupervisor;
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var benri = global.benri;
-  var impl = benri.impl;
-
-  benri.io.compression.Inflator = Inflator;
-
-  function Inflator(pType) {
-    this.type = pType;
-
-    var tImpl = impl.get('io.compression.inflator.' + pType);
-
-    if (tImpl === null) {
-      throw new Error('No inflator for type.');
-    }
-
-    this._impl = new tImpl.best.clazz();
+  function revokeObjectURL(pURL) {
+    // Don't need to do anything.
   }
 
-  Inflator.prototype.inflate = function(pUint8Array, pOptions) {
-    return this._impl.inflate(pUint8Array, pOptions);
+  benri.impl.web = {
+    Blob: GlobalBlob,
+    createObjectURL: createObjectURL,
+    revokeObjectURL: revokeObjectURL
   };
 
 }(this));
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-(function(global) {
-
-  var benri = global.benri;
-  var impl = benri.impl;
-
-  benri.io.compression.Deflator = Deflator;
-
-  function Deflator(pType) {
-    this.type = pType;
-
-    var tImpl = impl.get('io.compression.deflator.' + pType);
-
-    if (tImpl === null) {
-      throw new Error('No deflator for type.');
-    }
-
-    this._impl = new tImpl.best.clazz();
-  }
-
-  Deflator.prototype.deflate = function(pUint8Array, pOptions) {
-    return this._impl.deflate(pUint8Array, pOptions);
-  };
-
-}(this));
+benri.impl.web.util = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.web = {};
+benri.impl.web.util.log = {};
 /**
  * @author Jason Parrott
  *
@@ -17682,7 +13636,8 @@ benri.impl.web.mem = {};
   var benri = global.benri;
 
   benri.impl.add('mem.metrics', function(pData) {
-    pData.add(MemoryMetrics, ['sys', 'gc']);
+    if (pData.hints.type === 'sys' || pData.hints.type === 'gc')
+    pData.add(MemoryMetrics, 11);
   });
 
   benri.impl.web.mem.MemoryMetrics = MemoryMetrics;
@@ -17769,93 +13724,127 @@ benri.impl.web.mem = {};
 }(this));
 
 /**
- * @author Jason Parrott
+ * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  benri.impl.web.io = {
-    toArrayBuffer: toArrayBuffer,
-    toRawString: toRawString
+  var benri = global.benri;
+
+  if (!('HTMLAudioElement' in global)) {
+    return;
+  }
+
+  var MediaRenderer = benri.media.MediaRenderer;
+
+  var STATE_NOT_READY = MediaRenderer.PLAYBACK_STATE_NOT_READY;
+  var STATE_READY = MediaRenderer.PLAYBACK_STATE_READY;
+  var STATE_PLAYING = MediaRenderer.PLAYBACK_STATE_PLAYING;
+  var STATE_PAUSED = MediaRenderer.PLAYBACK_STATE_PAUSED;
+
+  /**
+   * @class
+   * @extends {benri.media.audio.AudioRenderer}
+   */
+  var HTMLAudioRenderer = (function(pSuper) {
+    function HTMLAudioRenderer(pAudioData) {
+      pSuper.call(this, pAudioData);
+      this.options = null;
+    }
+
+    HTMLAudioRenderer.prototype = Object.create(pSuper.prototype);
+    HTMLAudioRenderer.prototype.constructor = HTMLAudioRenderer;
+
+    return HTMLAudioRenderer;
+  })(benri.media.audio.AudioRenderer);
+
+  /**
+   * @override
+   */
+  HTMLAudioRenderer.prototype.play = function(pOptions) {
+    var tOptions = this.options = pOptions || {},
+        tElem = this.audio.data;
+
+    if (this.playbackState === STATE_PAUSED) {
+      this.resume();
+    } else {
+      if (tOptions.startTime) {
+        tElem.currentTime = tOptions.startTime / 1000;
+      }
+      if (tOptions.loop) {
+        tElem.loop = true;
+      }
+      tElem.play();
+      this.playbackState = STATE_PLAYING;
+    }
   };
 
-  var GlobalArrayBuffer = global.ArrayBuffer;
-  var GlobalUint8Array = global.Uint8Array;
-  var GlobalArrayBufferView = void 0;
+  /**
+   * @override
+   */
+  HTMLAudioRenderer.prototype.stop = function() {
+    var tOptions = this.options || {},
+        tElem = this.audio.data;
 
-  if (GlobalUint8Array) {
-    var tDummyU = new GlobalUint8Array(0);
-    GlobalArrayBufferView = tDummyU.__proto__.__proto__.constructor;
-  }
+    tElem.pause();
+    tElem.currentTime = tOptions.startTime || 0;
+    this.options = null;
+    this.playbackState = STATE_READY;
+  };
 
-  var Uint8Array = benri.io.Uint8Array;
-  var ArrayBuffer = benri.io.ArrayBuffer;
-  var ArrayBufferView = benri.io.ArrayBufferView;
+  /**
+   * @override
+   */
+  HTMLAudioRenderer.prototype.pause = function() {
+    this.audio.data.pause();
+    this.playbackState = STATE_PAUSED;
+  };
 
-  var mOverride = false;
+  /**
+   * @override
+   */
+  HTMLAudioRenderer.prototype.resume = function() {
+    this.audio.data.play();
+    this.playbackState = STATE_PLAYING;
+  };
 
-  function toArrayBuffer(pData) {
-    var i, il;
-    var tResult;
+  /**
+   * @override
+   */
+  HTMLAudioRenderer.prototype.seekTo = function(pTime) {
+    this.audio.data.fastSeek(pTime / 1000);
+  };
 
-    if (pData instanceof Array) {
-      il = pData.length;
-      tResult = new Uint8Array(il);
+  /**
+   * @override
+   */
+  HTMLAudioRenderer.prototype.getPlaybackTime = function() {
+    return this.audio.data.currentTime * 1000;
+  };
 
-      for (i = 0; i < il; i++) {
-        tResult[i] = pData[i] & 0xFF;
-      }
+  /**
+   * @override
+   */
+  HTMLAudioRenderer.prototype.getVolume = function() {
+    return this.audio.data.volume;
+  };
 
-      return tResult.buffer;
-    } else if (GlobalArrayBufferView) {
-      var tBuffer;
+  /**
+   * @override
+   */
+  HTMLAudioRenderer.prototype.setVolume = function(pVolume) {
+    this.audio.data.volume = pVolume;
+  };
 
-      if (pData instanceof GlobalArrayBuffer) {
-        tBuffer = pData;
-      } else if (pData instanceof GlobalArrayBufferView) {
-        tBuffer = pData.buffer;
-      } else {
-        return null;
-      }
-
-      if (mOverride) {
-        il = tBuffer.byteLength;
-        var tNewArray = new Uint8Array(il);
-        var tOldArray = new GlobalUint8Array(tBuffer);
-
-        for (i = 0; i < il; i++) {
-          tNewArray[i] = tOldArray[i];
-        }
-
-        return tNewArray.buffer;
-      } else {
-        return tBuffer;
-      }
-    } else if (pData instanceof ArrayBuffer) {
-      return pData;
-    } else if (pData instanceof ArrayBufferView) {
-      return pData.buffer;
-    } else {
-      return null;
-    }
-  }
-
-  function toRawString(pArrayBuffer) {
-    var tString = '';
-    var fromCharCode = String.fromCharCode;
-    var tArray = new Uint8Array(pArrayBuffer);
-
-    for (var i = 0, il = tArray.length; i < il; i++) {
-      tString += fromCharCode(tArray[i]);
-    }
-
-    return tString;
-  }
+  benri.impl.add('media.audio.AudioRenderer', function(pEvent) {
+    pEvent.add(HTMLAudioRenderer, 11);
+  });
 
 }(this));
+
 /**
  * @author Jason Parrott
  *
@@ -17863,175 +13852,7 @@ benri.impl.web.mem = {};
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-(function(global) {
-
-  var benri = global.benri;
-  var EventEmitter = benri.event.EventEmitter;
-  var GlobalXMLHttpRequest = global.XMLHttpRequest;
-  var Blob = benri.io.Blob;
-  var TextBlob = benri.io.TextBlob;
-  var Response = benri.net.Response;
-  var toArrayBuffer = benri.impl.web.io.toArrayBuffer;
-  var toRawString = benri.impl.web.io.toRawString;
-
-  benri.impl.add('net.Request', function(pEvent) {
-    if (GlobalXMLHttpRequest) {
-      pEvent.add(XMLHttpRequestImpl);
-    }
-  });
-
-  var mPool = [];
-
-  function fromPool() {
-    return mPool.pop() || new GlobalXMLHttpRequest();
-  }
-
-  function toPool(pXHR) {
-    mPool.push(pXHR);
-  }
-
-  function convertBodyToBlob(pXHR) {
-    var tResponse = pXHR.response;
-    var tBlob;
-    var tType = pXHR.getResponseHeader('Content-Type') || '';
-
-    if (pXHR._benri_overriden) {
-      // This is for old browsers.
-      tBlob = new TextBlob(pXHR.responseText);
-      tResponse = tBlob.getBuffer();
-      tBlob = null;
-    }
-
-    if (typeof tResponse === 'string') {
-      return new TextBlob(tResponse, tType);
-    } else if (tResponse === null) {
-      return null;
-    } else if (tType.substring(0, 5) === 'text/') {
-      return new TextBlob(toRawString(tResponse), tType);
-    } else {
-      return new Blob(toArrayBuffer(tResponse), tType);
-    }
-  }
-
-  function XMLHttpRequestImpl(pRequest) {
-    this.request = pRequest;
-    this.xhr = null;
-
-    EventEmitter(this);
-  }
-
-  XMLHttpRequestImpl.prototype.send = function(pData) {
-    var tRequest = this.request;
-    var tXHR = this.xhr = fromPool();
-
-    var tHeaders = tRequest.getAllHeaders();
-    var tTimeout = tRequest.timeout;
-
-    var tSelf = this;
-
-    function onProgress(pEvent) {
-      tSelf.emit('progress', {
-        current: pEvent.loaded,
-        total: pEvent.lengthComputable ? pEvent.total : -1
-      });
-    }
-
-    function onLoad(pEvent) {
-      var tStatus = this.status;
-
-      if (tStatus >= 200 && tStatus < 400) {
-        tSelf.emit('load', {
-          response: new Response(
-            tStatus,
-            this.statusText,
-            tXHR.getAllResponseHeaders(),
-            convertBodyToBlob(tXHR)
-          )
-        });
-      } else {
-        tSelf.emit('error', {
-          type: 'http',
-          status: tStatus,
-          message: this.statusText
-        });
-      }
-    }
-
-    function onError(pEvent) {
-      tSelf.emit('error', {
-        type: 'error',
-        status: tXHR.status,
-        message: tXHR.statusText || 'Unknown'
-      });
-    }
-
-    function onAbort(pEvent) {
-      tSelf.emit('error', {
-        type: 'abort',
-        status: 0,
-        message: 'Aborted'
-      });
-    }
-
-    function onTimeout(pEvent) {
-      tSelf.emit('error', {
-        type: 'timeout',
-        status: 0,
-        message: 'Timeout'
-      });
-    }
-
-    function onLoadEnd() {
-      tXHR.removeEventListener('progress', onProgress, false);
-      tXHR.removeEventListener('error', onError, false);
-      tXHR.removeEventListener('load', onLoad, false);
-      tXHR.removeEventListener('abort', onAbort, false);
-      tXHR.removeEventListener('timeout', onTimeout, false);
-      tXHR.removeEventListener('loadend', onLoadEnd, false);
-
-      tSelf.xhr = null;
-      tXHR._benri_overriden = false;
-
-      toPool(tXHR);
-
-      tXHR = null;
-    }
-
-    tXHR.addEventListener('progress', onProgress, false);
-    tXHR.addEventListener('error', onError, false);
-    tXHR.addEventListener('load', onLoad, false);
-    tXHR.addEventListener('abort', onAbort, false);
-    tXHR.addEventListener('timeout', onTimeout, false);
-    tXHR.addEventListener('loadend', onLoadEnd, false);
-
-    tXHR.timeout = tTimeout;
-
-    tXHR.open(tRequest.method, tRequest.url.toString(), true);
-
-    for (var k in tHeaders) {
-      tXHR.setRequestHeader(k, tHeaders[k]);
-    }
-
-    if (tRequest.isRaw) {
-      if ('responseType' in tXHR) {
-        tXHR.responseType = 'arraybuffer';
-      } else {
-        tXHR.overrideMimeType('text/plain;charset=x-user-defined');
-        tXHR._benri_overriden = true;
-      }
-    }
-
-    tXHR.send(pData);
-  };
-
-  XMLHttpRequestImpl.prototype.abort = function() {
-    if (this.xhr !== null) {
-      this.xhr.abort();
-    }
-  };
-
-}(this));
-
+benri.impl.web.io = {};
 /**
  * @author Jason Parrott
  *
@@ -18050,35 +13871,34 @@ benri.impl.web.io.compression = {};
 (function(global) {
 
   var benri = global.benri;
-  var toArrayBuffer = benri.impl.web.io.toArrayBuffer;
   benri.impl.web.io.compression.DeflateInflator = DeflateInflator;
   benri.impl.web.io.compression.DeflateDeflator = DeflateDeflator;
 
   benri.impl.add('io.compression.inflator.inflate', function(pEvent) {
-    global.Zlib && global.Zlib.Inflate && pEvent.add(DeflateInflator);
+    global.Zlib && global.Zlib.Inflate && pEvent.add(DeflateInflator, 11);
   });
 
   benri.impl.add('io.compression.deflator.deflate', function(pEvent) {
-    global.Zlib && global.Zlib.Deflate && pEvent.add(DeflateDeflator);
+    global.Zlib && global.Zlib.Deflate && pEvent.add(DeflateDeflator, 11);
   });
 
   var mInflatorProto = {
-    inflate: function(pUint8Array, pOptions) {
+    inflate: function(pBuffer, pOptions) {
       pOptions = pOptions || {};
       pOptions.resize = true;
 
-      var tInflator = new Zlib[this.type](pUint8Array, pOptions);
-      return toArrayBuffer(tInflator.decompress());
+      var tInflator = new Zlib[this.type](pBuffer.data, pOptions);
+      return benri.io.Buffer.fromArray(tInflator.decompress());
     }
   };
 
   var mDeflatorProto = {
-    deflate: function(pUint8Array, pOptions) {
+    deflate: function(pBuffer, pOptions) {
       pOptions = pOptions || {};
       pOptions.resize = true;
 
-      var tDeflator = new Zlib[this.type](pUint8Array, pOptions);
-      return toArrayBuffer(tInflator.compress());
+      var tDeflator = new Zlib[this.type](pBuffer.data, pOptions);
+      return benri.io.Buffer.fromArray(tInflator.compress());
     }
   };
 
@@ -18107,18 +13927,18 @@ benri.impl.web.io.compression = {};
   var mErrorChar = String.fromCharCode(0xFFFD);
 
   benri.impl.add('text.decoder.utf-8', function(pEvent) {
-    pEvent.add(UTF8Decoder);
+    pEvent.add(UTF8Decoder, 10);
   });
 
   function UTF8Decoder() {
 
   }
 
-  UTF8Decoder.prototype.decode = function(pUint8Array, pOffset, pLength) {
+  UTF8Decoder.prototype.decode = function(pBuffer, pOffset, pEndIndex) {
     // http://encoding.spec.whatwg.org/#utf-8-decode
 
     var tBytePointer = pOffset;
-    var tStreamLength = pLength;
+    var tStreamLength = pEndIndex - pOffset;
     var tCodePoint = 0;
     var tBytesSeen = 0;
     var tBytesNeeded = 0;
@@ -18126,18 +13946,19 @@ benri.impl.web.io.compression = {};
     var tUpperBoundary = 0xBF;
     var tByte;
     var tError = mErrorChar;
+    var tData = pBuffer.data;
 
     var tOutput = '';
 
     if (tStreamLength >= 3 &&
-        pUint8Array[0] === 0xEF &&
-        pUint8Array[1] === 0xBB &&
-        pUint8Array[2] === 0xBF) {
+        tData[0] === 0xEF &&
+        tData[1] === 0xBB &&
+        tData[2] === 0xBF) {
       tBytePointer = 3;
     }
 
     while (true) {
-      if (tBytePointer === tStreamLength) {
+      if (tBytePointer === pEndIndex) {
         if (tBytesNeeded !== 0) {
           tBytesNeeded = 0;
           tOutput += tError;
@@ -18147,7 +13968,7 @@ benri.impl.web.io.compression = {};
         }
       }
 
-      tByte = pUint8Array[tBytePointer++];
+      tByte = tData[tBytePointer++];
 
       if (tBytesNeeded === 0) {
         if (tByte <= 0x7F) {
@@ -18231,27 +14052,27 @@ benri.impl.web.io.compression = {};
   var mErrorChar = String.fromCharCode(0xFFFD);
 
   benri.impl.add('text.decoder.shift_jis', function(pEvent) {
-    pEvent.add(ShiftJISDecoder);
+    pEvent.add(ShiftJISDecoder, 10);
   });
 
   function ShiftJISDecoder() {
 
   }
 
-  ShiftJISDecoder.prototype.decode = function(pUint8Array, pOffset, pLength) {
+  ShiftJISDecoder.prototype.decode = function(pBuffer, pOffset, pEndIndex) {
     var tShiftJISLead = 0;
     var tLead = 0;
-    var tBytePointer = 0;
+    var tBytePointer = pOffset;
     var tPointer = null;
-    var tLength = pLength;
     var tByte;
     var tString = '';
-    var tOffset = pOffset;
+    var tOffset = 0;
     var tLeadOffset;
     var tMap = mMap;
+    var tData = pBuffer.data;
 
     while (true) {
-      if (tBytePointer === tLength) {
+      if (tBytePointer === pEndIndex) {
         if (tShiftJISLead === 0) {
           break; // done
         } else {
@@ -18260,7 +14081,7 @@ benri.impl.web.io.compression = {};
         }
       }
 
-      tByte = pUint8Array[tBytePointer];
+      tByte = tData[tBytePointer];
       tBytePointer++;
 
       if (tShiftJISLead !== 0) {
@@ -18313,6 +14134,36 @@ benri.impl.web.io.compression = {};
 /**
  * @author Jason Parrott
  *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function() {
+
+  benri.impl.add('text.encoder.ascii', function(pEvent) {
+    pEvent.add(ASCIIDecoder, 10);
+  });
+
+  function ASCIIEncoder() {
+
+  }
+
+  ASCIIEncoder.prototype.encode = function(pString) {
+    var tLength = pString.length;
+    var tBuffer = benri.io.Buffer.create(tLength);
+    var tData = tBuffer.data;
+
+    for (var i = 0; i < tLength; i++) {
+      tData[i] = pString.charCodeAt(i) & 0xFF;
+    }
+
+    return tBuffer;
+  };
+
+}());
+/**
+ * @author Jason Parrott
+ *
  * Copyright (C) 2013 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
@@ -18322,18 +14173,19 @@ benri.impl.web.io.compression = {};
   var benri = global.benri;
 
   benri.impl.add('text.decoder.ascii', function(pEvent) {
-    pEvent.add(ASCIIDecoder);
+    pEvent.add(ASCIIDecoder, 10);
   });
 
   function ASCIIDecoder() {
 
   }
 
-  ASCIIDecoder.prototype.decode = function(pUint8Array, pOffset, pLength) {
+  ASCIIDecoder.prototype.decode = function(pBuffer, pOffset, pEndIndex) {
     var tString = '';
+    var tData = pBuffer.data;
 
-    for (var i = pOffset; i < pLength; i++) {
-      tString += String.fromCharCode(pUint8Array[i]);
+    for (; pOffset < pEndIndex; pOffset++) {
+      tString += String.fromCharCode(tData[pOffset]);
     }
 
     return tString;
@@ -18368,7 +14220,9 @@ benri.impl.shared.text = {};
   var benri = global.benri;
 
   benri.impl.add('mem.metrics', function(pData) {
-    pData.add(MemoryMetrics, ['native']);
+    if (pData.hints.type === 'native') {
+      pData.add(MemoryMetrics, 10);
+    }
   });
 
   /**
@@ -18430,6 +14284,110 @@ benri.impl.shared.text = {};
 /**
  * @author Jason Parrott
  *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+if ('Uint8Array' in this) {
+  benri.impl.add('io.buffer', function(pEvent) {
+    var mHaveSlice = ArrayBuffer.prototype.slice !== void 0;
+
+    pEvent.add({
+      create: function(pSize) {
+        return new Uint8Array(pSize);
+      },
+
+      copyTo: function(pBuffer, pOffset, pEndOffset) {
+        if (mHaveSlice) {
+          return new Uint8Array(pBuffer.buffer.slice(pOffset, pEndOffset));
+        }
+
+        var tArray = new Uint8Array(pEndOffset - pOffset);
+        tArray.set(pBuffer.subarray(pOffset, pEndOffset));
+
+        return tArray;
+      },
+
+      fromArray: function(pArray) {
+        var tNewBuffer;
+        var tLength;
+        var i;
+
+        if (pArray instanceof Uint8Array) {
+          return pArray;
+        } else if (pArray instanceof ArrayBuffer || (pArray.buffer && pArray.buffer instanceof ArrayBuffer)) {
+          return new Uint8Array(pArray);
+        }
+
+        tLength = pArray.length;
+        tNewBuffer = new Uint8Array(tLength);
+
+        for (i = 0; i < tLength; i++) {
+          tNewBuffer[i] = pArray[i] & 0xFF;
+        }
+
+        return tNewBuffer;
+      },
+
+      fromParts: function(pParts) {
+        
+      },
+
+      copyFrom: function(pDestBuffer, pSourceBuffer, pDestOffset, pSourceOffset, pSize) {
+        if (pSourceOffset !== 0 || pSize !== 0) {
+          pSourceBuffer = new Uint8Array(pSourceBuffer, pSourceOffset, pSize);
+        }
+
+        pDestBuffer.set(pSourceBuffer, pDestOffset);
+      }
+    }, 12);
+  });
+}
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+benri.impl.add('io.buffer', function(pEvent) {
+  pEvent.add({
+    create: function(pSize) {
+      return new Array(pSize);
+    },
+
+    copyTo: function(pBuffer, pOffset, pEndOffset) {
+      var tNewBuffer = new Array(pEndOffset - pOffset);
+
+      for (var i = pOffset, j = 0; i < pEndOffset; i++, j++) {
+        tNewBuffer[j] = pBuffer[i];
+      }
+
+      return tNewBuffer;
+    },
+
+    fromArray: function(pArray) {
+      return pArray;
+    },
+
+    fromParts: function(pParts) {
+
+    },
+
+    copyFrom: function(pDestBuffer, pSourceBuffer, pDestOffset, pSourceOffset, pSize) {
+      pDestOffset = pDestOffset || 0;
+      pSourceOffset = pSourceOffset || 0;
+      pSize = pSize || pSourceBuffer.length;
+
+      for (var i = 0; i < pSize; i++, pDestOffset++, pSourceOffset++) {
+        tDestBuffer[pDestOffset] = pSourceBuffer[pSourceOffset];
+      }
+    }
+  }, 11);
+});
+/**
+ * @author Jason Parrott
+ *
  * Copyright (C) 2013 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
@@ -18448,7 +14406,7 @@ benri.impl.shared.text = {};
   benri.graphics.Surface = Surface;
 
   Surface.createSurface = function(pWidth, pHeight, pSurfaceHints, pImplHints) {
-    return new (getImpl('graphics.surface', pImplHints).best.clazz)(pWidth || 1, pHeight || 1, pSurfaceHints);
+    return new (getImpl('graphics.surface', pImplHints).best)(pWidth || 1, pHeight || 1, pSurfaceHints);
   };
 
   function Surface(pWidth, pHeight, pHints) {
@@ -18733,11 +14691,11 @@ benri.impl.shared.text = {};
 
     Keeper(this);
 
-    this.onDestroy(onDestroy);
+    this.on('destroy', onDestroy);
   }
 
-  function onDestroy() {
-    this.reset();
+  function onDestroy(pData, pTarget) {
+    pTarget.reset();
   }
 
   var tProto = Records.prototype;
@@ -20214,6 +16172,8813 @@ benri.impl.shared.text = {};
 
 (function(global) {
 
+  benri.event.StoppableEventEmitter = StoppableEventEmitter;
+
+  var EventEmitter = benri.event.EventEmitter;
+  var on = EventEmitter.on;
+  var ignore = EventEmitter.ignore;
+
+  function StoppableEventEmitter(pInstance) {
+    pInstance = pInstance || this;
+
+    pInstance._events = {};
+
+    pInstance.on = on;
+    pInstance.ignore = ignore;
+    pInstance.emit = emit;
+  }
+
+  function emit(pName, pData) {
+    var tNode = this._events[pName];
+    var tCallback;
+    var tStop = false;
+
+    function stop() {
+      tStop = true;
+    }
+
+    if (tNode === void 0) {
+      return true;
+    }
+
+    pData.stop = stop;
+
+    do {
+      tCallback = tNode.data;
+      tCallback(pData, this);
+
+      tNode = tNode.next;
+    } while (tStop === false && tNode !== null);
+
+    return !tStop;
+  }
+
+}(this));
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 TheatreScript Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  /**
+   * @class
+   * @extends {theatre.Prop}
+   */
+  var RenderProp = (function(pSuper) {
+    var StoppableEventEmitter = benri.event.StoppableEventEmitter;
+
+    /**
+     * @constructor
+     */
+    function RenderProp(pRenderManagerProp, pBaseHash) {
+      pSuper.call(this);
+
+      StoppableEventEmitter(this);
+
+      this.type = 'render';
+
+      this.renderManagerProp = pRenderManagerProp;
+
+      this.isVisible = true;
+
+      this._currentCallback = null;
+    }
+
+    var tProto = RenderProp.prototype = Object.create(pSuper.prototype);
+    tProto.constructor = RenderProp;
+
+    function createOnActorEnter(pRenderProp) {
+      return function onActorEnter(pData, pTarget) {
+        pRenderProp.renderManagerProp.register(pRenderProp);
+        pTarget.onFor('leave', (pRenderProp._currentCallback = createOnActorLeave(pRenderProp)), 1);
+      };
+    }
+
+    function createOnActorLeave(pRenderProp) {
+      return function onActorLeave(pData, pTarget) {
+        pRenderProp.renderManagerProp.unregister(pRenderProp);
+        pTarget.onFor('enter', (pRenderProp._currentCallback = createOnActorEnter(pRenderProp)), 1);
+      };
+    }
+
+    function onActorEnter(pData, pTarget) {
+      pTarget.onFor('leave', onActorLeave, 1);
+    }
+
+    var superOnAdd = pSuper.prototype.onAdd;
+
+    tProto.onAdd = function onAdd(pActor) {
+      superOnAdd.call(this, pActor);
+
+      if (pActor.stageId === -1) {
+        pActor.onFor('enter', (this._currentCallback = createOnActorEnter(this)), 1);
+      } else {
+        this.renderManagerProp.register(this);
+        pActor.onFor('leave', (this._currentCallback = createOnActorLeave(this)), 1);
+      }
+    };
+
+    var superOnRemove = pSuper.prototype.onRemove;
+
+    tProto.onRemove = function onRemove() {
+      if (this.actor.stageId !== -1) {
+        this.renderManagerProp.unregister(this);
+        this.actor.ignore('leave', this._currentCallback);
+      } else {
+        this.actor.ignore('enter', this._currentCallback);
+      }
+
+      this._currentCallback = null;
+
+      superOnRemove.call(this);
+    };
+
+    tProto.getRenderable = function getRenderable() {
+      var tPackage = {
+        renderable: null
+      };
+
+      this.emit('renderable', tPackage);
+
+      return tPackage.renderable;
+    };
+
+    tProto.preRender = function preRender(pPackage) {
+      return this.emit('prerender', pPackage);
+    };
+
+    tProto.postRender = function postRender(pPackage) {
+      this.emit('postrender', pPackage);
+    };
+
+    tProto.finalizeRender = function finalizeRender(pPackage) {
+      this.emit('finalizerender', pPackage);
+    };
+
+    return RenderProp;
+  })(theatre.Prop);
+
+  theatre.crews.render.RenderProp = RenderProp;
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 TheatreScript Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  theatre.crews.render.RenderManagerProp = RenderManagerProp;
+
+  var requestAnimationFrame;
+
+  if (global.requestAnimationFrame !== void 0) {
+    requestAnimationFrame = global.requestAnimationFrame;
+  } else if (global.webkitRequestAnimationFrame !== void 0) {
+    requestAnimationFrame = global.webkitRequestAnimationFrame;
+  } else if (global.mozRequestAnimationFrame !== void 0) {
+    requestAnimationFrame = global.mozRequestAnimationFrame;
+  } else {
+    requestAnimationFrame = function(pCallback) {
+      return setTimeout(pCallback, 20);
+    };
+  }
+
+  /**
+   * @class
+   * @extends {theatre.Prop}
+   */
+  var RenderManagerProp = (function(pSuper) {
+    var RenderProp = theatre.crews.render.RenderProp;
+    var CacheManager = theatre.crews.render.CacheManager;
+    var EventEmitter = benri.event.EventEmitter;
+
+    /**
+     * @constructor
+     */
+    function RenderManagerProp(pCamera) {
+      pSuper.call(this);
+
+      this.type = 'renderManager';
+
+      EventEmitter(this);
+
+      this.camera = pCamera;
+      this.cacheManager = new CacheManager(pCamera);
+      this.onRevalidated = null;
+
+      this._animationFrameId = -1;
+      this._props = new Array(256);
+
+      this.syncRendering = false;
+
+      this.makeRenderable = makeRenderable;
+      this.register = register;
+      this.unregister = unregister;
+    }
+  
+    var tProto = RenderManagerProp.prototype = Object.create(pSuper.prototype);
+    tProto.constructor = RenderManagerProp;
+  
+    tProto.onEnter = function(pStage) {
+      pSuper.prototype.onEnter.call(this, pStage);
+
+      var tStageManager = pStage.stageManager;
+      var onRevalidated = this.onRevalidated = createOnRevalidated(this, this.syncRendering);
+
+      pStage.on('revalidated', onRevalidated);        
+    };
+
+    tProto.onLeave = function() {
+      this.stage.ignore('revalidated', this.onRevalidated);
+    };
+
+    function makeRenderable(pActor) {
+      var tProp = new RenderProp(this);
+      pActor.props.add(tProp);
+
+      return tProp;
+    }
+
+    function register(pProp) {
+      this._props[pProp.actor.stageId] = pProp;
+    }
+
+    function unregister(pProp) {
+      this._props[pProp.actor.stageId] = void 0;
+    }
+
+    return RenderManagerProp;
+  })(theatre.Prop);
+
+
+  function createOnRevalidated(pRenderManagerProp, pSyncRendering) {
+    return function onRevalidated(pData, pTarget) {
+      var tInExecute = pTarget.inExecute;
+
+      if (pSyncRendering === false) {
+        if (pRenderManagerProp._animationFrameId === -1) {
+          pRenderManagerProp._animationFrameId = requestAnimationFrame((function() {
+
+            return function() {
+              onAnimationFrame(pRenderManagerProp, tInExecute);
+            };
+          }()));
+        }
+      } else {
+          onAnimationFrame(pRenderManagerProp, tInExecute);
+      }
+
+      /*if (pTarget.stage.inExecute === true) {
+        pTarget.stage.onFor('leavestep', function() {
+          onAnimationFrame(pRenderManagerProp, true);
+        }, 1);
+      } else {
+        onAnimationFrame(pRenderManagerProp, false);
+      }*/
+    };
+  }
+
+  function onAnimationFrame(pRenderManagerProp, pDoCache) {
+    pRenderManagerProp._animationFrameId = -1;
+
+    var tProps = pRenderManagerProp._props;
+    var tCamera = pRenderManagerProp.camera;
+    var tContext = tCamera.context;
+    var tPackage = {
+      context: tContext
+    };
+
+    tContext.matrix.reset();
+    tContext.backgroundColor = tCamera.backgroundColor;
+    tContext.clear();
+
+    pRenderManagerProp.emit('render', tPackage);
+
+    var tActor = pRenderManagerProp.stage.stageManager;
+    var tProp;
+    var tRenderable;
+    var tNode = tActor.node;
+
+    var tCurrentNode = tActor.node;
+    var tNextNode;
+    var tLeaveNodeStack = new Array();
+    var tCanContinue = true;
+    var tHasChild;
+
+    var tCacheProp;
+    var tCache;
+    var tCacheManager = pRenderManagerProp.cacheManager;
+
+    main: while (true) {
+      tActor = tCurrentNode.actor;
+      tProp = tProps[tActor.stageId];
+      tNextNode = tCurrentNode.next;
+      tHasChild = tCurrentNode.hasChild;
+
+      if (tProp === void 0) {
+        if (!tHasChild) {
+          do {
+            tCurrentNode = tLeaveNodeStack.pop();
+            tActor = tCurrentNode.actor;
+            tProp = tProps[tActor.stageId];
+
+            if (tProp !== void 0) {
+              tCacheProp = tActor.props.renderCache;
+
+              if (tCacheProp !== void 0) {
+                tCache = tCacheManager.finishCache(tCacheProp);
+
+                if (tCache !== null) {
+                  tProp.emit('finishcache', tPackage);
+                  tProp.emit('rendercache', tPackage);
+
+                  tContext.matrix.recycle();
+                  tContext.matrix = tCamera.getMatrix(tActor.getAbsolutePosition());
+
+                  tCache.render();
+                }
+              }
+
+              tProp.finalizeRender(tPackage);
+            }
+
+            if (tLeaveNodeStack.length === 0) {
+              break main;
+            }
+          } while(!tCurrentNode.nextSibling);
+        } else {
+          tLeaveNodeStack.push(tCurrentNode);
+        }
+
+        tCurrentNode = tNextNode;
+
+        continue;
+      }
+
+      tCanContinue = (tProp.isVisible === true && tProp.preRender(tPackage) === true);
+
+      if (tCanContinue === true) {
+        tCacheProp = tActor.props.renderCache;
+
+        if (tCacheProp !== void 0) {
+          tCache = tCacheManager.getCache(tCacheProp.hash);
+
+          if (tCache !== void 0) {
+            if (tCacheProp.isInvalid(pRenderManagerProp, tCache) === true) {
+              tCache.destroy();
+              tCache = void 0;
+            } else {
+              // No need to process the children anymore.
+              tCanContinue = false;
+
+              tProp.emit('rendercache', tPackage);
+
+              tContext.matrix.recycle();
+              tContext.matrix = tCamera.getMatrix(tActor.getAbsolutePosition());
+
+              tCache.render();
+
+              tProp.finalizeRender(tPackage);
+
+              tNextNode = tCurrentNode.nextSibling;
+
+              if (!tNextNode) {
+                tNextNode = tCurrentNode.getTailNode().next;
+              } else {
+                tCurrentNode = tNextNode;
+
+                continue;
+              }
+            }
+          } else if (pDoCache === true && tCacheProp.isCachable(pRenderManagerProp) === true) {
+            if (tCacheManager.startCache(tCacheProp) === true) {
+              tProp.emit('startcache', tPackage);
+            }
+          }
+        } else {
+          tCache = void 0;
+        }
+
+        if (tCache === void 0) {
+          tRenderable = tProp.getRenderable();
+
+          if (tRenderable !== null) {
+            tContext.matrix.recycle();
+            tContext.matrix = tCamera.getMatrix(tActor.getAbsolutePosition());
+
+            tRenderable.render(tContext);
+          }
+
+          tLeaveNodeStack.push(tCurrentNode);
+        }
+      } else {
+        tProp.finalizeRender(tPackage);
+
+        tNextNode = tCurrentNode.nextSibling;
+
+        if (!tNextNode) {
+          tNextNode = tCurrentNode.getTailNode().next;
+        } else {
+          tCurrentNode = tNextNode;
+
+          continue;
+        }
+      }
+
+      if (tHasChild === false || tCanContinue === false) {
+        do {
+          tCurrentNode = tLeaveNodeStack.pop();
+          tActor = tCurrentNode.actor;
+          tProp = tProps[tActor.stageId];
+
+          if (tProp !== void 0) {
+            tCacheProp = tActor.props.renderCache;
+
+            if (tCacheProp !== void 0) {
+              tCache = tCacheManager.finishCache(tCacheProp);
+
+              if (tCache !== null) {
+                tProp.emit('finishcache', tPackage);
+                tProp.emit('rendercache', tPackage);
+
+                tContext.matrix.recycle();
+                tContext.matrix = tCamera.getMatrix(tActor.getAbsolutePosition());
+
+                tCache.render();
+              }
+            }
+
+            tProp.finalizeRender(tPackage);
+          }
+
+          if (tLeaveNodeStack.length === 0) {
+            break main;
+          }
+        } while(!tCurrentNode.nextSibling);
+      }
+
+      tCurrentNode = tNextNode;
+    }
+
+    pRenderManagerProp.emit('finalizerender', tPackage);
+
+    tCacheManager.cleanup();
+
+    tContext.flush();
+  }
+
+  theatre.crews.render.RenderManagerProp = RenderManagerProp;
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function() {
+
+  var EventEmitter = benri.event.EventEmitter;
+
+  /**
+   * @class
+   * A class that stores past cues.
+   * When using on() with this class, if the given
+   * event name has already had a cue fired,
+   * the handler will be executed right away with
+   * the old data.
+   * @constructor
+   */
+  function PersistentEventEmitter(pInstance) {
+    pInstance = pInstance || this;
+
+    EventEmitter(pInstance);
+
+    pInstance._eventResults = {};
+
+    pInstance._baseOn = pInstance.on;
+    pInstance._baseEmit = pInstance.emit;
+    pInstance._emittingEventStack = [];
+
+    pInstance.on = on;
+    pInstance.emit = emit;
+    pInstance.emitOnce = emitOnce;
+    pInstance.resetEvent = resetEvent;
+  }
+
+  function on(pName, pCallback, pCount) {
+    this._baseOn(pName, pCallback, pCount);
+
+    var tEventResults = this._eventResults;
+
+    if (pName in tEventResults && this._emittingEventStack.indexOf(pName) === -1) {
+      pCallback(tEventResults[pName], this);
+    }
+  }
+
+  function emit(pName, pData) {
+    this._eventResults[pName] = pData;
+
+    this._emittingEventStack.push(pName);
+    this._baseEmit(pName, pData);
+    this._emittingEventStack.pop();
+  }
+
+  function emitOnce(pName, pData) {
+    this._baseEmit(pName, pData);
+  }
+
+  function resetEvent(pName) {
+    if (!pName) {
+      this._eventResults = {};
+    } else {
+      delete this._eventResults[pName];
+    }
+  }
+
+  benri.event.PersistentEventEmitter = PersistentEventEmitter;
+
+}());
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 SWFCrew Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+  var swfcrew = theatre.crews.swf;
+  var PersistentEventEmitter = benri.event.PersistentEventEmitter;
+  
+  /**
+   * @constructor
+   */
+  function Loader() {
+    PersistentEventEmitter(this);
+    this.swf = null;
+    this.options = {};
+    this.actionScriptLoader = null;
+    this.actionScriptProgram = null;
+    this.actorMap = [];
+    this.actorNameMap = {};
+    this.fontCache = [];
+    this.media = null;
+    this.url = null;
+  }
+
+  swfcrew.Loader = Loader;
+
+  Loader.prototype.register = function(pId, pClass, pArgs) {
+    pArgs.displayListId = pId;
+    
+    this.actorMap[pId] = {
+      clazz: pClass,
+      args: pArgs
+    }
+  };
+
+  Loader.prototype.load = function(pSWF, pOptions) {
+    this.options = pOptions = (pOptions || {});
+    this.swf = pSWF;
+
+    if ('antialias' in pOptions) {
+      benri.env.setVar('benri.graphics.surface.antialias', pOptions.antialias);
+    }
+
+    this.emit('loadstart', pSWF);
+
+    var tASType = pOptions.asType || 'AS1VM';
+
+    var tActionScriptProgram = this.actionScriptProgram = AlphabetJS.createProgram(tASType, swfcrew.ASHandlers);
+    var tActionScriptLoader = this.actionScriptLoader = AlphabetJS.createLoader(tASType);
+    var tActorTypes = swfcrew.actors;
+
+    this.media = pSWF.assetManifest;
+
+    var tDictionaryToActorMap = this.actorMap;
+    var i, il;
+    var tHandlers = swfcrew.handlers;
+    var tDictionary = pSWF.orderedDictionary;
+    var tId;
+    var tObject;
+    var tDisplayListType;
+
+    for (i = 0, il = tDictionary.length; i < il; i++) {
+      tObject = tDictionary[i];
+      tId = tObject.id;
+      tDisplayListType = tObject.displayListType;
+
+      if (tHandlers[tDisplayListType] === void 0) {
+        continue;
+      }
+
+      tHandlers[tDisplayListType].call(this, tObject);
+    }
+
+    tHandlers['DefineSprite'].call(this, pSWF.rootSprite);
+
+    if (this.url) {
+      this.url.query.setEncoding(pSWF.encoding);
+      this.options.rootVars = this.url.query.toJSON();
+    }
+
+    this.emit('loadcomplete', pSWF);
+  };
+
+  Loader.prototype.setFontCache = function(pId, pFont) {
+    this.fontCache[pId] = pFont;
+  };
+
+  Loader.prototype.getFontCache = function(pId) {
+    return this.fontCache[pId] || null;
+  };
+
+  Loader.prototype.clearFontCache = function() {
+    this.fontCache.length = 0;
+  };
+
+
+  /**
+   * @class
+   * @extends Loader
+   */
+  var DataLoader = (function(pSuper) {
+    function DataLoader() {
+      pSuper.call(this);
+    }
+
+    DataLoader.prototype = Object.create(pSuper.prototype);
+    DataLoader.prototype.constructor = DataLoader;
+
+    DataLoader.prototype.load = function(pData, pOptions) {
+      this.options = pOptions = (pOptions || {});
+
+      var tSelf = this;
+      var tDelay = quickswf.SWF.fromBuffer(pData, 'application/x-shockwave-flash');
+
+      this.emit('parsestart', {delay: tDelay, buffer: pData});
+
+      tDelay.then(
+        function(pSWF) {
+          tSelf.swf = pSWF;
+          tSelf.emit('parsecomplete', pSWF);
+          pSuper.prototype.load.call(tSelf, pSWF, pOptions);
+        },
+        function(pError) {
+          tSelf.emit('error', pError);
+        }
+      );
+    };
+
+    return DataLoader;
+  })(Loader);
+
+  swfcrew.DataLoader = DataLoader;
+
+  /**
+   * @class
+   * @extends DataLoader
+   */
+  var URLLoader = (function(pSuper) {
+    function URLLoader() {
+      pSuper.call(this);
+    }
+
+    URLLoader.prototype = Object.create(pSuper.prototype);
+    URLLoader.prototype.constructor = URLLoader;
+
+    URLLoader.prototype.load = function(pURL, pOptions) {
+      this.options = pOptions = (pOptions || {});
+
+      var tSelf = this;
+      var tRequest = new benri.net.Request(pURL, 'GET', true);
+
+      tRequest.send(null)
+      .then(function(pResponse) {
+        tSelf.url = tRequest.url;
+        tSelf.emit('downloadcomplete', pResponse);
+        pSuper.prototype.load.call(tSelf, pResponse.body, pOptions);
+      })
+      .as(function(e) {
+        tSelf.emit('downloadprogress', e);
+        // TODO: Progressive Loading
+      })
+      .catch(function(e) {
+        tSelf.emit('error', e);
+      });
+
+      this.emit('downloadstart', tRequest);
+    };
+
+    return URLLoader;
+  })(DataLoader);
+
+  swfcrew.URLLoader = URLLoader;
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function() {
+
+  var env = benri.env = {};
+
+  benri.event.EventEmitter(env);
+
+  var mVars = [];
+
+  env.setVar = function(pName, pValue) {
+    mVars[pName] = pValue + '';
+
+    env.emit('setvar', {
+      varName: pName,
+      varValue: pValue
+    });
+  };
+
+  env.getVar = function(pName) {
+    return mVars[pName] || null;
+  };
+
+}());
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function() {
+
+  var log = benri.util.log;
+
+  log.Logger = Logger;
+
+  var mActiveLoggers = [];
+
+  function Logger(pTag, pAdapters, pLevel) {
+    this.tag = pTag;
+
+    this.level = pLevel !== void 0 ? pLevel : log.LEVEL_INFO;
+
+    this._adapters = [];
+
+    for (var i = 0, il = pAdapters.length; i < il; i++) {
+      this.addAdapter(pAdapters[i]);
+    }
+
+    mActiveLoggers.push(this);
+
+    Logger.emit('loggerCreated', this);
+  }
+
+  benri.event.EventEmitter(Logger);
+
+  Logger.getActiveLoggers = function() {
+    return mActiveLoggers.slice(0);
+  };
+
+  var tProto = Logger.prototype;
+
+  tProto.destroy = function() {
+    var i;
+
+    for (i = this._adapters.length - 1; i >= 0; i--) {
+      this.removeAdapter(this._adapters[i]);
+    }
+
+    i = mActiveLoggers.indexOf(this);
+
+    if (i !== -1) {
+      mActiveLoggers.splice(i, 1);
+
+      Logger.emit('loggerDestroyed', this);
+    }
+  };
+
+  tProto.addAdapter = function(pAdapter) {
+    if (this._adapters.indexOf(pAdapter) !== -1) {
+      return;
+    }
+
+    this._adapters.push(pAdapter);
+  };
+
+  tProto.removeAdapter = function(pAdapter) {
+    var tAdapters = this._adapters;
+
+    for (var i = 0, il = tAdapters.length; i < il; i++) {
+      if (tAdapters[i] === pAdapter) {
+        tAdapters.splice(i, 1);
+
+        return;
+      }
+    }
+  }
+
+  tProto.log = function(pLevel, pMessage, pData) {
+    if (pLevel > this.level) {
+      return;
+    }
+
+    var tAdapters = this._adapters;
+    var tAdapter;
+
+    for (var i = 0, il = tAdapters.length; i < il; i++) {
+      tAdapter = tAdapters[i];
+
+      if (pLevel <= tAdapter.level) {
+        tAdapter.log(pLevel, pMessage, pData);
+      }
+    }
+  };
+
+  tProto.panic = function(pMessage, pData) {
+    this.log(log.LEVEL_PANIC, this.tag + ':' + ' ' + pMessage, pData);
+  };
+
+  tProto.alert = function(pMessage, pData) {
+    this.log(log.LEVEL_ALERT, this.tag + ':' + ' ' + pMessage, pData);
+  };
+
+  tProto.crit = function(pMessage, pData) {
+    this.log(log.LEVEL_CRIT, this.tag + ':' + ' ' + pMessage, pData);
+  };
+
+  tProto.error = function(pMessage, pData) {
+    this.log(log.LEVEL_ERROR, this.tag + ':' + ' ' + pMessage, pData);
+  };
+
+  tProto.warn = function(pMessage, pData) {
+    this.log(log.LEVEL_WARN, this.tag + ':' + ' ' + pMessage, pData);
+  };
+
+  tProto.notice = function(pMessage, pData) {
+    this.log(log.LEVEL_NOTICE, this.tag + ':' + ' ' + pMessage, pData);
+  };
+
+  tProto.info = function(pMessage, pData) {
+    this.log(log.LEVEL_INFO, this.tag + ':' + ' ' + pMessage, pData);
+  };
+
+  tProto.debug = function(pMessage, pData) {
+    this.log(log.LEVEL_DEBUG, this.tag + ':' + ' ' + pMessage, pData);
+  };
+
+  var tBenriLogger = log.benriLogger = new Logger('BenriJS', [
+    new log.ConsoleAdapter({
+      level: log.LEVEL_DEBUG
+    })
+  ]);
+
+  var tLogLevel = benri.env.getVar('logLevel');
+
+  if (tLogLevel !== null) {
+    tBenriLogger.level = tLogLevel;
+  } else {
+    tBenriLogger.level = log.LEVEL_INFO;
+  }
+
+  benri.env.on('setvar', function(pEvent) {
+    if (pEvent.varName === 'logLevel') {
+      tBenriLogger.level = pEvent.varValue;
+    }
+  });
+
+}());
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+var quickswf = {
+  structs: {
+
+  },
+  tags: {
+
+  },
+  utils: {
+
+  },
+  logger: new benri.util.log.Logger(
+    'QuickSWF',
+    [new benri.util.log.ConsoleAdapter({
+      level: benri.util.log.LEVEL_DEBUG
+    })]
+  )
+};
+
+/**
+ * @author Yuta Imaya
+ * @author Jason Parrott (Slight namespace modifications)
+ *
+ * Copyright (C) 2012 Yuta Imaya.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  var CRC32 = quickswf.utils.CRC32 = {};
+
+  /**
+   * CRC32 ハッシュ値を取得
+   * @param {!Uint8Array} data data byte array.
+   * @param {number=} pos data position.
+   * @param {number=} length data length.
+   * @return {number} CRC32.
+   */
+  CRC32.calc = function(pBuffer, pos, length) {
+    return CRC32.update(pBuffer, 0, pos, length);
+  };
+
+  /**
+   * CRC32ハッシュ値を更新
+   * @param {!Uint8Array} data data byte array.
+   * @param {number} crc CRC32.
+   * @param {number=} pos data position.
+   * @param {number=} length data length.
+   * @return {number} CRC32.
+   */
+  CRC32.update = function(pBuffer, crc, pos, length) {
+    var tData = pBuffer.data;
+    var table = CRC32.Table;
+    var i = (typeof pos === 'number') ? pos : (pos = 0);
+    var il = (typeof length === 'number') ? length : pBuffer.length;
+
+    crc ^= 0xffffffff;
+
+    // loop unrolling for performance
+    for (i = il & 7; i--; ++pos) {
+      crc = (crc >>> 8) ^ table[(crc ^ tData[pos]) & 0xff];
+    }
+    for (i = il >> 3; i--; pos += 8) {
+      crc = (crc >>> 8) ^ table[(crc ^ tData[pos    ]) & 0xff];
+      crc = (crc >>> 8) ^ table[(crc ^ tData[pos + 1]) & 0xff];
+      crc = (crc >>> 8) ^ table[(crc ^ tData[pos + 2]) & 0xff];
+      crc = (crc >>> 8) ^ table[(crc ^ tData[pos + 3]) & 0xff];
+      crc = (crc >>> 8) ^ table[(crc ^ tData[pos + 4]) & 0xff];
+      crc = (crc >>> 8) ^ table[(crc ^ tData[pos + 5]) & 0xff];
+      crc = (crc >>> 8) ^ table[(crc ^ tData[pos + 6]) & 0xff];
+      crc = (crc >>> 8) ^ table[(crc ^ tData[pos + 7]) & 0xff];
+    }
+
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+
+  CRC32.Table = (function() {
+    /** @type {!(Array.<number>|Uint32Array)} */
+    var table = global.Uint32Array ? new Uint32Array(256) : new Array(256);
+    /** @type {number} */
+    var c;
+    /** @type {number} */
+    var i;
+    /** @type {number} */
+    var j;
+
+    for (i = 0; i < 256; ++i) {
+      c = i;
+      for (j = 0; j < 8; ++j) {
+        c = (c & 1) ? (0xedB88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      table[i] = c >>> 0;
+    }
+
+    return table;
+  }());
+
+}(this));
+
+/**
+ * @author Yuta Imaya
+ * @author Jason Parrott (Namespace modifications)
+ *
+ * Copyright (C) 2013 SWFCrew Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+//-----------------------------------------------------------------------------
+// Code copied from zlib.js at https://github.com/imaya/zlib.js
+// with permission from author.
+//-----------------------------------------------------------------------------
+
+
+(function(global) {
+
+  quickswf.utils.Adler32 = Adler32;
+
+  /**
+   * Adler32 ハッシュ値の作成
+   * @param {benri.io.Buffer} array 算出に使用する byte array.
+   * @return {number} Adler32 ハッシュ値.
+   */
+  function Adler32(pBuffer) {
+    return Adler32.update(1, pBuffer);
+  };
+
+  /**
+   * Adler32 ハッシュ値の更新
+   * @param {number} adler 現在のハッシュ値.
+   * @param {benri.io.Buffer} array 更新に使用する byte array.
+   * @return {number} Adler32 ハッシュ値.
+   */
+  Adler32.update = function(adler, pBuffer) {
+    /** @type {number} */
+    var s1 = adler & 0xffff;
+    /** @type {number} */
+    var s2 = (adler >>> 16) & 0xffff;
+    /** @type {number} array length */
+    var len = pBuffer.size;
+    /** @type {number} loop length (don't overflow) */
+    var tlen;
+    /** @type {number} array index */
+    var i = 0;
+
+    var tBufferData = pBuffer.data;
+
+    while (len > 0) {
+      tlen = len > Adler32.OptimizationParameter ?
+        Adler32.OptimizationParameter : len;
+      len -= tlen;
+
+      do {
+        s1 += tBufferData[i++];
+        s2 += s1;
+      } while (--tlen);
+
+      s1 %= 65521;
+      s2 %= 65521;
+    }
+
+    return ((s2 << 16) | s1) >>> 0;
+  };
+
+  /**
+   * Adler32 最適化パラメータ
+   * 現状では 1024 程度が最適.
+   * @see http://jsperf.com/adler-32-simple-vs-optimized/3
+   * @const
+   * @type {number}
+   */
+  Adler32.OptimizationParameter = 1024;
+
+}(this));
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 QuickSWF Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  /**
+   * @class
+   * @extends {benri.io.Reader}
+   */
+  var SWFReader = (function(pSuper) {
+    /**
+     * @constructor
+     */
+    function SWFReader(pSource) {
+      pSuper.call(this, pSource);
+
+      this.encoding = 'utf-8';
+
+      /**
+       * The current bit buffer.
+       * @type {number}
+       * @private
+       */
+      this._bitBuffer = 0;
+
+      /**
+       * The current bit buffer length;
+       * @type {number}
+       * @private
+       */
+      this._bitBufferLength = 0;
+    }
+
+    var tSuperProto = pSuper.prototype;
+    var tProto = SWFReader.prototype = Object.create(tSuperProto);
+    tProto.constructor = SWFReader;
+
+    /**
+     * Align the current bits to the nearest large byte.
+     */
+    tProto.align = function() {
+      if (this._bitBufferLength !== 0) {
+        this._bitBuffer = 0;
+        this._bitBufferLength = 0;
+      }
+    };
+
+    /**
+     * Peeks a bits, not modifying the state of this Reader.
+     * @param {number} pNumber The number of bits to peek at.
+     * @return {number} The bits.
+     */
+    tProto.peekBits = function(pNumber) {
+      var tByteIndex = this.tell(),
+          tBitBuffer = this._bitBuffer,
+          tBitBufferLength = this._bitBufferLength;
+
+      var tTmp = 0;
+
+      while (tBitBufferLength < pNumber) {
+        tTmp = this.getUint8();
+
+        tBitBuffer = (tBitBuffer << 8) | tTmp;
+        tBitBufferLength += 8;
+      }
+
+      tTmp = tBitBuffer >>> (tBitBufferLength - pNumber);
+
+      this.seekTo(tByteIndex);
+
+      return tTmp;
+    };
+
+    /**
+     * Reads bits.
+     * @param {number} pNumber The number of bits to read.
+     * @return {number} The bits.
+     */
+    tProto.getUBits = function(pNumber) {
+      var tByteIndex = this.tell(),
+          tBitBuffer = this._bitBuffer,
+          tBitBufferLength = this._bitBufferLength;
+
+      var tByteLength = 8;
+      var tResult = tBitBuffer;
+
+      while (tBitBufferLength + tByteLength < pNumber) {
+
+        tBitBuffer = this.getUint8();
+
+        tResult = (tResult << tByteLength) | tBitBuffer;
+
+        tBitBufferLength += tByteLength;
+      }
+
+      if (tBitBufferLength < pNumber) {
+        tBitBuffer = this.getUint8();
+        
+        tResult = (tResult << (pNumber - tBitBufferLength)) | (tBitBuffer >>> (tBitBufferLength + tByteLength - pNumber));
+
+        tBitBufferLength = tBitBufferLength + tByteLength - pNumber;
+
+        tBitBuffer = tBitBuffer & ((1 << tBitBufferLength) - 1);
+
+      } else {
+        tResult = tBitBuffer >>> (tBitBufferLength - pNumber);
+
+        tBitBufferLength -= pNumber;
+
+        tBitBuffer &= ((1 << tBitBufferLength) - 1);
+      }
+
+      this._bitBuffer = tBitBuffer;
+      this._bitBufferLength = tBitBufferLength;
+
+      return tResult;
+    };
+
+    /**
+     * Reads a signed number from bits.
+     * @param {number} pNumber The number of bits to read.
+     * @return {number} The bits.
+     */
+    tProto.getBits = function(pNumber) {
+      var tResult = this.getUBits(pNumber);
+      if (tResult >> (pNumber - 1)) {
+        // TODO: Will this every be over 31?
+        tResult -= 1 << pNumber;
+      }
+      return tResult;
+    };
+
+    /**
+     * Reads a fixed point from bits with a precision of 8.
+     * @param {number} pNumber The number of bits to read.
+     * @return {number} The fixed point.
+     */
+    tProto.getFixedPoint8 = function(pNumber) {
+      return this.getBits(pNumber) * 0.00390625;
+    };
+
+    /**
+     * Reads a fixed point from bits with a precision of 16.
+     * @param {number} pNumber The number of bits to read.
+     * @return {number} The fixed point.
+     */
+    tProto.getFixedPoint16 = function(pNumber) {
+      return this.getBits(pNumber) * 0.0000152587890625;
+    };
+
+    tProto.getInt16 = function() {
+      return tSuperProto.getInt16.call(this, true);
+    };
+
+    tProto.getUint16 = function() {
+      return tSuperProto.getUint16.call(this, true);
+    };
+
+    tProto.getInt32 = function() {
+      return tSuperProto.getInt32.call(this, true);
+    };
+
+    tProto.getUint32 = function() {
+      return tSuperProto.getUint32.call(this, true);
+    };
+
+    return SWFReader;
+  })(benri.io.Reader);
+
+  global.quickswf.SWFReader = SWFReader;
+
+}(this));
+
+/**
+ * @author Yoshihiro Yamazaki
+ *
+ * Copyright (C) 2012 Yoshihiro Yamazaki
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.structs.KERNINGRECORD = KERNINGRECORD;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.KERNINGRECORD}
+   */
+  function KERNINGRECORD(pCode1, pCode2, pAdjustment) {
+    this.code1 = pCode1;
+    this.code2 = pCode2;
+    this.adjustment = pAdjustment;
+  }
+
+  /**
+   * Loads a KERNINGRECORD type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @return {quickswf.structs.KERNINGRECORD} The loaded KERNINGRECORD.
+   */
+  KERNINGRECORD.load = function(pReader, pFlagWideCodes) {
+    var tCode1, tCode2, tAdjustment;
+
+    if (pFlagWideCodes) {
+      tCode1 = pReader.getUint16();
+      tCode2 = pReader.getUint16();
+    } else {
+      tCode1 = pReader.getUint8();
+      tCode2 = pReader.getUint8();
+    }
+
+    tAdjustment = pReader.getUint16();
+
+    return new KERNINGRECORD(tCode1, tCode2, tAdjustment);
+  };
+
+}(this));
+
+/**
+ * @author Yoshihiro Yamazaki
+ *
+ * Copyright (C) 2012 QuickSWF project
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.structs.GLYPHENTRY = GLYPHENTRY;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.GLYPHENTRY}
+   */
+  function GLYPHENTRY(pGlyphIndex, pGlyphAdvance) {
+    this.index = pGlyphIndex;
+    this.advance = pGlyphAdvance;
+  }
+
+  /**
+   * Loads a GLYPHENTRY type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {number} pGlyphBits Bits in each glyph Index
+   * @param {number} pAdvanceBits Bits in each advance value.
+   * @return {quickswf.structs.GLYPHENTRY} The loaded GLYPHENTRY.
+   */
+  GLYPHENTRY.load = function(pReader, pGlyphBits, pAdvanceBits) {
+    var tGlyphIndex = pReader.getUBits(pGlyphBits);
+    var tGlyphAdvance = pReader.getUBits(pAdvanceBits);
+
+    return new GLYPHENTRY(tGlyphIndex, tGlyphAdvance);
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.structs.CLIPACTIONS = CLIPACTIONS;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.CLIPACTIONS}
+   */
+  function CLIPACTIONS() {
+    this.allEventFlags = 0;
+    this.clipActionRecords = new Array();
+  }
+
+  /**
+   * Loads a CLIPACTIONS type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {number} pVersion The version of this SWF.
+   * @return {quickswf.structs.CLIPACTIONS} The loaded CLIPACTIONS.
+   */
+  CLIPACTIONS.load = function(pReader, pVersion) {
+    var tActions = new CLIPACTIONS();
+
+    pReader.getUint16(); // Reserved for nothing.
+
+    if (pVersion <= 5) {
+      tActions.allEventFlags = pReader.getUint16();
+    } else {
+      tActions.allEventFlags = pReader.getUint32();
+    }
+
+    for (;;) {
+      if (pVersion <= 5) {
+        if (pReader.getUint16() === 0) {
+          break;
+        } else {
+          pReader.seek(-2); // wind backwards.
+        }
+      } else {
+        if (pReader.getUint32() === 0) {
+          break;
+        } else {
+          pReader.seek(-4); // wind backwards.
+        }
+      }
+
+      var tEventFlags;
+      if (pVersion <= 5) {
+        tEventFlags = pReader.getUint16();
+      } else {
+        tEventFlags = pReader.getUint32();
+      }
+
+      var tActionRecordSize = pReader.getUint32();
+      var tData = pReader.getCopy(tActionRecordSize);
+
+      if (pVersion >= 6) {
+        // check for keypress and do U8
+      }
+
+      tActions.clipActionRecords.push({
+        eventFlags: tEventFlags,
+        action: tData
+      });
+    }
+
+    return tActions;
+  };
+
+}(this));
+
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.structs.RGBA = RGBA;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.RGBA}
+   */
+  function RGBA(pRed, pGreen, pBlue, pAlpha) {
+    this.red = pRed;
+    this.green = pGreen;
+    this.blue = pBlue;
+    this.alpha = pAlpha;
+  }
+
+  RGBA.prototype.toString = function() {
+    return 'rgba(' +
+      this.red +
+      ',' +
+      this.green +
+      ',' +
+      this.blue +
+      ',' +
+      this.alpha +
+      ')';
+  };
+
+  /**
+   * Loads a colour RGBA type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {bool} pWithAlpha If this structure has alpha or not.
+   * @return {quickswf.structs.RGBA} The loaded RGBA.
+   */
+  RGBA.load = function(pReader, pWithAlpha) {
+    return new RGBA(
+      pReader.getUint8(),
+      pReader.getUint8(),
+      pReader.getUint8(),
+      pWithAlpha ? pReader.getUint8() / 255 : 1.0
+    );
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.structs.LINESTYLE = LINESTYLE;
+  var RGBA = global.quickswf.structs.RGBA;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.LINESTYLE}
+   */
+  function LINESTYLE(pIsMorph) {
+    if (pIsMorph) {
+      this.startWidth = 0;
+      this.endWidth = 0;
+      this.startColor = null;
+      this.endColor = null;
+    } else {
+      this.width = 0;
+      this.color = null;
+    }
+  }
+
+  /**
+   * Loads a LINESTYLE type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {bool} pWithAlpha True if alpha needs to be parsed.
+   * @param {bool} pIsMorph True if morph shape.
+   * @return {quickswf.structs.LINESTYLE} The loaded LINESTYLE.
+   */
+  LINESTYLE.load = function(pReader, pWithAlpha, pIsMorph) {
+    var tLineStyle = new LINESTYLE(pIsMorph);
+
+    if (pIsMorph) {
+      tLineStyle.startWidth = pReader.getUint16();
+      tLineStyle.endWidth = pReader.getUint16();
+      tLineStyle.startColor = RGBA.load(pReader, pWithAlpha);
+      tLineStyle.endColor = RGBA.load(pReader, pWithAlpha);
+    } else {
+      tLineStyle.width = pReader.getUint16();
+      tLineStyle.color = RGBA.load(pReader, pWithAlpha);
+    }
+
+    return tLineStyle;
+  };
+
+  /**
+   * Loads an array of LINESTYLE types.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {bool} pWithAlpha True if alpha needs to be parsed.
+   * @param {bool} pHasLargeFillCount True if this struct can have more than 256 styles.
+   * @param {bool} pIsMorph True if morph shape.
+   * @return {Array.<quickswf.structs.LINESTYLE>} The loaded LINESTYLE array.
+   */
+  LINESTYLE.loadMultiple = function(pReader, pWithAlpha, pHasLargeFillCount, pIsMorph) {
+    var tCount = pReader.getUint8();
+
+    if (pHasLargeFillCount && tCount === 0xFF) {
+      tCount = pReader.getUint16();
+    }
+
+    var tArray = new Array(tCount);
+
+    for (var i = 0; i < tCount; i++) {
+      tArray[i] = LINESTYLE.load(pReader, pWithAlpha, pIsMorph);
+    }
+
+    return tArray;
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.structs.GRADIENT = GRADIENT;
+  global.quickswf.structs.Stop = Stop;
+
+  var RGBA = global.quickswf.structs.RGBA;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.GRADIENT}
+   */
+  function GRADIENT() {
+    this.spreadMode = 0;
+    this.interpolationMode = 0;
+    this.stops = new Array();
+    this.focalPoint = 0.0;
+  }
+
+  /**
+   * @constructor
+   * @private
+   * @param {bool} pIsMorph True if morph shape.
+   */
+  function Stop(pIsMorph) {
+    if (pIsMorph) {
+      this.startRatio = 0;
+      this.startColor = null;
+      this.endRatio = 0;
+      this.endColor = null;
+    } else {
+      this.ratio = 0;
+      this.color = null;
+    }
+  }
+
+  /**
+   * Loads a GRADIENT type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {bool} pWithAlpha True if we need to parse colour.
+   * @param {bool} pIsMorph True if morph shape.
+   * @return {quickswf.structs.GRADIENT} The loaded GRADIENT.
+   */
+  GRADIENT.load = function(pReader, pWithAlpha, pIsMorph) {
+    var tGradient = new GRADIENT();
+
+    tGradient.spreadMode = pReader.getUBits(2);
+    tGradient.interpolationMode = pReader.getUBits(2);
+    var tStops = tGradient.stops;
+    var tCount = tStops.length = pReader.getUBits(4);
+    var tStop;
+
+    for (var i = 0; i < tCount; i++) {
+      tStop = new Stop(pIsMorph);
+
+      if (pIsMorph) {
+        tStop.startRatio = pReader.getUint8();
+        tStop.startColor = RGBA.load(pReader, true);
+        tStop.endRatio = pReader.getUint8();
+        tStop.endColor = RGBA.load(pReader, true);
+      } else {
+        tStop.ratio = pReader.getUint8();
+        tStop.color = RGBA.load(pReader, pWithAlpha);
+      }
+
+      tStops[i] = tStop;
+    }
+
+    return tGradient;
+  };
+
+}(this));
+
+/**
+ * @author Yoshihiro Yamazaki
+ *
+ * Copyright (C) 2012 QuickSWF project
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  var mStruct = global.quickswf.structs;
+  mStruct.TEXTRECORD = TEXTRECORD;
+  var RGBA = mStruct.RGBA;
+  var GLYPHENTRY = mStruct.GLYPHENTRY;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.TEXTRECORD}
+   */
+  function TEXTRECORD() {
+    this.type = 0;
+    this.styleflags = 0;
+    this.id = -1;
+    this.color = null;
+    this.x = 0;
+    this.y = 0;
+    this.height = 0;
+    this.xAdvance = 0;
+    this.glyphs = null;
+  }
+
+  /**
+   * Loads a TEXTRECORD type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {number} p_1stB First byte of TextRecord.
+   * @param {bool} pWithAlpha True if parsing alpha is needed.
+   * @param {number} pGlyphBits Bits in each glyph Index
+   * @param {number} pAdvanceBits Bits in each advance value.
+   * @param {quickswf.structs.Text} pText DefineText object which has this TEXTRECORD.
+   * @return {quickswf.structs.TEXTRECORD} The loaded TEXTRECORD.
+   */
+  TEXTRECORD.load = function(pReader, p_1stB, pWithAlpha, pGlyphBits, pAdvanceBits, pText) {
+    var tTextRecordType = p_1stB >>> 7;
+    var tStyleFlags = p_1stB;
+    var tTextColor = null;
+
+    if (tStyleFlags & 0x08) { // StyleFlagsHasFont
+      pText.fontID = pReader.getUint16();
+    }
+    if (tStyleFlags & 0x04) { // StyleFlagsHasColor
+      pText.textColor = RGBA.load(pReader, pWithAlpha);
+    }
+    if (tStyleFlags & 0x01) { // StyleFlagsHasXOffset
+      pText.xOffset = pReader.getUint16();
+      pText.xAdvance = 0;
+    }
+    if (tStyleFlags & 0x02) { // StyleFlagsHasYOffset
+      pText.yOffset = pReader.getUint16();
+    }
+    if (tStyleFlags & 0x08) { // StyleFlagsHasFont
+      pText.textHeight = pReader.getUint16();
+    }
+
+    var tTEXTRECORD = new TEXTRECORD;
+
+    tTEXTRECORD.type = tTextRecordType;
+    tTEXTRECORD.styleflags = tStyleFlags;
+    tTEXTRECORD.id = pText.fontID;
+    tTEXTRECORD.color = pText.textColor;
+    tTEXTRECORD.x = pText.xOffset;
+    tTEXTRECORD.y = pText.yOffset;
+    tTEXTRECORD.height = pText.textHeight;
+    tTEXTRECORD.xAdvance = pText.xAdvance;
+
+    var tGlyphCount = pReader.getUint8();
+    var tGlypyEntries = new Array(tGlyphCount);
+
+    for (var i = 0; i < tGlyphCount; i++) {
+      tGlypyEntries[i] = GLYPHENTRY.load(pReader, pGlyphBits, pAdvanceBits);
+      pText.xAdvance += tGlypyEntries[i].advance;
+    }
+
+    tTEXTRECORD.glyphs = tGlypyEntries;
+
+    pReader.align();
+
+    return tTEXTRECORD;
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.structs.RECT = RECT;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.RECT}
+   */
+  function RECT(pLeft, pRight, pTop, pBottom) {
+    this.left = pLeft;
+    this.right = pRight;
+    this.top = pTop;
+    this.bottom = pBottom;
+  }
+
+  RECT.prototype.move = function (pXOffset, pYOffset) {
+    this.left   += pXOffset;
+    this.right  += pXOffset;
+    this.top    += pYOffset;
+    this.bottom += pYOffset;
+  };
+
+  RECT.prototype.clone  = function () {
+    return new RECT(this.left, this.right, this.top, this.bottom);
+  };
+
+  /**
+   * Loads a RECT type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @return {quickswf.structs.RECT} The loaded RECT.
+   */
+  RECT.load = function(pReader) {
+    var tNumberOfBits = pReader.getUBits(5);
+    var tLeft = pReader.getBits(tNumberOfBits);
+    var tRight = pReader.getBits(tNumberOfBits);
+    var tTop = pReader.getBits(tNumberOfBits);
+    var tBottom = pReader.getBits(tNumberOfBits);
+
+    pReader.align();
+
+    return new RECT(tLeft, tRight, tTop, tBottom);
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.structs.MATRIX = MATRIX;
+
+  /**
+   * @constructor
+   * @extends {Array}
+   * @class {quickswf.structs.MATRIX}
+   */
+  function MATRIX() {
+
+  }
+
+  MATRIX.prototype = [1, 0, 0, 1, 0, 0];
+
+  /**
+   * Loads a MATRIX type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @return {quickswf.structs.MATRIX} The loaded MATRIX.
+   */
+  MATRIX.load = function(pReader) {
+    var tMatrix = new MATRIX();
+    var tNumberOfBits;
+
+    // Check to see if we have scale.
+    if (pReader.getUBits(1) === 1) {
+      tNumberOfBits = pReader.getUBits(5);
+      tMatrix[0] = pReader.getFixedPoint16(tNumberOfBits);
+      tMatrix[3] = pReader.getFixedPoint16(tNumberOfBits);
+    }
+
+    // Check to see if we have skew.
+    if (pReader.getUBits(1) === 1) {
+      tNumberOfBits = pReader.getUBits(5);
+      tMatrix[1] = pReader.getFixedPoint16(tNumberOfBits);
+      tMatrix[2] = pReader.getFixedPoint16(tNumberOfBits);
+    }
+
+    // Grab the translation.
+    tNumberOfBits = pReader.getUBits(5);
+    tMatrix[4] = pReader.getBits(tNumberOfBits);
+    tMatrix[5] = pReader.getBits(tNumberOfBits);
+
+    pReader.align();
+
+    return tMatrix;
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  var mStructs = global.quickswf.structs;
+  mStructs.FILLSTYLE = FILLSTYLE;
+  var RGBA = mStructs.RGBA;
+  var MATRIX = mStructs.MATRIX;
+  var GRADIENT = mStructs.GRADIENT;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.FILLSTYLE}
+   */
+  function FILLSTYLE(pIsMorph) {
+    if (pIsMorph) {
+      this.type = 0;
+      this.startColor = null;
+      this.endColor = null;
+      this.startMatrix = null;
+      this.endMatrix = null;
+      this.gradient = null;
+      this.bitmapId = null;
+    } else {
+      this.type = 0;
+      this.color = null;
+      this.matrix = null;
+      this.gradient = null;
+      this.bitmapId = null;
+    }
+  }
+
+  /**
+   * Loads a FILLSTYLE type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {bool} pWithAlpha True if alpha needs to be parsed.
+   * @param {bool} pIsMorph True if morph shape.
+   * @return {quickswf.structs.FILLSTYLE} The loaded FILLSTYLE.
+   */
+  FILLSTYLE.load = function(pReader, pWithAlpha, pIsMorph) {
+    var tFillStyle = new FILLSTYLE(pIsMorph);
+    var tType = tFillStyle.type = pReader.getUint8();
+
+    switch (tType) {
+      case 0x00: // Solid fill
+        if (pIsMorph) {
+          tFillStyle.startColor = RGBA.load(pReader, pWithAlpha);
+          tFillStyle.endColor = RGBA.load(pReader, pWithAlpha);
+        } else {
+          tFillStyle.color = RGBA.load(pReader, pWithAlpha);
+        }
+        break;
+      case 0x10: // Linear gradient fill
+      case 0x12: // Radial gradient fill
+      case 0x13: // Focal radial gradient fill
+        if (pIsMorph) {
+          tFillStyle.startMatrix = MATRIX.load(pReader);
+          tFillStyle.endMatrix = MATRIX.load(pReader);
+        } else {
+          tFillStyle.matrix = MATRIX.load(pReader);
+        }
+
+        tFillStyle.gradient = GRADIENT.load(pReader, pWithAlpha, pIsMorph);
+
+        if (tType === 0x13) {
+          tFillStyle.gradient.focalPoint = pReader.getFixedPoint8(16);
+        }
+
+        break;
+      case 0x40: // Repeating bitmap fill
+      case 0x41: // Clipped bitmap fill
+      case 0x42: // Non-smoothed repeating bitmap
+      case 0x43: // Non-smoothed clipped bitmap
+        tFillStyle.bitmapId = pReader.getUint16();
+
+        if (pIsMorph) {
+          tFillStyle.startMatrix = MATRIX.load(pReader);
+          tFillStyle.endMatrix = MATRIX.load(pReader);
+        } else {
+          tFillStyle.matrix = MATRIX.load(pReader);
+        }
+        if (tFillStyle.bitmapId === 0xFFFF) {
+          tFillStyle.color = new RGBA(255, 0, 0, 1);
+          tFillStyle.type = 0;
+
+          if (pIsMorph) {
+            tFillStyle.startMatrix = null;
+            tFillStyle.endMatrix = null;
+          } else {
+            tFillStyle.matrix = null;
+          }
+
+          tFillStyle.bitmapId = null;
+
+          break;
+        }
+
+        if (tType === 0x42 || tType === 0x43) {
+          quickswf.logger.warn('Non-smoothed bitmaps are not supported');
+        }
+
+        break;
+      default:
+        quickswf.logger.warn('Unknown fill style type: ' + tType);
+        return;
+    }
+
+    return tFillStyle;
+  };
+
+  /**
+   * Loads an array of FILLSTYLE types.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {bool} pWithAlpha True if alpha needs to be parsed.
+   * @param {bool} pHasLargeFillCount True if this struct can have more than 256 styles.
+   * @param {bool} pIsMorph True if morph shape.
+   * @return {Array.<quickswf.structs.FILLSTYLE>} The loaded FILLSTYLE array.
+   */
+  FILLSTYLE.loadMultiple = function(pReader, pWithAlpha, pHasLargeFillCount, pIsMorph) {
+    var tCount = pReader.getUint8();
+
+    if (pHasLargeFillCount && tCount === 0xFF) {
+      tCount = pReader.getUint16();
+    }
+
+    var tArray = new Array(tCount);
+
+    for (var i = 0; i < tCount; i++) {
+      tArray[i] = FILLSTYLE.load(pReader, pWithAlpha, pIsMorph);
+    }
+
+    return tArray;
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  var mStructs = global.quickswf.structs;
+  mStructs.SHAPERECORD = SHAPERECORD;
+  mStructs.EDGERECORD = EDGERECORD;
+  mStructs.STYLECHANGERECORD = STYLECHANGERECORD;
+  var FILLSTYLE = mStructs.FILLSTYLE;
+  var LINESTYLE = mStructs.LINESTYLE;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.SHAPERECORD}
+   */
+  function SHAPERECORD() {
+
+  }
+
+  /**
+   * Loads a SHAPERECORD type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @return {quickswf.structs.SHAPERECORD} The loaded SHAPERECORD.
+   */
+  SHAPERECORD.load = function(pReader) {
+    var tShapeRecord = new SHAPERECORD();
+
+    return tShapeRecord;
+  };
+
+  /**
+   * Loads multple SHAPERECORDs.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {quickswf.Shape} pShape The Shape these SHAPERECORDs belong to.
+   * @param {bool} pWithAlpha True if parsing alpha is needed.
+   * @param {bool} pIsMorph True if morph shape.
+   * @return {Array.<quickswf.structs.SHAPERECORD>} The loaded SHAPERECORDs.
+   */
+  SHAPERECORD.loadMultiple = function(pReader, pShape, pWithAlpha, pIsMorph) {
+    var tRecords = new Array();
+    var i = 0;
+    var tStyleChanged;
+
+    for (;;) {
+      if (pReader.getUBits(1) === 0) { // Is edge flag
+        if (pReader.peekBits(5) === 0) { // End of records.
+          pReader.getUBits(5);
+
+          break;
+        } else {
+          tStyleChanged = tRecords[i++] = parseStyleChanged(pReader, pShape.numberOfFillBits, pShape.numberOfLineBits, pWithAlpha, pIsMorph);
+          pShape.numberOfFillBits = tStyleChanged.fillBits;
+          pShape.numberOfLineBits = tStyleChanged.lineBits;
+        }
+      } else {
+        if (pReader.getUBits(1) === 1) { // Is straight record
+          tRecords[i++] = parseStraightEdge(pReader);
+        } else {
+          tRecords[i++] = parseCurvedEdge(pReader);
+        }
+      }
+    }
+
+    pReader.align();
+
+    return tRecords;
+  };
+
+  function EDGERECORD(pType, pDeltaX, pDeltaY, pDeltaControlX, pDeltaControlY) {
+    this.type = pType;
+    this.deltaX = pDeltaX;
+    this.deltaY = pDeltaY;
+    this.deltaControlX = pDeltaControlX;
+    this.deltaControlY = pDeltaControlY;
+  }
+
+  function STYLECHANGERECORD(pNumberOfFillBits, pNumberOfLineBits) {
+    this.type = 1;
+    this.hasMove = false;
+    this.moveDeltaX = 0;
+    this.moveDeltaY = 0;
+    this.fillStyle0 = -1;
+    this.fillStyle1 = -1;
+    this.lineStyle = -1;
+    this.fillBits = pNumberOfFillBits;
+    this.lineBits = pNumberOfLineBits;
+    this.fillStyles = null;
+    this.lineStyles = null;
+  }
+
+  function parseStraightEdge(pReader) {
+    var tNumberOfBits = pReader.getUBits(4) + 2;
+    var tGeneralLineFlag = pReader.getUBits(1);
+    var tVerticalLineFlag = 0;
+
+    if (tGeneralLineFlag === 0) {
+      tVerticalLineFlag = pReader.getUBits(1);
+    }
+
+    var tDeltaX = 0;
+    var tDeltaY = 0;
+
+    if (tGeneralLineFlag === 1 || tVerticalLineFlag === 0) {
+      tDeltaX = pReader.getBits(tNumberOfBits);
+    }
+
+    if (tGeneralLineFlag === 1 || tVerticalLineFlag === 1) {
+      tDeltaY = pReader.getBits(tNumberOfBits);
+    }
+
+    return new EDGERECORD(3, tDeltaX, tDeltaY, 0, 0);
+  }
+
+  function parseCurvedEdge(pReader) {
+    var tNumberOfBits = pReader.getUBits(4) + 2;
+    var tDeltaControlX = pReader.getBits(tNumberOfBits);
+    var tDeltaControlY = pReader.getBits(tNumberOfBits);
+    var tDeltaX = pReader.getBits(tNumberOfBits);
+    var tDeltaY = pReader.getBits(tNumberOfBits);
+
+    return new EDGERECORD(2, tDeltaX, tDeltaY, tDeltaControlX, tDeltaControlY);
+  }
+
+  function parseStyleChanged(pReader, pNumberOfFillBits, pNumberOfLineBits, pWithAlpha, pIsMorph) {
+    var tNewStyles = pReader.getUBits(1);
+    var tNewLineStyle = pReader.getUBits(1);
+    var tNewFillStyle1 = pReader.getUBits(1);
+    var tNewFillStyle0 = pReader.getUBits(1);
+    var tNewMoveTo = pReader.getUBits(1);
+
+    var tResult = new STYLECHANGERECORD(pNumberOfFillBits, pNumberOfLineBits);
+
+    if (tNewMoveTo === 1) {
+      var tMoveBits = pReader.getUBits(5);
+      tResult.hasMove = true;
+      tResult.moveDeltaX = pReader.getBits(tMoveBits);
+      tResult.moveDeltaY = pReader.getBits(tMoveBits);
+    }
+
+    if (tNewFillStyle0 === 1) {
+      tResult.fillStyle0 = pReader.getUBits(pNumberOfFillBits);
+    }
+
+    if (tNewFillStyle1 === 1) {
+      tResult.fillStyle1 = pReader.getUBits(pNumberOfFillBits);
+    }
+
+    if (tNewLineStyle === 1) {
+      tResult.lineStyle = pReader.getUBits(pNumberOfLineBits);
+    }
+
+    if (tNewStyles === 1) {
+      pReader.align();
+      tResult.fillStyles = FILLSTYLE.loadMultiple(pReader, pWithAlpha, true, pIsMorph);
+      tResult.lineStyles = LINESTYLE.loadMultiple(pReader, pWithAlpha, true, pIsMorph);
+      pReader.align();
+      tResult.fillBits = pReader.getUBits(4);
+      tResult.lineBits = pReader.getUBits(4);
+    }
+
+    return tResult;
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.structs.CXFORM = CXFORM;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.CXFORM}
+   */
+  function CXFORM() {
+    this.rm = 256;
+    this.gm = 256;
+    this.bm = 256;
+    this.am = 256;
+
+    this.ra = 0;
+    this.ga = 0;
+    this.ba = 0;
+    this.aa = 0;
+  }
+
+  CXFORM.prototype.clone = function() {
+    var tColorTransform = new CXFORM();
+
+    tColorTransform.rm = this.rm;
+    tColorTransform.gm = this.gm;
+    tColorTransform.bm = this.bm;
+    tColorTransform.am = this.am;
+
+    tColorTransform.ra = this.ra;
+    tColorTransform.ga = this.ga;
+    tColorTransform.ba = this.ba;
+    tColorTransform.aa = this.aa;
+
+    return tColorTransform;
+  }
+
+  CXFORM.prototype.equals = function(pThat) {
+    if (pThat
+      && this.rm === pThat.rm
+      && this.gm === pThat.gm
+      && this.bm === pThat.bm
+      && this.am === pThat.am
+      && this.ra === pThat.ra
+      && this.ga === pThat.ga
+      && this.ba === pThat.ba
+      && this.aa === pThat.aa) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Loads a CXFORM type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {bool} pWithAlpha If this struct has alpha to load.
+   * @return {quickswf.structs.CXFORM} The loaded CXFORM.
+   */
+  CXFORM.load = function(pReader, pWithAlpha) {
+    var tHasAdditive = pReader.getUBits(1);
+    var tHasMultiplitive = pReader.getUBits(1);
+    var tNumberOfBits = pReader.getUBits(4);
+
+    var tTransform = new CXFORM();
+
+    if (tHasMultiplitive === 1) {
+      tTransform.rm = pReader.getBits(tNumberOfBits);
+      tTransform.gm = pReader.getBits(tNumberOfBits);
+      tTransform.bm = pReader.getBits(tNumberOfBits);
+      if (pWithAlpha === true) {
+        tTransform.am = pReader.getBits(tNumberOfBits);
+      }
+    }
+
+    if (tHasAdditive === 1) {
+      tTransform.ra = pReader.getBits(tNumberOfBits);
+      tTransform.ga = pReader.getBits(tNumberOfBits);
+      tTransform.ba = pReader.getBits(tNumberOfBits);
+      if (pWithAlpha === true) {
+        tTransform.aa = pReader.getBits(tNumberOfBits);
+      }
+    }
+
+    pReader.align();
+
+    return tTransform;
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function() {
+
+  var bugs = {};
+
+  benri.impl.web.graphics = {
+    bugs: bugs
+  };
+
+  /** @const @type {boolean} */
+  bugs.putImageDataAlphaBug = detectPutImageDataBug();
+
+  /** @const @type {boolean} */
+  bugs.repeatPatternBug = detectRepeatPatternBug();
+
+  /** @const @type {boolean} */
+  bugs.canvasSizeBug = detectCanvasSizeBug();
+
+  /**
+   * @return {boolean}
+   */
+  function detectPutImageDataBug() {
+    /** @type {HTMLCanvasElement} */
+    var tCanvas = document.createElement('canvas');
+    /** @type {CanvasRenderingContext2D} */
+    var tContext = tCanvas.getContext('2d');
+    /** @type {ImageData} */
+    var tImageData;
+    /** @type {!(CanvasPixelArray|Uint8ClampedArray)} */
+    var tPixelArray;
+
+    tCanvas.width = tCanvas.height = 1;
+    tImageData = tContext.createImageData(1, 1);
+    tPixelArray = tImageData.data;
+
+    tPixelArray[0] = tPixelArray[3] = 128;
+
+    tContext.putImageData(tImageData, 0, 0);
+    tImageData = tContext.getImageData(0, 0, 1, 1);
+    tPixelArray = tImageData.data;
+
+    return (tPixelArray[0] === 255);
+  }
+
+  function detectRepeatPatternBug() {
+    var tPatternCanvas = document.createElement('canvas');
+    tPatternCanvas.width = 1;
+    // iOS doesn't care about the size, but Chrome
+    // needs width or height to be larger than the other.
+    tPatternCanvas.height = 3;
+    var tPatternContext = tPatternCanvas.getContext('2d');
+
+    tPatternContext.fillStyle = 'red';
+    tPatternContext.fillRect(0, 0, 1, 3);
+
+    var tCanvas = document.createElement('canvas');
+
+    // iOS needs to be above 5000 total pixels,
+    // Chrome needs to be a box larger than 256 (the render square).
+    tCanvas.width = 257;
+    tCanvas.height = 257;
+
+    var tContext = tCanvas.getContext('2d');
+    var tPattern = tContext.createPattern(tPatternCanvas, 'repeat');
+
+    tContext.fillStyle = tPattern;
+
+    tContext.setTransform(1.1, 0, 0, 1.1, 0, 0);
+    tContext.fillRect(0, 0, 257, 257);
+
+    return (tContext.getImageData(1, 0, 1, 1).data[0] !== 255);
+  }
+
+  function detectCanvasSizeBug() {
+    // sadly, we actually can't detect this
+    // so we guess based upon the existence
+    // of other bugs (this is not 100% accurate).
+    
+    return detectPutImageDataBug();
+  }
+
+  benri.env.on('setvar', function(pEvent) {
+    if (pEvent.varName === 'benri.impl.web.graphics.canvasSizeBug') {
+      bugs.canvasSizeBug = pEvent.varValue;
+    }
+  });
+
+}());
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+benri.impl.web.graphics.shader = {};
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+benri.impl.web.graphics.shader.fragment = {};
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var mHasBitmapPatternGapIssue = benri.impl.web.graphics.bugs.repeatPatternBug;
+
+
+  benri.impl.web.graphics.shader.fragment.ImageShader = {
+    pre: function(pShader, pSurface, pProgram) {
+      var tImage = pShader.getImage();
+      var tSrcWidth = tImage.getWidth();
+      var tSrcHeight = tImage.getHeight();
+      var tTileMode = pShader.getTileMode();
+
+      pProgram.fillData = {
+        image: tImage.domImage,
+        matrix: pShader.getMatrix(),
+        tileMode: tTileMode,
+        width: tSrcWidth,
+        height: tSrcHeight,
+        srcX: 0,
+        srcY: 0,
+        srcWidth: tSrcWidth,
+        srcHeight: tSrcHeight
+      };
+    },
+
+    style: function(pShader, pSurface, pProgram) {
+      var tContext = pSurface.context;
+      var tFillData = pProgram.fillData;
+      var tSurfaceMatrix;
+      var tMatrix;
+      var tImage = tFillData.image;
+
+      pSurface.saveContext();
+
+      if (tFillData.tileMode === 'none') {
+        if (tFillData.drawnOnSurface) {
+          return true;
+        }
+
+        tSurfaceMatrix = pProgram.matrix;
+        tMatrix = pShader.getMatrix();
+
+        tContext.clip();
+
+        pSurface.setTransform(
+          tSurfaceMatrix.a,
+          tSurfaceMatrix.b,
+          tSurfaceMatrix.c,
+          tSurfaceMatrix.d,
+          tSurfaceMatrix.e,
+          tSurfaceMatrix.f
+        );
+        pSurface.transform(tMatrix.a, tMatrix.b, tMatrix.c, tMatrix.d, tMatrix.e, tMatrix.f);
+        tContext.drawImage(tImage, 0, 0, tFillData.srcWidth, tFillData.srcHeight, 0, 0, tFillData.width, tFillData.height);
+
+        return true;
+      } else {
+        tMatrix = pProgram.matrix.cloneAndAutoRelease().multiply(pShader.getMatrix());
+
+        if (mHasBitmapPatternGapIssue) {
+          tMatrix.setScaleX(Math.round(tImage.width * tMatrix.getScaleX()) / tImage.width);
+          tMatrix.setScaleY(Math.round(tImage.height * tMatrix.getScaleY()) / tImage.height);
+        }
+
+        pSurface.setTransform(
+          tMatrix.a,
+          tMatrix.b,
+          tMatrix.c,
+          tMatrix.d,
+          tMatrix.e,
+          tMatrix.f
+        );
+        tContext[pProgram.fillTypeText] = tContext.createPattern(tImage, 'repeat');
+      }
+
+      return false;
+    },
+
+    post: function(pShader, pSurface, pProgram) {
+      pSurface.restoreContext();
+    }
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var Records = benri.graphics.Records;
+  var Color = benri.graphics.draw.Color;
+
+  var mHaveMultiplyMode;
+
+  benri.impl.web.graphics.shader.fragment.ColorTransformShader = {
+    pre: function(pShader, pSurface, pProgram) {
+      var tFillType = pProgram.fillType;
+
+      /*if (pShader.getGlobalAlpha().alphaOnly) {
+        return;
+      }*/
+
+      if (!pShader.checkColorTransformAccessed()) {
+        pShader.updateFlags();
+      }
+
+
+      var tHasAlpha = pShader.hasAlpha;
+      var tHasColors = pShader.hasColors;
+
+      if (!tHasAlpha && !tHasColors) {
+        // Nothing to do.
+        return;
+      }
+
+      var tContext = pSurface.context;
+
+      if (tHasAlpha && !tHasColors && pShader.alphaAdd === 0) {
+        // We can just do alpha here.
+        pShader.previousAlpha = tContext.globalAlpha;
+        tContext.globalAlpha = pShader.alphaMultiplier;
+        // Is this part still necessary since we have AlphaShader?
+        return;
+      }
+
+      var tFillData = pProgram.fillData;
+      var tColors = pProgram.colors;
+      var i;
+      var il = tColors.length;
+      var tIsTargetFresh = pSurface.isTargetFresh();
+
+      if (il === 0) {
+        // We need to pixel process this.
+        if (tFillType === Records.RAW) {
+          // Set up a composite canvas.
+          pSurface.pushCompositeCanvas(tFillData.width, tFillData.height, true);
+        } else {
+          var tImageData = tFillData.image;
+          var tMatrix = tFillData.matrix;
+          var tSrcWidth = tFillData.srcWidth;
+          var tSrcHeight = tFillData.srcHeight;
+          var tSurfaceMatrix = pProgram.matrix;
+          var tIsNoneTileMode = tFillData.tileMode === 'none';
+
+          if (!tIsTargetFresh || !tIsNoneTileMode) {
+            var tTargetWidth;
+            var tTargetHeight;
+            var tFinalScale = Math.max(
+              Math.abs(tSurfaceMatrix.getScaleX() * tMatrix.getScaleX()),
+              Math.abs(tSurfaceMatrix.getScaleY() * tMatrix.getScaleY())
+            );
+
+            if (tFinalScale >= 1 || !tIsNoneTileMode) {
+              tTargetWidth = tSrcWidth;
+              tTargetHeight = tSrcHeight;
+            } else {
+              tTargetWidth = tSrcWidth * tFinalScale;
+              tTargetHeight = tSrcHeight * tFinalScale;
+
+              if (tTargetWidth < 1) {
+                tTargetHeight = tTargetHeight / tTargetWidth;
+                tTargetWidth = 1;
+              }
+              if (tTargetHeight < 1) {
+                tTargetWidth = tTargetWidth / tTargetHeight;
+                tTargetHeight = 1;
+              }
+            }
+
+            tFillData.width = tTargetWidth;
+            tFillData.height = tTargetHeight;
+
+            pSurface.pushCompositeCanvas(tTargetWidth, tTargetHeight, tIsNoneTileMode);
+
+            pSurface.context.drawImage(tImageData, 0, 0, tSrcWidth, tSrcHeight, 0, 0, tTargetWidth, tTargetHeight);
+
+            transformPixels(tImageData, pShader, pSurface, pProgram);
+
+            var tImage = pSurface.takeCompositeCanvas();
+
+            tFillData.image = tImage.domImage;
+            tFillData.srcWidth = tTargetWidth;
+            tFillData.srcHeight = tTargetHeight;
+            tFillData.width = tSrcWidth;
+            tFillData.height = tSrcHeight;
+
+            pShader.toDestroyImage = tImage;
+          } else {
+            tContext = pSurface.context;
+            pSurface.saveContext();
+            tContext.clip();
+
+            pSurface.setTransform(
+              tSurfaceMatrix.a,
+              tSurfaceMatrix.b,
+              tSurfaceMatrix.c,
+              tSurfaceMatrix.d,
+              tSurfaceMatrix.e,
+              tSurfaceMatrix.f
+            );
+            pSurface.transform(tMatrix.a, tMatrix.b, tMatrix.c, tMatrix.d, tMatrix.e, tMatrix.f);
+
+            tContext.drawImage(tImageData, 0, 0, tSrcWidth, tSrcHeight, 0, 0, tSrcWidth, tSrcHeight);
+
+            transformPixels(tImageData, pShader, pSurface, pProgram);
+            pSurface.restoreContext();
+
+            pShader.transformFinished = true;
+
+            pSurface.setTargetFresh(false);
+            
+            tFillData.drawnOnSurface = true;
+          }
+
+        }
+
+        return;
+      }
+
+      var tColor;
+      var tRGBA;
+
+      var tAlphaAdd = pShader.alphaAdd;
+      var tAlphaMultiplier = pShader.alphaMultiplier;
+      var tRedAdd = pShader.redAdd;
+      var tRedMultiplier = pShader.redMultiplier;
+      var tGreenAdd = pShader.greenAdd;
+      var tGreenMultiplier = pShader.greenMultiplier;
+      var tBlueAdd = pShader.blueAdd;
+      var tBlueMultiplier = pShader.blueMultiplier;
+
+      for (i = 0, il = tColors.length; i < il; i++) {
+        tColor = tColors[i];
+        tRGBA = tColor.getRGBA();
+
+        tRGBA[0] = Math.min(255, Math.max(0, (tRGBA[0] * tRedMultiplier + tRedAdd) | 0));
+        tRGBA[1] = Math.min(255, Math.max(0, (tRGBA[1] * tGreenMultiplier + tGreenAdd) | 0));
+        tRGBA[2] = Math.min(255, Math.max(0, (tRGBA[2] * tBlueMultiplier + tBlueAdd) | 0));
+        tRGBA[3] = Math.min(255, Math.max(0, (tRGBA[3] * tAlphaMultiplier + tAlphaAdd) | 0));
+
+        tColors[i] = new Color(tRGBA[0], tRGBA[1], tRGBA[2], tRGBA[3]);
+      }
+    },
+
+    post: function(pShader, pSurface, pProgram) {
+      var tFillType = pProgram.fillType;
+      var tAlphaMultiplier = pShader.alphaMultiplier;
+      var tHasAlpha = pShader.hasAlpha;
+      var tHasColors = pShader.hasColors;
+      var tContext;
+      var tPreviousAlpha;
+
+      if (!tHasAlpha && !tHasColors) {
+        // Nothing to do.
+        return;
+      }
+
+      if (tHasAlpha && !tHasColors && pShader.alphaAdd === 0) {
+        // We can just do alpha here.
+        tContext = pSurface.context;
+        tPreviousAlpha = pShader.previousAlpha;
+
+        if (tContext.globalAlpha !== tPreviousAlpha) {
+          tContext.globalAlpha = tPreviousAlpha;
+        }
+        
+        return;
+      }
+
+      if (pShader.transformFinished) {
+        pShader.transformFinished = false;
+
+        return;
+      }
+
+
+      if (pShader.toDestroyImage) {
+        // We've already done stuff in pre.
+        pShader.toDestroyImage.destroy();
+        pShader.toDestroyImage = null;
+
+        return;
+      }
+
+      var tColors = pProgram.colors;
+
+      if (tColors.length > 0) {
+        // Already did transforms to vectors!
+        return;
+      }
+
+      //transformPixels(pProgram.fillData.image, pShader, pSurface, pProgram);
+
+      if (tFillType === Records.RAW) {
+        pSurface.popCompositeCanvas(tAlphaMultiplier, 'source-over');
+      }
+    }
+  };
+
+  function transformPixels(pImage, pShader, pSurface, pProgram) {
+    // Process by pixel.
+    var tFillData = pProgram.fillData;
+    var tTargetContext = pSurface.context;
+    var tWidth = tFillData.width;
+    var tHeight = tFillData.height;
+    var tSrcWidth = tFillData.srcWidth;
+    var tSrcHeight = tFillData.srcHeight;
+    var tTargetX = tFillData.x || 0;
+    var tTargetY = tFillData.y || 0;
+
+    var tAlphaAdd = pShader.alphaAdd;
+    var tAlphaMultiplier = pShader.alphaMultiplier;
+    var tRedAdd = pShader.redAdd;
+    var tRedMultiplier = pShader.redMultiplier;
+    var tGreenAdd = pShader.greenAdd;
+    var tGreenMultiplier = pShader.greenMultiplier;
+    var tBlueAdd = pShader.blueAdd;
+    var tBlueMultiplier = pShader.blueMultiplier;
+
+    var tHasAdds = pShader.hasAdds;
+
+    var tHasRed = pShader.hasRed;
+    var tHasGreen = pShader.hasGreen;
+    var tHasBlue = pShader.hasBlue;
+
+    var tHavePositiveAdds = tRedAdd >= 0 && tGreenAdd >= 0 && tBlueAdd >= 0;
+    var tHaveMultipliers = tRedMultiplier * tGreenMultiplier * tBlueMultiplier !== 1;
+    var tHavePositiveMultipliers = tRedMultiplier >= 0 && tGreenMultiplier >= 0 && tBlueMultiplier >= 0;
+    var tHaveSameMultipliers = tHaveMultipliers && tRedMultiplier === tGreenMultiplier && tRedMultiplier === tBlueMultiplier;
+
+    var tAllPixelsImageData = null;
+    var tAllPixels = null;
+
+
+    function doSetAll() {
+      var tContext = tTargetContext;
+      var tPreviousGlobalAlpha = tContext.globalAlpha;
+      tContext.globalAlpha = 1;
+
+      //pSurface.pushCompositeCanvas(tWidth, tHeight);
+
+      //tContext = pSurface.context;
+      
+      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
+
+      tContext.globalCompositeOperation = 'source-atop';
+      tContext.fillStyle = 'rgba(' + tRedAdd + ',' + tGreenAdd + ',' + tBlueAdd + ',1)';
+      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
+      tContext.globalCompositeOperation = tPreviousCompositeOperation;
+
+      //pSurface.popCompositeCanvas(1, 'source-atop');
+
+      tContext.globalAlpha = tPreviousGlobalAlpha;
+
+      return false;
+    }
+
+    function doDarkenAllLighten() {
+      var tContext = tTargetContext;
+      var tMult = 1 - tRedMultiplier;
+      var tPreviousGlobalAlpha = tContext.globalAlpha;
+      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
+
+      tContext.globalAlpha = 1;
+      tContext.globalCompositeOperation = 'source-atop';
+      tContext.fillStyle = 'rgba(0,0,0,' + tMult + ')';
+      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = 'lighter';
+      tContext.fillStyle = 'rgba(' + tRedAdd + ',' + tGreenAdd + ',' + tBlueAdd + ',1)';
+      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = 'destination-in';
+      tContext.drawImage(pImage, 0, 0, tSrcWidth, tSrcHeight, tTargetX, tTargetY, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = tPreviousCompositeOperation;
+      tContext.globalAlpha = tPreviousGlobalAlpha;
+
+      return false;
+    }
+
+    function doDarkenAll() {
+      var tContext = tTargetContext;
+      var tMult = 1 - tRedMultiplier;
+      var tPreviousGlobalAlpha = tContext.globalAlpha;
+      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
+
+      tContext.globalAlpha = 1;
+      tContext.globalCompositeOperation = 'source-atop';
+      tContext.fillStyle = 'rgba(0,0,0,' + tMult + ')';
+      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = tPreviousCompositeOperation;
+      tContext.globalAlpha = tPreviousGlobalAlpha;
+
+      return false;
+    }
+
+    function canMultiply() {
+      if (mHaveMultiplyMode !== void 0) {
+        return mHaveMultiplyMode;
+      }
+
+      var tContext = tTargetContext;
+      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
+
+      tContext.globalCompositeOperation = 'multiply';
+
+      if (tContext.globalCompositeOperation === 'multiply') {
+        tContext.globalCompositeOperation = tPreviousCompositeOperation;
+
+        return (mHaveMultiplyMode = true);
+      }
+
+      return (mHaveMultiplyMode = false);
+    }
+
+    function doDarken() {
+      var tContext = tTargetContext;
+      var tMult = 1 - tRedMultiplier;
+      var tPreviousGlobalAlpha = tContext.globalAlpha;
+      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
+
+      tContext.globalAlpha = 1;
+      tContext.globalCompositeOperation = 'multiply';
+      tContext.fillStyle = 'rgba(' + ((tRedMultiplier * 255) | 0)  + ',' + ((tGreenMultiplier * 255) | 0)  + ',' + ((tBlueMultiplier * 255) | 0)  + ',1)';
+      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = 'destination-in';
+      tContext.drawImage(pImage, 0, 0, tSrcWidth, tSrcHeight, tTargetX, tTargetY, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = tPreviousCompositeOperation;
+      tContext.globalAlpha = tPreviousGlobalAlpha;
+
+      return false;
+    }
+
+    function doDarkenLighten() {
+      var tContext = tTargetContext;
+      var tPreviousGlobalAlpha = tContext.globalAlpha;
+      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
+
+      tContext.globalAlpha = 1;
+      tContext.globalCompositeOperation = 'multiply';
+      tContext.fillStyle = 'rgba(' + ((tRedMultiplier * 255) | 0)  + ',' + ((tGreenMultiplier * 255) | 0)  + ',' + ((tBlueMultiplier * 255) | 0)  + ',1)';
+      tContext.fillRect(0, 0, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = 'lighter';
+      tContext.fillStyle = 'rgba(' + tRedAdd + ',' + tGreenAdd + ',' + tBlueAdd + ',1)';
+      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = 'destination-in';
+      tContext.drawImage(pImage, 0, 0, tSrcWidth, tSrcHeight, tTargetX, tTargetY, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = tPreviousCompositeOperation;
+      tContext.globalAlpha = tPreviousGlobalAlpha;
+
+      return false;
+    }
+
+    function doLightenAll() {
+      var tContext = tTargetContext;
+      var tPreviousGlobalAlpha = tContext.globalAlpha;
+      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
+
+      tContext.globalAlpha = 1;
+      tContext.globalCompositeOperation = 'lighter';
+
+      // This is not perfect when alpha is involved.
+      // Due to alpha premultiplication we have lots colours and can not
+      // reproduce them. Need to find a work around this even though the result
+      // is quite similar.
+      tContext.fillStyle = 'rgba(' + tRedAdd + ',' + tGreenAdd + ',' + tBlueAdd + ',1)';
+      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = 'destination-in';
+      tContext.drawImage(pImage, 0, 0, tSrcWidth, tSrcHeight, tTargetX, tTargetY, tWidth, tHeight);
+
+      tContext.globalCompositeOperation = tPreviousCompositeOperation;
+      tContext.globalAlpha = tPreviousGlobalAlpha;
+
+      return false;
+    }
+
+    function doAll() {
+      tAllPixelsImageData = tTargetContext.getImageData(tTargetX, tTargetY, tWidth, tHeight);
+      var tPixels = tAllPixels = tAllPixelsImageData.data;
+      var tRM = tRedMultiplier;
+      var tRA = tRedAdd;
+      var tGM = tGreenMultiplier;
+      var tGA = tGreenAdd;
+      var tBM = tBlueMultiplier;
+      var tBA = tBlueAdd;
+      var tAM = tAlphaMultiplier;
+      var tAA = tAlphaAdd;
+      var tAlphaPixel;
+      var tAlphaRatio;
+      var tAlphaInverter
+
+      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
+        for (var i = 0, il = tPixels.length; i < il; i += 4) {
+          tAlphaPixel = tPixels[i + 3];
+
+          if (tAlphaPixel === 0) continue;
+
+          if (tAlphaPixel === 255) {
+            tPixels[i] = (tPixels[i] * tRM + tRA) | 0;
+            tPixels[i + 1] = (tPixels[i + 1] * tGM + tGA) | 0;
+            tPixels[i + 2] = (tPixels[i + 2] * tBM + tBA) | 0;
+            tPixels[i + 3] = (tAlphaPixel * tAM + tAA) | 0;
+          } else {
+            tAlphaRatio = tAlphaPixel / 255;
+            tAlphaInverter = 1 + (1 - tAlphaRatio);
+
+            tPixels[i] = (tPixels[i] * tAlphaInverter * tRM * tAlphaRatio + tRA * tAlphaRatio) | 0;
+            tPixels[i + 1] = (tPixels[i + 1] * tAlphaInverter * tGM * tAlphaRatio + tGA * tAlphaRatio) | 0;
+            tPixels[i + 2] = (tPixels[i + 2] * tAlphaInverter * tBM * tAlphaRatio + tBA * tAlphaRatio) | 0;
+            tPixels[i + 3] = (tAlphaPixel * tAM + tAA) | 0;
+          }
+        }
+      } else {
+        for (var i = 0, il = tPixels.length; i < il; i += 4) {
+          tAlphaPixel = tPixels[i + 3];
+
+          if (tAlphaPixel === 0) continue;
+
+          tPixels[i] = (tPixels[i] * tRM + tRA) | 0;
+          tPixels[i + 1] = (tPixels[i + 1] * tGM + tGA) | 0;
+          tPixels[i + 2] = (tPixels[i + 2] * tBM + tBA) | 0;
+          tPixels[i + 3] = (tAlphaPixel * tAM + tAA) | 0;
+        }
+      }
+    }
+
+    function doThree() {
+      tAllPixelsImageData = tTargetContext.getImageData(tTargetX, tTargetY, tWidth, tHeight);
+      var tPixels = tAllPixels = tAllPixelsImageData.data;
+      var tRM = tRedMultiplier;
+      var tRA = tRedAdd;
+      var tGM = tGreenMultiplier;
+      var tGA = tGreenAdd;
+      var tBM = tBlueMultiplier;
+      var tBA = tBlueAdd;
+
+      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
+        for (var i = 0, il = tPixels.length; i < il; i += 4) {
+          tAlphaPixel = tPixels[i + 3];
+
+          if (tAlphaPixel === 0) continue;
+
+          if (tAlphaPixel === 255) {
+            tPixels[i] = (tPixels[i] * tRM + tRA) | 0;
+            tPixels[i + 1] = (tPixels[i + 1] * tGM + tGA) | 0;
+            tPixels[i + 2] = (tPixels[i + 2] * tBM + tBA) | 0;
+          } else {
+            tAlphaRatio = tAlphaPixel / 255;
+            tAlphaInverter = 1 + (1 - tAlphaRatio);
+            
+            tPixels[i] = (tPixels[i] * tAlphaInverter * tRM * tAlphaRatio + tRA * tAlphaRatio) | 0;
+            tPixels[i + 1] = (tPixels[i + 1] * tAlphaInverter * tGM * tAlphaRatio + tGA * tAlphaRatio) | 0;
+            tPixels[i + 2] = (tPixels[i + 2] * tAlphaInverter * tBM * tAlphaRatio + tBA * tAlphaRatio) | 0;
+          }
+        }
+      } else {
+        for (var i = 0, il = tPixels.length; i < il; i += 4) {
+          if (tPixels[i + 3] === 0) continue;
+
+          tPixels[i] = (tPixels[i] * tRM + tRA) | 0;
+          tPixels[i + 1] = (tPixels[i + 1] * tGM + tGA) | 0;
+          tPixels[i + 2] = (tPixels[i + 2] * tBM + tBA) | 0;
+        }
+      }
+    }
+
+    function doOneIndex(pIndex, pMultiplier, pAdd) {
+      tAllPixelsImageData = tTargetContext.getImageData(tTargetX, tTargetY, tWidth, tHeight);
+      var tPixels = tAllPixels = tAllPixelsImageData.data;
+      var tAlphaIndex = 3 - pIndex;
+
+      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
+        for (var i = 0, il = tPixels.length; i < il; i += 4) {
+          tAlphaPixel = tPixels[i + tAlphaIndex];
+
+          if (tAlphaPixel === 0) continue;
+
+          if (tAlphaPixel === 255) {
+            tPixels[i] = (tPixels[i] * pMultiplier + pAdd) | 0;
+          } else {
+            tAlphaRatio = tAlphaPixel / 255;
+            tAlphaInverter = 1 + (1 - tAlphaRatio);
+            
+            tPixels[i] = (tPixels[i] * tAlphaInverter * pMultiplier * tAlphaRatio + pAdd * tAlphaRatio) | 0;
+          }
+        }
+      } else {
+        for (var i = pIndex, il = tPixels.length; i < il; i += 4) {
+          if (tPixels[i + tAlphaIndex] === 0) continue;
+
+          tPixels[i] = (tPixels[i] * pMultiplier + pAdd) | 0;
+        }
+      }
+    }
+
+    function doTwoIndex(pIndex, pMultiplier, pAdd, pIndex2, pMultiplier2, pAdd2) {
+      tAllPixelsImageData = tTargetContext.getImageData(tTargetX, tTargetY, tWidth, tHeight);
+      var tPixels = tAllPixels = tAllPixelsImageData.data;
+      var tAlphaIndex = 3 - pIndex;
+      pIndex2 = pIndex2 - pIndex;
+
+      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
+        for (var i = 0, il = tPixels.length; i < il; i += 4) {
+          tAlphaPixel = tPixels[i + tAlphaIndex];
+
+          if (tAlphaPixel === 0) continue;
+
+          if (tAlphaPixel === 255) {
+            tPixels[i] = (tPixels[i] * pMultiplier + pAdd) | 0;
+            tPixels[i + pIndex2] = (tPixels[i + pIndex2] * pMultiplier2 + pAdd2) | 0;
+          } else {
+            tAlphaRatio = tAlphaPixel / 255;
+            tAlphaInverter = 1 + (1 - tAlphaRatio);
+            
+            tPixels[i] = (tPixels[i] * tAlphaInverter * pMultiplier * tAlphaRatio + pAdd * tAlphaRatio) | 0;
+            tPixels[i + pIndex2] = (tPixels[i + pIndex2] * tAlphaInverter * pMultiplier2 * tAlphaRatio + pAdd2 * tAlphaRatio) | 0;
+          }
+        }
+      } else {
+        for (var i = pIndex, il = tPixels.length; i < il; i += 4) {
+          if (tPixels[i + tAlphaIndex] === 0) continue;
+
+          tPixels[i] = (tPixels[i] * pMultiplier + pAdd) | 0;
+          tPixels[i + pIndex2] = (tPixels[i + pIndex2] * pMultiplier2 + pAdd2) | 0;
+        }
+      }
+    }
+
+    if (tAlphaAdd !== 0) {
+      doAll();
+      tTargetContext.putImageData(tAllPixelsImageData, tTargetX, tTargetY);
+    } else {
+      var tSetBytes = true;
+
+      if (tHavePositiveMultipliers && (tRedMultiplier + tGreenMultiplier + tBlueMultiplier === 0)) {
+        tSetBytes = doSetAll();
+      } else if (tHavePositiveMultipliers && tHaveSameMultipliers && !tHasAdds) {
+        tSetBytes = doDarkenAll();
+      } else if (tHavePositiveMultipliers && tHasAdds && tHavePositiveAdds && tHaveSameMultipliers) {
+        tSetBytes = doDarkenAllLighten();
+      } else if (tHasAdds && tHavePositiveAdds && !tHaveMultipliers) {
+        tSetBytes = doLightenAll();
+      } else if (canMultiply() && tHavePositiveMultipliers && (!tHasAdds || (tHasAdds && tHavePositiveAdds))) {
+        if (!tHasAdds) {
+          tSetBytes = doDarken();
+        } else {
+          tSetBytes = doDarkenLighten();
+        }
+      } else if (tHasRed && tHasGreen && tHasBlue) {
+        doThree();
+      } else if (tHasRed && tHasGreen) {
+        doTwoIndex(0, tRedMultiplier, tRedAdd, 1, tGreenMultiplier, tGreenAdd);
+      } else if (tHasRed && tHasBlue) {
+        doTwoIndex(0, tRedMultiplier, tRedAdd, 2, tBlueMultiplier, tBlueAdd);
+      } else if (tHasGreen && tHasBlue) {
+        doTwoIndex(1, tGreenMultiplier, tGreenAdd, 2, tBlueMultiplier, tBlueAdd);
+      } else if (tHasRed) {
+        doOneIndex(0, tRedMultiplier, tRedAdd);
+      } else if (tHasGreen) {
+        doOneIndex(1, tGreenMultiplier, tGreenAdd);
+      } else if (tHasBlue) {
+        doOneIndex(2, tBlueMultiplier, tBlueAdd);
+      }
+
+      if (tSetBytes) {
+        tTargetContext.putImageData(tAllPixelsImageData, tTargetX, tTargetY);
+      }
+    }
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  benri.impl.web.graphics.shader.fragment.ColorShader = {
+    pre: function(pShader, pSurface, pProgram) {
+      pProgram.colors.push(pShader.getColor().clone());
+    },
+
+    style: function(pShader, pSurface, pProgram) {
+      pSurface.context[pProgram.fillTypeText] = pProgram.colors[0].toCSSString();
+
+      return false;
+    },
+
+    post: function(pShader, pSurface, pProgram) {}
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  benri.impl.web.graphics.shader.fragment.AlphaShader = {
+    pre: function(pShader, pSurface, pProgram) {
+      var tContext = pSurface.context;
+      var tAlpha = pShader.getGlobalAlpha();
+      var tOldAlpha = pShader.oldAlpha = tContext.globalAlpha;
+
+      if (tOldAlpha !== tAlpha) {
+        tContext.globalAlpha = tAlpha < 0 ? 0 : tAlpha;
+      }
+    },
+
+    post: function(pShader, pSurface, pProgram) {
+      var tCurrentAlpha = pSurface.context.globalAlpha;
+      var tOldAlpha = pShader.oldAlpha;
+
+      if (tCurrentAlpha !== tOldAlpha) {
+        pSurface.context.globalAlpha = tOldAlpha;        
+      }
+    }
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+benri.impl.web.graphics.draw = {};
+
+/**
+ * @author Guangyao Liu
+ *
+ * Copyright (C) 2014 BenriJS.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var benri = global.benri;
+  var GradientStyle = global.benri.graphics.draw.GradientStyle;
+
+  var mLinearGradientMap = {};
+  var mRadialGradientMap = {};
+  var mGradientStorageSize = 20;
+
+  function CanvasGradientFactory() {
+    
+  }
+
+  CanvasGradientFactory._currentSize = 0;
+  
+  CanvasGradientFactory.getInstance = function (pGradientStyle, pContext, pColors) {
+    var tGradient;
+    var tGradientMap;
+    var tColorSignature = '$';
+    var tCompleteSignature;
+
+    if (pGradientStyle.type === GradientStyle.TYPE_RADIAL) {
+      tGradientMap = mRadialGradientMap;
+    } else if (pGradientStyle.type === GradientStyle.TYPE_LINEAR) {
+      tGradientMap = mLinearGradientMap;
+    }
+
+    for (var i = 0, il = pColors.length; i < il; i++) {
+      tColorSignature += pColors[i].toCSSString();
+    }
+
+    tCompleteSignature = pGradientStyle.signature + tColorSignature;
+
+    tGradient = tGradientMap[tCompleteSignature];
+    if (tGradient !== void 0) {
+      return tGradient;
+    }
+
+    tGradient = _createCanvasGradient(pGradientStyle, pContext, pColors);
+
+    if (tGradient !== null && CanvasGradientFactory._currentSize < mGradientStorageSize) {
+      tGradientMap[tCompleteSignature] = tGradient;
+      CanvasGradientFactory._currentSize++;
+    }
+      
+    return tGradient;
+  };
+
+  function _createCanvasGradient(pGradientStyle, pContext, pColors) {
+    var tGradient;
+    var tStartPoint = pGradientStyle.startPoint;
+    var tEndPoint = pGradientStyle.endPoint;
+    var tStartRadius;
+    var tEndRadius;
+    var tColorRatioStops = pGradientStyle.colorRatioStops;
+    var tStopColors = pColors;
+    var i, il;
+
+    if (tStartPoint === null || tEndPoint === null) {
+      return null;
+    }
+
+    if (pGradientStyle.type === GradientStyle.TYPE_RADIAL) {
+      tStartRadius = pGradientStyle.startRadius;
+      tEndRadius = pGradientStyle.endRadius;
+
+      tGradient = pContext.createRadialGradient(
+        tStartPoint.x, tStartPoint.y, tStartRadius, tEndPoint.x, tEndPoint.y, tEndRadius
+      );
+    } else if (pGradientStyle.type === GradientStyle.TYPE_LINEAR) {
+      tGradient = pContext.createLinearGradient(
+        tStartPoint.x, tStartPoint.y, tEndPoint.x, tEndPoint.y
+      );
+    }
+
+    for (i = 0, il = tColorRatioStops.length; i < il; i++) {
+      tGradient.addColorStop(tColorRatioStops[i], tStopColors[i].toCSSString());
+    }
+    
+    return tGradient;
+  }
+
+  global.benri.impl.web.graphics.draw.CanvasGradientFactory = CanvasGradientFactory;
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var CanvasGradientFactory = benri.impl.web.graphics.draw.CanvasGradientFactory;
+
+  benri.impl.web.graphics.shader.fragment.RadialGradientShader = {
+    pre: function(pShader, pSurface, pProgram) {
+      var tGradientStyle = pShader.getGradientStyle();
+      var tColors;
+      var tStopColors;
+
+      if (tGradientStyle !== null) {
+        tColors = pProgram.colors;
+        tStopColors = tGradientStyle.stopColors;
+        for (var i = 0, il = tStopColors.length; i < il; i++) {
+          tColors.push(tStopColors[i].clone());
+        }
+      }
+    },
+
+    style: function(pShader, pSurface, pProgram) {
+      var tContext = pSurface.context;
+      var tGradientStyle = pShader.getGradientStyle();
+      var tMatrix = pShader.getMatrix();
+      var tFillTypeText = pProgram.fillTypeText;
+      var tWorldMatrix = pProgram.matrix;
+      var i, il;
+
+      pSurface.saveContext();
+      pSurface.setIdentityTransform();
+
+      tContext[tFillTypeText] = CanvasGradientFactory.getInstance(tGradientStyle, tContext, pProgram.colors);
+      pSurface.setTransform(
+        tWorldMatrix.a,
+        tWorldMatrix.b,
+        tWorldMatrix.c,
+        tWorldMatrix.d,
+        tWorldMatrix.e,
+        tWorldMatrix.f
+      );
+      pSurface.transform(tMatrix.a, tMatrix.b, tMatrix.c, tMatrix.d, tMatrix.e, tMatrix.f);
+
+      return false;
+    },
+
+    post: function(pShader, pSurface, pProgram) {
+      pSurface.restoreContext();
+    }
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var CanvasGradientFactory = benri.impl.web.graphics.draw.CanvasGradientFactory;
+
+  benri.impl.web.graphics.shader.fragment.LinearGradientShader = {
+    pre: function(pShader, pSurface, pProgram) {
+      var tGradientStyle = pShader.getGradientStyle();
+      var tColors;
+      var tStopColors;
+
+      if (tGradientStyle !== null) {
+        tColors = pProgram.colors;
+        tStopColors = tGradientStyle.stopColors;
+        for (var i = 0, il = tStopColors.length; i < il; i++) {
+          tColors.push(tStopColors[i].clone());
+        }
+      }
+    },
+
+    style: function(pShader, pSurface, pProgram) {
+      var tContext = pSurface.context;
+      var tGradientStyle = pShader.getGradientStyle();
+      var tMatrix = pShader.getMatrix();
+      var tFillTypeText = pProgram.fillTypeText;
+      var tWorldMatrix = pProgram.matrix;
+      var i, il;
+
+      pSurface.saveContext();
+      pSurface.setIdentityTransform();
+
+      tContext[tFillTypeText] = CanvasGradientFactory.getInstance(tGradientStyle, tContext, pProgram.colors);
+      pSurface.setTransform(
+        tWorldMatrix.a,
+        tWorldMatrix.b,
+        tWorldMatrix.c,
+        tWorldMatrix.d,
+        tWorldMatrix.e,
+        tWorldMatrix.f
+      );
+      pSurface.transform(tMatrix.a, tMatrix.b, tMatrix.c, tMatrix.d, tMatrix.e, tMatrix.f);
+
+      return false;
+    },
+
+    post: function(pShader, pSurface, pProgram) {
+      pSurface.restoreContext();
+    }
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+benri.content = {};
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function() {
+
+  benri.content.MimeType = MimeType;
+
+  function MimeType(pString) {
+    var tType = '';
+    var tSubType = '';
+    var i, il;
+    var tChar;
+    var tParameters = {};
+    var tParamName = '';
+    var tParamValue = '';
+
+    var STATE_TYPE = 1;
+    var STATE_SUBTYPE = 2;
+    var STATE_PARAMNAME = 3;
+    var STATE_PARAMVALUE = 4;
+
+    var tState = STATE_TYPE;
+
+    for (i = 0, il = pString.length; i < il; i++) {
+      tChar = pString[i];
+
+      switch (tState) {
+        case STATE_TYPE:
+          if (tChar === '/') {
+            tState = STATE_SUBTYPE;
+          } else if (tChar !== ' ') {
+            tType += tChar;
+          }
+
+          break;
+        case STATE_SUBTYPE:
+          if (tChar !== ' ') {
+            tSubType += tChar;
+          } else if (tChar === ';') {
+            tState = STATE_PARAMNAME;
+          }
+
+          break;
+        case STATE_PARAMNAME:
+          if (tChar === '=') {
+            tState = STATE_PARAMVALUE;
+          } else if (tChar === ';') {
+            if (tParamName !== '') {
+              tParameters[tParamName] = '';
+              tParamName = '';
+            }
+          } else if (tChar !== ' ') {
+            tParamName += tChar;
+          }
+
+          break;
+        case STATE_PARAMVALUE:
+          if (tChar === ';') {
+            tParameters[tParamName] = tParamValue;
+            tParamName = tParamValue = '';
+            tState = STATE_PARAMNAME;
+          } else if (tChar !== ' ') {
+            tParamValue += tChar;
+          }
+
+          break;
+      }
+    }
+
+    if (tParamName !== '') {
+      tParameters[tParamName] = tParamValue;
+    }
+
+    this.type = tType;
+    this.subtype = tSubType;
+    this.params = tParameters;
+
+    this.toString = toString;
+  }
+
+  function toString(pIncludeParams) {
+    var tBase = this.type + '/' + this.subtype;
+    var tParams;
+    var k;
+
+    if (pIncludeParams === void 0 || pIncludeParams === true) {
+      tParams = this.params;
+
+      for (k in tParams) {
+        tBase += ('; ' + k + '=' + tParams[k]);
+      }
+    }
+
+    return tBase;
+  }
+
+}());
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+benri.concurrent = {};
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var benri = global.benri;
+
+  var PersistentEventEmitter = benri.event.PersistentEventEmitter;
+
+  benri.concurrent.Delay = Delay;
+
+  function Delay() {
+    PersistentEventEmitter(this);
+  }
+
+  var tProto = Delay.prototype;
+
+  tProto.resolve = function(pValue) {
+    this.resetEvent('progress');
+    this.resetEvent('reject');
+
+    this.emit('resolve', pValue);
+
+    return this;
+  };
+
+  tProto.reject = function(pReason) {
+    this.resetEvent('resolve');
+    this.resetEvent('progress');
+
+    this.emit('reject', pReason);
+
+    return this;
+  };
+
+  tProto.progress = function(pData) {
+    this.emit('progress', pData);
+
+    return this;
+  };
+
+  tProto.as = function(pCallback) {
+    this.on('progress', pCallback);
+
+    return this;
+  };
+
+  tProto.then = function(pSuccess, pReject) {
+    if (pSuccess) {
+      this.onFor('resolve', pSuccess, 1);
+    }
+
+    if (pReject) {
+      this.onFor('reject', pReject, 1);
+    }
+
+    return this;
+  };
+
+  tProto.catch = function(pReject) {
+    this.onFor('reject', pReject, 1);
+
+    return this;
+  };
+
+}(this));
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var benri = global.benri;
+  var net = benri.net;
+  var impl = benri.impl;
+  var Delay = benri.concurrent.Delay;
+  var URL = net.URL;
+
+  net.Request = Request;
+
+  var RequestImpl;
+
+  function Request(pURL, pMethod, pRaw) {
+    if (RequestImpl === void 0) {
+      RequestImpl = impl.get('net.Request').best;
+    }
+
+    if (!(pURL instanceof URL)) {
+      pURL = new URL(pURL);
+    }
+
+    this.url = pURL;
+    this.method = (pMethod || 'GET').toUpperCase();
+    this._headers = [];
+    this.timeout = 0;
+    this._sending = false;
+    this.isRaw = pRaw || false;
+
+    this._impl = new RequestImpl(this);
+  }
+
+  var tProto = Request.prototype;
+
+  tProto.setHeader = function(pName, pValue) {
+    if (this._sending) {
+      throw new Error('Invalid state');
+    }
+
+    this._headers[pName] = pValue;
+  };
+
+  tProto.getHeader = function(pName) {
+    return this._headers[pName] || null;
+  };
+
+  tProto.getAllHeaders = function() {
+    var tHeaders = this._headers;
+    var tResult = {};
+
+    for (var k in tHeaders) {
+      tResult[k] = tHeaders[k];
+    }
+
+    return tResult;
+  };
+
+  tProto.send = function(pData) {
+    if (this._sending) {
+      throw new Error('Invalid state');
+    }
+
+    var tDelay = new Delay();
+
+    this._sending = true;
+
+    var tImpl = this._impl;
+
+    tImpl.on('progress', function(pEvent) {
+      tDelay.progress({
+        current: pEvent.current,
+        total: pEvent.total
+      });
+    });
+
+    tImpl.on('error', function(pEvent) {
+      tDelay.reject({
+        type: pEvent.type,
+        status: pEvent.status,
+        message: pEvent.message
+      });
+    });
+
+    tImpl.on('load', function(pEvent) {
+      tDelay.resolve(pEvent.response);
+    });
+
+    tImpl.send(pData);
+
+    return tDelay;
+  };
+
+  tProto.abort = function() {
+    if (this._sending) {
+      this._sending = false;
+      this._impl.abort();
+    }
+  };
+
+}(this));
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function() {
+
+  var implGet = benri.impl.get;
+  var implAdd = benri.impl.add;
+  var MimeType = benri.content.MimeType;
+  var Keeper = benri.mem.Keeper;
+  var Delay = benri.concurrent.Delay;
+
+  benri.content.Blob = Blob;
+
+  function Blob(pType) {
+    Keeper(this);
+
+    this.type = pType || new MimeType('application/octet-stream');
+  };
+
+  var tProto = Blob.prototype;
+
+  tProto.setBuffer = function(pBuffer) {
+    this._buffer = pBuffer;
+  };
+
+  tProto.getBuffer = function() {
+    return this._buffer;
+  };
+
+  Blob.fromBuffer = function(pBuffer, pType) {
+    var tMimeType = typeof pType === 'string' ? new MimeType(pType) : pType;
+    var tBlob;
+    var tClazz = getBlobClass(tMimeType);
+
+    if (tClazz === Blob) {
+      tBlob = new Blob(tMimeType);
+      tBlob._buffer = pBuffer;
+
+      return (new Delay()).resolve(tBlob);
+    }
+
+    return tClazz.fromBuffer(pBuffer, tMimeType);
+  };
+
+  Blob.getClass = function(pType) {
+    var tMimeType = typeof pType === 'string' ? new MimeType(pType) : pType;
+
+    return getBlobClass(tMimeType);
+  };
+
+  Blob.getClasses = function(pType) {
+    var tMimeType = typeof pType === 'string' ? new MimeType(pType) : pType;
+
+    var tImpl = implGet('content.blob.' + tMimeType.toString(false), {
+      type: tMimeType
+    });
+
+    if (tImpl === null) {
+      tImpl = implGet('content.blob.' + tMimeType.type + '/*', {
+        type: tMimeType
+      });
+
+      if (tImpl === null) {
+        return {
+          best: Blob,
+          bestScore: 1,
+          list: [{clazz: Blob, score: 1}]
+        };
+      }
+    }
+
+    return tImpl;
+  };
+
+  function getBlobClass(pType) {
+    var tImpl = implGet('content.blob.' + pType.toString(false), {
+      type: pType
+    });
+
+    if (tImpl === null) {
+      tImpl = implGet('content.blob.' + pType.type + '/*', {
+        type: pType
+      });
+
+      if (tImpl === null) {
+        return Blob;
+      }
+    }
+
+    return tImpl.best;
+  }
+
+  Blob.register = function(pTypes, pCallback) {
+    if (typeof pTypes === 'string') {
+      implAdd('content.blob.' + pTypes, pCallback);
+    } else {
+      for (var i = 0, il = pTypes.length; i < il; i++) {
+        implAdd('content.blob.' + pTypes[i], pCallback);
+      }
+    }
+  };
+
+}());
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  /**
+   * @class
+   * @extends {benri.content.Blob}
+   */
+  var SWF = (function(pSuper) {
+    var Delay = benri.concurrent.Delay;
+
+    /**
+     * The data structure that holds all data
+     * about an SWF file.
+     * @constructor
+     * @class {quickswf.SWF}
+     */
+    function SWF() {
+      pSuper.call(this, 'application/x-shockwave-flash');
+
+      this.version = 1;
+      this.fileSize = 0;
+      this.encoding = 'ascii';
+      this.bounds = null;
+      this.width = 0;
+      this.height = 0;
+      this.frameRate = 1;
+      this.frameCount = 0;
+      this.rootSprite = new quickswf.structs.Sprite();
+      this.dictionary = {};
+      this.orderedDictionary = [];
+      this.fonts = {};
+      this.jpegTableDQT = null;
+      this.jpegTableDHT = null;
+      this.streamSoundMetadata = null;
+      this.assetManifest = new benri.content.Manifest();
+
+      this.on('destroy', onDestroy);
+    }
+  
+    var tProto = SWF.prototype = Object.create(pSuper.prototype);
+    tProto.constructor = SWF;
+  
+    function onDestroy(pData, pTarget) {
+      pTarget._buffer = null;
+      pTarget.bounds = null;
+      pTarget.rootSprite = null;
+      pTarget.jpegTableDQT = null;
+      pTarget.jpegTableDHT = null;
+      pTarget.dictionary = null;
+      pTarget.orderedDictionary = null;
+      pTarget.fonts = null;
+      pTarget.streamSoundMetadata = null;
+      pTarget.assetManifest.destroy();
+      pTarget.assetManifest = null;
+    };
+
+    SWF.fromBuffer = function(pBuffer, pType) {
+      var tDelay = new Delay();
+
+      var tSWF = new SWF();
+
+      tSWF.setBuffer(pBuffer);
+
+      var tParser = new quickswf.Parser(tSWF);
+
+      tParser.on('load', function(pSWF) {
+        tDelay.resolve(pSWF);
+      });
+
+      tParser.on('error', function(pReason) {
+        tDelay.reject(pReason);
+      });
+
+      tParser.addBuffer(pBuffer);
+
+      return tDelay;
+    };
+
+    return SWF;
+  })(benri.content.Blob);
+
+  quickswf.SWF = SWF;
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  quickswf.Parser = Parser;
+
+  var mLogger = quickswf.logger;
+
+  var RECT = quickswf.structs.RECT;
+  var SWF = quickswf.SWF;
+  var SWFReader = quickswf.SWFReader;
+
+  var STATE_HEADER = 1; // Parsing the header
+  var STATE_OUTTAG = 2; // Inbetween tags
+  var STATE_INTAG = 3; // Inside a tag. Not used yet
+  var STATE_ASSETS = 4; // Waiting for assets to load
+
+  /**
+   * @constructor
+   */
+  function Parser(pSWF) {
+    benri.event.EventEmitter(this);
+
+    /**
+     * The SWFReader object for this parser.
+     * @type {quickswf.SWFReader}
+     */
+    this.r = null;
+
+    this.readers = [];
+
+    /**
+     * The SWF object that gets created after parsing.
+     * @type {quickswf.SWF}
+     */
+    this.swf = pSWF;
+
+    this.state = STATE_HEADER;
+
+    this.encoding = 'ascii';
+
+    /**
+     * The currently being parsed frame index.
+     * @type {Number}
+     */
+    this.currentFrame = 0;
+
+    /**
+     * A stack of frame indices to keep track of while parsing.
+     * @type {Array.<Number>}
+     */
+    this.frameStack = new Array();
+
+    /**
+     * A stack of Sprites to keep track of while parsing.
+     * @type {Array.<quickswf.structs.Sprite>}
+     */
+    this.spriteStack = new Array();
+
+    /**
+     * The currently being parsed Sprite.
+     * @type {quickswf.structs.Sprite}
+     */
+    this.currentSprite = null;
+
+    this.register = register;
+  }
+
+  function register(pId, pObject) {
+    this.swf.dictionary[pId] = pObject;
+    this.swf.orderedDictionary.push(pObject);
+  }
+
+  var tProto = Parser.prototype;
+
+  /**
+   * Adds a new action to the current frame
+   * of the current sprite.
+   * @param {Object} pData The data. Make sure it has a type property of type String.
+   */
+  tProto.add = function(pData) {
+    var tFrames = this.currentSprite.frames;
+    var tIndex = this.currentFrame;
+    var tRealData = new Object();
+
+    for (var k in pData) {
+      tRealData[k] = pData[k];
+    }
+
+    if (tFrames[tIndex] === void 0) {
+      tFrames[tIndex] = [tRealData];
+    } else {
+      tFrames[tIndex].push(tRealData);
+    }
+  };
+
+  tProto.addBuffer = function(pBuffer) {
+    var tReaders = this.readers;
+    tReaders.push(new SWFReader(pBuffer));
+
+    if (tReaders.length === 1) {
+      this.parse();
+    }
+  }
+
+  tProto.parseHeader = function(pReader) {
+    var tSWF = this.swf;
+    var tCompressedFlag = pReader.getChar();
+
+    if (
+        (tCompressedFlag !== 'C' && tCompressedFlag !== 'F' && tCompressedFlag !== 'Z') ||
+        (pReader.getString(2) !== 'WS')
+      ) {
+
+      mLogger.error('Invalid SWF format');
+      this.emit('error', 'Invalid SWF format');
+
+      return null;
+    }
+
+    var tVersion = tSWF.version = pReader.getUint8();
+    var tFileSize = tSWF.fileSize = pReader.getUint32();
+    var tEncoding = 'utf-8';
+
+    if (tVersion <= 5) {
+      tEncoding = 'shift_jis';
+    }
+
+    this.encoding = tSWF.encoding = pReader.encoding = tEncoding;
+
+    if (tCompressedFlag === 'C') {
+      var tInflator = new benri.io.compression.Inflator('inflate');
+      pReader = this.r = new quickswf.SWFReader(tInflator.inflate(pReader.getCopyTo(tFileSize)));
+      tSWF.fileSize -= 8; // offset for beginning of file which doesn't exist in this new buffer.
+    } else if (tCompressedFlag === 'Z') {
+      // LZMA compression.
+      mLogger.error('LZMA compression is not supported');
+      this.emit('error', 'LZMA compression is not supported');
+
+      return null;
+    }
+
+    var tBounds = tSWF.bounds = RECT.load(pReader);
+
+    tSWF.width = Math.abs((tBounds.right - tBounds.left) / 20);
+    tSWF.height = Math.abs((tBounds.bottom - tBounds.top) / 20);
+
+    tSWF.frameRate = pReader.getUint16() / 256;
+    var tFrameCount = tSWF.frameCount = pReader.getUint16();
+
+    this.currentSprite = tSWF.rootSprite;
+    this.currentSprite.id = 0;
+    this.currentSprite.frameCount = tFrameCount;
+
+    this.state = STATE_OUTTAG;
+
+    return pReader;
+  };
+
+  tProto.parseTag = function(pReader) {
+    var tTypeAndLength;
+    var tType;
+    var tLength;
+    var tExpectedFinalIndex;
+    var tFileSize = this.swf.fileSize;
+
+    tTypeAndLength = pReader.getUint16();
+    tType = (tTypeAndLength >>> 6) + '';
+    tLength = tTypeAndLength & 0x3F;
+
+    if (tLength === 0x3F) {
+      tLength = pReader.getUint32();
+    }
+
+    tExpectedFinalIndex = pReader.tell() + tLength;
+
+    if (!(tType in this)) {
+      mLogger.warn('Unknown tag: ' + tType);
+      pReader.seek(tLength);
+    } else {
+      this[tType](tLength);
+
+      // Forgive the hack for DefineSprite (39). It's length is for all the tags inside of it.
+      if (tType !== '39' && pReader.tell() !== tExpectedFinalIndex) {
+        mLogger.warn('Expected final index incorrect for tag ' + tType);
+        pReader.seekTo(tExpectedFinalIndex);
+      }
+    }
+  }
+
+  /**
+   * Parses the buffer.
+   */
+  tProto.parse = function() {
+    var tTimer = Date.now();
+    var tReader = this.r = this.readers.pop();
+    var tState = this.state;
+    var tIndex;
+    var tFileSize = this.swf.fileSize;
+    var tAssetManifest = this.swf.assetManifest;
+
+    tReader.encoding = this.encoding;
+
+    while (true) {
+      if (tState === STATE_OUTTAG) {
+        this.parseTag(tReader);
+      } else if (tState === STATE_HEADER) {
+        if ((tReader = this.parseHeader(tReader)) === null) {
+          return;
+        }
+
+        tFileSize = this.swf.fileSize;
+      } else {
+        break;
+      }
+
+      if (tReader.tell() >= tFileSize) {
+        this.state = STATE_ASSETS;
+        tAssetManifest.load();
+        tAssetManifest.onLoad(createAssetLoadWrapper(this));
+
+        return;
+      }
+
+      if (Date.now() - tTimer >= 4500) {
+        this.readers.splice(0, 0, tReader);
+        setTimeout(createTimeoutWrapper(this), 10);
+
+        return;
+      }
+
+      tState = this.state;
+    }
+  };
+
+  function createAssetLoadWrapper(pParser) {
+    return function() {
+      pParser.emit('load', pParser.swf);
+    }
+  }
+
+  function createTimeoutWrapper(pParser) {
+    return function() {
+      pParser.parse();
+    }
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.Parser.prototype['39'] = defineSprite;
+  global.quickswf.structs.Sprite = Sprite;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.Sprite}
+   */
+  function Sprite() {
+    this.id = -1;
+    this.frameCount = 0;
+    this.frames = new Array(0);
+    this.frameLabels = new Object();
+  }
+
+  Sprite.prototype.displayListType = 'DefineSprite';
+
+  /**
+   * Loads a Sprite.
+   * @param {quickswf.Reader} pReader The reader to read from.
+   * @return {quickswf.structs.Sprite} The parsed Sprite.
+   */
+  Sprite.load = function(pReader) {
+    var tSprite = new Sprite();
+    tSprite.id = pReader.getUint16();
+    tSprite.frameCount = pReader.getUint16();
+
+    return tSprite;
+  };
+
+  function defineSprite(pLength) {
+    var tSprite = Sprite.load(this.r);
+    this.spriteStack.push(this.currentSprite);
+    this.currentSprite = tSprite;
+    this.frameStack.push(this.currentFrame);
+    this.currentFrame = 0;
+
+    this.register(tSprite.id, tSprite);
+  }
+
+}(this));
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2012 QuickSWF project
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  quickswf.Parser.prototype['14'] = defineSound;
+  quickswf.Parser.prototype['15'] = startSound;
+  quickswf.Parser.prototype['18'] = soundStreamHead;
+  quickswf.Parser.prototype['45'] = soundStreamHead;
+  quickswf.Parser.prototype['19'] = soundStreamBlock;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.EventSound}
+   */
+  function EventSound(pFmt, pFs, pDepth, pCh, pLen, pData) {
+    this.soundFormat = pFmt; // Coding format ('0'=PCM, '1'=ADPCM, '2'=MP3, '3'=PCM(LSB first))
+    this.soundRate = pFs; // Sampling rate ('0'=5.5kHz, '1'=11kHz, '2'=22kHz, '3'=44kHz)
+    this.soundSize = pDepth; // Bit depth ('0'=8bit, '1'=16bit)
+    this.soundType = pCh; // Number of channels ('0'=mono, '1'=stereo)
+    this.soundSampleCount = pLen; // Number of samples (for stereo, number of sample pairs)
+    this.soundData = pData; // Byte array
+  }
+
+  /**
+   * Loads a EventSound type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {quickswf.Reader} pBounds Start of the next tag.
+   * @return {quickswf.structs.EventSound} The loaded EventSound.
+   */
+  EventSound.load = function(pReader, pBounds) {
+    var tFmt = pReader.getUBits(4);
+    var tFs = pReader.getUBits(2);
+    var tDepth = pReader.getUBits(1);
+    var tCh = pReader.getUBits(1);
+    var tLen = pReader.getUint32();
+    var tMetaData = new SoundMetadata(tFmt, tFs, tDepth, tCh, tLen, 0);
+    var tData = SoundData.load(pReader, tMetaData, pBounds);
+
+    return new EventSound(tFmt, tFs, tDepth, tCh, tLen, tData);
+  };
+
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.SoundData}
+   */
+  function SoundData(pData, pRaw, pType) {
+    this.raw = pRaw;
+    for (var k in pData) {
+      if (pData[k] !== pRaw) {
+        this[k] = pData[k];
+      }
+    }
+    this.mimeType = pType;
+  }
+
+  /**
+   * Loads a SoundData type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {quickswf.Reader} pBounds Start of the next tag.
+   * @return {quickswf.structs.EventSound} The loaded SoundData.
+   */
+  SoundData.load = function(pReader, pMeta, pBounds) {
+    var tFmt = pMeta.soundCompression,
+        tData, tLength, tOffset, tRaw, tType;
+
+    if (tFmt === 0 || tFmt === 3) {
+quickswf.logger.debug('+++ PCM');
+      // PCM
+      tOffset = pReader.tell();
+      tLength = pBounds - tOffset;
+      tData = pReader.getCopy(tLength);
+      /*
+       * Need some conversion:
+       *  - Number of channels:
+       *        flag ('0'=mono, '1'=stereo)
+       *                => Number (channel num)
+       *  - Sampling rate:
+       *        flag ('0'=5.5kHz, '1'=11kHz, '2'=22kHz, '3'=44kHz)
+       *                => Number (Hz)
+       *  - Bit depth:
+       *        flag ('0'=8bits, '1'=16bits)
+       *                => Number (bits/sample)
+       */
+      tRaw = createRIFFChunk(1/*PCM*/, pMeta.soundType + 1, 5500 << pMeta.soundRate,
+              (pMeta.soundSize + 1) * 8, tData, tLength);
+      tType = 'audio/wave';
+      tData = {};
+      tData.offset = 0;
+    } else if (tFmt === 1) {
+quickswf.logger.debug('+++ ADPCM');
+      // ADPCM
+      tData = {};
+      tData.adpcmCodeSize = pReader.getUBits(2);
+      tOffset = pReader.tell();
+      tLength = pBounds - tOffset;
+      tData.adpcmPackets = pReader.getCopy(tLength);
+      /*
+       *  - Bit depth:
+       *        flag ('0'=2bits, '1'=3bits, '2'=4bits, '3'=5bits/sample)
+       *                => Number (bits/sample)
+       */
+      tRaw = createRIFFChunk(2/*ADPCM*/, pMeta.soundType + 1, 5500 << pMeta.soundRate,
+              tData.adpcmCodeSize + 2, tData.adpcmPackets, tLength);
+      tData.offset = 0;
+      tType = 'audio/x-wav';
+    } else if (tFmt === 2) {
+quickswf.logger.debug('+++ MP3');
+      // MP3
+      tData = {};
+      tData.seekSamples = pReader.getInt16();
+      tOffset = pReader.tell();
+      tRaw = tData.mp3Frames = pReader.getCopyTo(pBounds);
+      tData.offset = tOffset;
+      tType = 'audio/mpeg';
+    }
+
+    pReader.seekTo(pBounds);
+
+    return new SoundData(tData, tRaw, tType);
+  };
+
+  /**
+   * Wraps up the PCM data in RIFF chunk (i.e. WAVE file.)
+   * @param {Number}  pFmt Format type (PCM=1, ADPCM=2)
+   * @param {Number}  pCh Number of channels.
+   * @param {Number}  pFs Sampling rate (n samples per sec.)
+   * @param {Number}  pDepth Length of a single sample in bits.
+   * @param {Uint8Array}  pData Sound data.
+   * @param {Number}  pLength Length of the sound data in bytes.
+   * @return {Uint8Array} RIFF chunk (i.e. WAVE file.)
+   */
+  function createRIFFChunk(pFmt, pCh, pFs, pDepth, pData, pLength) {
+    var Buffer = benri.io.Buffer,
+        tRIFF = Buffer.create(44 + pLength),
+        tBuffer = tRIFF.data,
+        tCurr = 0, tIntBuf = Buffer.create(4),
+        tBlockSize = pDepth / 8 * pCh,
+        tBytesPerSec = tBlockSize * pFs,
+        appendChars = function (pStr) {
+            for (var i = 0, il = pStr.length; i < il; i++) {
+              tBuffer[tCurr++] = pStr.charCodeAt(i);
+            }},
+        appendInt32 = function (pInt) {
+            tIntBuf.setInt32(0, pInt, true);
+
+            for (var i = 0; i < 4; i++) {
+              tBuffer[tCurr++] = tIntBuf.getInt8(i);
+            }},
+        appendInt16 = function (pInt) {
+            tIntBuf.setInt16(0, pInt, true);
+
+            for (var i = 0; i < 2; i++) {
+              tBuffer[tCurr++] = tIntBuf.getInt8(i);
+            }};
+
+    // RIFF chunk
+    appendChars('RIFF');
+    appendInt32(36 + pLength); // total size
+    appendChars('WAVE');
+    // format chunk
+    appendChars('fmt ');
+    appendInt32(16); // chunk size
+    appendInt16(pFmt); // wave format type (PCM=1)
+    appendInt16(pCh);  // number of channels (mono=1, streo=2)
+    appendInt32(pFs);  // samples per sec
+    appendInt32(tBytesPerSec); // bytes per sec (block size * samples per sec)
+    appendInt16(tBlockSize); // block size (bits per sample / 8 * number of channels)
+    appendInt16(pDepth); // bits per sample (8bit or 16bit)
+    // data chunk
+    appendChars('data');
+    appendInt32(pLength); // chunk size
+    tRIFF.copyFrom(pData, 44);
+
+    return tRIFF;
+  }
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.SOUNDINFO}
+   */
+  function SOUNDINFO(pStop, pNoMul, pEnv, pLoop, pOut, pIn) {
+    this.syncStop = pStop; // Stop the sound now.
+    this.syncNoMultiple = pNoMul; // Don't start the sound if already playing.
+    this.hasEnvelope = pEnv; // Has envelope info.
+    this.hasLoops = pLoop; // Has loop info.
+    this.hasOutPoint = pOut; // Has out-point info.
+    this.hasInPoint = pIn; // Has in-point infor.
+  }
+
+  /**
+   * Loads a SOUNDINFO type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @return {quickswf.structs.SOUNDINFO} The loaded SOUNDINFO.
+   */
+  SOUNDINFO.load = function(pReader) {
+    pReader.getUBits(2); // Skip reserved bits
+    var tStop = (pReader.getUBits(1) === 1);
+    var tNoMul = (pReader.getUBits(1) === 1);
+    var tEnv = (pReader.getUBits(1) === 1);
+    var tLoop = (pReader.getUBits(1) === 1);
+    var tOut = (pReader.getUBits(1) === 1);
+    var tIn = (pReader.getUBits(1) === 1);
+    var soundInfo = new SOUNDINFO(tStop, tNoMul, tEnv, tLoop, tOut, tIn);
+    // Number of samples to skip at beginning of sound.
+    tIn && (soundInfo.inPoint = pReader.getUint32());
+    // Position in samples of last sample to play.
+    tOut && (soundInfo.outPoint = pReader.getUint32());
+    // Sound loop count.
+    tLoop && (soundInfo.loopCount = pReader.getUint16());
+
+    if (tEnv) { // disable this for now...
+      // Sound Envelope point count.
+      soundInfo.envPoints = pReader.getUint8();
+      soundInfo.envelopeRecords = new Array(soundInfo.envPoints);
+
+      for (var i = 0, il = soundInfo.envPoints; i < il; i++) {
+        // Sound Envelope records.
+        soundInfo.envelopeRecords[i] = {};
+        soundInfo.envelopeRecords[i].pos44 = pReader.getUint32();
+        soundInfo.envelopeRecords[i].leftLevel = pReader.getUint16();
+        soundInfo.envelopeRecords[i].rightLevel = pReader.getUint16();
+      }
+    }
+
+    return soundInfo;
+  };
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.SoundStreamHead}
+   */
+  function SoundMetadata(pFmt, pFs, pDepth, pCh, pLen, pLatency) {
+    this.soundCompression = pFmt; // Coding format ('0'=PCM, '1'=ADPCM, '2'=MP3, '3'=PCM(LSB first))
+    this.soundRate = pFs; // Sampling rate ('0'=5.5kHz, '1'=11kHz, '2'=22kHz, '3'=44kHz)
+    this.soundSize = pDepth; // Bit depth ('0'=8bit, '1'=16bit)
+    this.soundType = pCh; // Number of channels ('0'=mono, '1'=stereo)
+    this.soundSampleCount = pLen; // Number of samples (for stereo, number of sample pairs)
+    this.latencySeek = pLatency; // The value here sould match MP3's SeekSamples field in the first SoundStreamBlock.
+  }
+
+  /**
+   * Loads a SoundMetadata type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @return {quickswf.structs.EventSound} The loaded SoundMetadata.
+   */
+  SoundMetadata.load = function(pReader) {
+    pReader.getUBits(4); // Skip reserved bits
+    pReader.getUBits(4); // Skip advisory bits (PlaybackSoundXxx)
+    var tFmt = pReader.getUBits(4);
+    var tFs = pReader.getUBits(2);
+    var tDepth = pReader.getUBits(1);
+    var tCh = pReader.getUBits(1);
+    var tLen = pReader.getUint16();
+    var tLatency = (tFmt !== 2 ? void 0 : pReader.getInt16());
+
+    return new SoundMetadata(tFmt, tFs, tDepth, tCh, tLen, tLatency);
+  };
+
+  function defineSound(pLength) {
+    var tReader = this.r, tBounds = tReader.tell() + pLength;
+    var tId = tReader.getUint16();
+    var tSound = EventSound.load(tReader, tBounds);
+    tSound.id = tId;
+    var tObj = tSound.soundData;
+
+    this.swf.assetManifest.addBuffer(tId + '', tObj.raw, tObj.mimeType);
+  }
+
+  function startSound(pLength) {
+    var tReader = this.r;
+    var tId = tReader.getUint16();
+    var tSoundInfo = SOUNDINFO.load(tReader);
+
+    this.add({
+      type: 'startSound',
+      soundId: tId,
+      soundInfo: tSoundInfo
+    });
+  }
+
+  function soundStreamHead(pLength) {
+    var tReader = this.r;
+    //this.swf.streamSoundMetadata = SoundStreamHead.load(tReader);
+    tReader.seek(pLength);
+  }
+
+  function soundStreamBlock(pLength) {
+    var tMetaData = this.swf.streamSoundMetadata;
+
+    if (tMetaData) {
+      var tFmt = tMetaData.soundCompression;
+      var tReader = this.r, tBounds = tReader.tell() + pLength;
+      var tSound, tSampleCount;
+
+      if (tFmt === 2) {
+        // MP3
+        tSampleCount = pReader.getUint16();
+      }
+      tSound = SoundData.load(tReader, tMetaData, tBounds);
+      tSound.sampleCount = tSampleCount;
+
+      this.add({
+        type: 'soundStreamBlock',
+        soundData: tSound
+      });
+    } else {
+      this.r.seek(pLength);
+    }
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  quickswf.Parser.prototype['2'] = defineShape;
+  quickswf.Parser.prototype['22'] = defineShape2;
+  quickswf.Parser.prototype['32'] = defineShape3;
+
+  var mStructs = quickswf.structs;
+  mStructs.Shape = Shape;
+
+  var RECT = mStructs.RECT;
+  var FILLSTYLE = mStructs.FILLSTYLE;
+  var LINESTYLE = mStructs.LINESTYLE;
+  var SHAPERECORD = mStructs.SHAPERECORD;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.Shape}
+   */
+  function Shape() {
+    this.id = -1;
+    this.bounds = null;
+    this.fillStyles = new Array();
+    this.lineStyles = new Array();
+    this.numberOfFillBits = 0;
+    this.numberOfLineBits = 0;
+    this.records = new Array();
+  }
+
+  Shape.prototype.displayListType = 'DefineShape';
+
+  /**
+   * Loads a Shape type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {bool} pWithStyles True if styles need to parsed.
+   * @param {bool} pWithAlpha True if alpha needs to be parsed.
+   * @param {bool} pHasLargeFillCount True if this struct can have more than 256 styles.
+   * @return {quickswf.structs.Shape} The loaded Shape.
+   */
+  Shape.load = function(pReader, pWithStyles, pWithAlpha, pHasLargeFillCount) {
+    var tShape = new Shape();
+
+    if (pWithStyles) {
+      tShape.fillStyles = FILLSTYLE.loadMultiple(pReader, pWithAlpha, pHasLargeFillCount, false);
+      tShape.lineStyles = LINESTYLE.loadMultiple(pReader, pWithAlpha, pHasLargeFillCount, false);
+    } else {
+      tShape.fillStyles = [new FILLSTYLE(false)];
+      tShape.lineStyles = [new LINESTYLE(false)];
+    }
+
+    tShape.numberOfFillBits = pReader.getUBits(4);
+    tShape.numberOfLineBits = pReader.getUBits(4);
+    tShape.records = SHAPERECORD.loadMultiple(pReader, tShape, pWithAlpha);
+
+    return tShape;
+  };
+
+  function defineShape(pLength) {
+    parseShape(this, false, false);
+  }
+
+  function defineShape2(pLength) {
+    parseShape(this, false, true);
+  }
+
+  function defineShape3(pLength) {
+    parseShape(this, true, true);
+  }
+
+
+  function parseShape(pParser, pWithAlpha, pHasLargeFillCount) {
+    var tReader = pParser.r;
+    var tId = tReader.getUint16();
+    var tBounds = RECT.load(tReader);
+    var tShape = Shape.load(tReader, true, pWithAlpha, pHasLargeFillCount);
+
+    tShape.id = tId;
+    tShape.bounds = tBounds;
+
+    pParser.register(tShape.id, tShape);
+  }
+
+
+}(this));
+
+/**
+ * @author Yoshihiro Yamazaki
+ *
+ * Copyright (C) 2012 QuickSWF project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.Parser.prototype['46'] = defineMorphShape;
+
+  var mStructs = global.quickswf.structs;
+  var RECT = mStructs.RECT;
+  var FILLSTYLE = mStructs.FILLSTYLE;
+  var LINESTYLE = mStructs.LINESTYLE;
+  var SHAPERECORD = mStructs.SHAPERECORD;
+  var STYLECHANGERECORD = mStructs.STYLECHANGERECORD;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.MorphShape}
+   */
+  function MorphShape() {
+    this.id = -1;
+    this.startBounds = null;
+    this.endBounds = null;
+    this.fillStyles = new Array();
+    this.lineStyles = new Array();
+    this.numberOfFillBits = 0;
+    this.numberOfLineBits = 0;
+    this.startEdges = new Array();
+    this.endEdges = new Array();
+  }
+
+  MorphShape.prototype.displayListType = 'DefineMorphShape';
+
+  /**
+   * Loads a MorphShape type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {number} pOffsetOfEndEdges Offset of EndEdges
+   * @param {bool} pWithStyles True if styles need to parsed.
+   * @return {quickswf.structs.MorphShape} The loaded MorphShape.
+   */
+  MorphShape.load = function(pReader, pOffsetOfEndEdges, pWithStyles) {
+    var tMorphShape = new MorphShape();
+
+    if (pWithStyles) {
+      tMorphShape.fillStyles = FILLSTYLE.loadMultiple(pReader, true, true, true);
+      tMorphShape.lineStyles = LINESTYLE.loadMultiple(pReader, true, true, true);
+    }
+
+    pReader.align();
+
+    tMorphShape.numberOfFillBits = pReader.getUBits(4);
+    tMorphShape.numberOfLineBits = pReader.getUBits(4);
+
+    var tStartEdges = tMorphShape.startEdges = SHAPERECORD.loadMultiple(pReader, tMorphShape, true, true);
+
+    pReader.seekTo(pOffsetOfEndEdges);
+
+    tMorphShape.numberOfFillBits = pReader.getUBits(4);
+    tMorphShape.numberOfLineBits = pReader.getUBits(4);
+
+    var tEndEdges = tMorphShape.endEdges = SHAPERECORD.loadMultiple(pReader, tMorphShape, true, true);
+
+    return tMorphShape;
+  };
+
+  function defineMorphShape(pLength) {
+    parseMorphShape(this);
+  }
+
+
+  function parseMorphShape(pParser) {
+    var tReader = pParser.r;
+    var tId = tReader.getUint16();
+    var tStartBounds = RECT.load(tReader);
+    var tEndBounds = RECT.load(tReader);
+    var tOffset = tReader.getUint32();
+    var tOffsetOfOffset = tReader.tell();
+
+    var tMorphShape = MorphShape.load(tReader, tOffsetOfOffset + tOffset, true, true);
+    tMorphShape.id = tId;
+    tMorphShape.startBounds = tStartBounds;
+    tMorphShape.endBounds = tEndBounds;
+
+    pParser.register(tId, tMorphShape);
+  }
+
+}(this));
+
+/**
+ * @author Yoshihiro Yamazaki
+ *
+ * Copyright (C) 2012 QuickSWF project
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  quickswf.Parser.prototype['11'] = defineText;
+  quickswf.Parser.prototype['33'] = defineText2;
+
+  var RECT = quickswf.structs.RECT;
+  var MATRIX = quickswf.structs.MATRIX;
+  var RGBA = quickswf.structs.RGBA;
+  var TEXTRECORD = quickswf.structs.TEXTRECORD;
+
+  /**
+   * @constructor
+   * @extends {Array}
+   * @class {quickswf.structs.Text}
+   */
+  function Text() {
+    this.fontID = -1;
+    this.textColor = new RGBA(255, 255, 255, 1);
+    this.xOffset = 0;
+    this.yOffset = 0;
+    this.textHeight = 240;
+    this.xAdvance = 0;
+    this.textrecords = null;
+  }
+
+  Text.prototype.displayListType = 'DefineText';
+
+  /**
+   * Loads a Text type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @param {bool} pWithAlpha True if parsing alpha is needed.
+   * @return {quickswf.structs.Text} The loaded Text.
+   */
+  Text.load = function(pReader, pWithAlpha) {
+    var tGlyphBits = pReader.getUint8();
+    var tAdvanceBits = pReader.getUint8();
+    var tText = new Text();
+    var tTextRecord_1stB;
+    var tTextRecords = new Array(0);
+
+    while ((tTextRecord_1stB = pReader.getUint8()) !== 0) {
+        var tTextRecord = TEXTRECORD.load(pReader, tTextRecord_1stB, pWithAlpha, tGlyphBits, tAdvanceBits, tText);
+        tTextRecords.push(tTextRecord);
+    }
+
+    tText.textrecords = tTextRecords;
+
+    return tText;
+  };
+
+  function defineText(pLength) {
+    parseText(this, false);
+  }
+
+  function defineText2(pLength) {
+    parseText(this, true);
+  }
+
+  function parseText(pParser, withAlpha) {
+    var tReader = pParser.r;
+    var tId = tReader.getUint16();
+    var tBounds = RECT.load(tReader);
+    var tMatrix = MATRIX.load(tReader);
+    var tText = Text.load(tReader, withAlpha);
+    tText.id = tId;
+    tText.bounds = tBounds;
+    tText.matrix = tMatrix;
+
+    pParser.register(tId, tText);
+  }
+
+}(this));
+
+/**
+ * @author Yoshihiro Yamazaki
+ *
+ * Copyright (C) 2012 Yoshihiro Yamazaki
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  quickswf.Parser.prototype['10'] = defineFont;
+  quickswf.Parser.prototype['48'] = defineFont2;
+
+  var RECT = quickswf.structs.RECT;
+  var Shape = quickswf.structs.Shape;
+  var KERNINGRECORD = quickswf.structs.KERNINGRECORD;;
+  var Decoder = benri.text.Decoder;
+  var Buffer = benri.io.Buffer;
+
+  /**
+   * @constructor
+   * @extends {Array}
+   * @class {quickswf.structs.Font}
+   */
+  function Font() {
+    this.id = -1;
+    this.shiftJIS = false;
+    this.smalltext = false;
+    this.ansi = false;
+    this.italic = false;
+    this.bold = false;
+    this.langCode = 0;
+    this.name = null;
+    this.codeTable = null;
+    this.ascent = 0;
+    this.descent = 0;
+    this.leading = 0;
+    this.advanceTable = null;
+    this.boundsTable = null;
+    this.kerningTable = null;
+    this.lookupTable = null;
+    this.shapes = null;
+  }
+
+  /**
+   * Loads a Font type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @return {quickswf.structs.Font} The loaded Font.
+   */
+  Font.load = function(pReader, pOffsetOfOffsetTable, pOffsetTable) {
+    var tFont = new Font();
+    if (pOffsetOfOffsetTable === null) {
+      return tFont;
+    }
+    var tNumGlyphs = pOffsetTable.length;
+    var tGlyphShapeTable = new Array(tNumGlyphs);
+    for (var i = 0 ; i < tNumGlyphs ; i++) {
+      pReader.seekTo(pOffsetOfOffsetTable + pOffsetTable[i]);
+      var tShape = Shape.load(pReader, false, false, false);
+      tGlyphShapeTable[i] = tShape;
+    }
+    tFont.shapes = tGlyphShapeTable;
+    return tFont;
+  };
+
+  function defineFont(pLength) {
+    parseFont(this);
+  }
+
+  function defineFont2(pLength) {
+    parseFont2(this);
+  }
+
+  function parseFont(pParser) {
+    var tReader = pParser.r;
+    var tId = tReader.getUint16();
+    var tOffsetOfOffsetTable = tReader.tell();
+    var tOfOffsetTable_0 = tReader.getUint16();
+    var tNumGlyphs = tOfOffsetTable_0 / 2;
+    var tOffsetTable = new Array(tNumGlyphs);
+    tOffsetTable[0] = tOfOffsetTable_0;
+
+    for (var i = 1 ; i < tNumGlyphs ; i++) {
+      tOffsetTable[i] = tReader.getUint16();
+    }
+
+    var tFont = Font.load(tReader, tOffsetOfOffsetTable, tOffsetTable);
+
+    tFont.id = tId;
+
+    pParser.swf.fonts[tId] = tFont;
+  }
+
+  function parseFont2(pParser) {
+    var tReader = pParser.r;
+    var tId = tReader.getUint16();
+    var tFlags = tReader.getUint8();
+    var tFontFlagsHasLayout   = (tFlags & 0x80) ? true : false;
+    var tFontFlagsShiftJIS    = (tFlags & 0x40) ? true : false;
+    var tFontFlagsSmallText   = (tFlags & 0x20) ? true : false;
+    var tFontFlagsANSI        = (tFlags & 0x10) ? true : false;
+    var tFontFlagsWideOffsets = (tFlags & 0x08) ? true : false;
+    var tFontFlagsWideCodes   = (tFlags & 0x04) ? true : false;
+    var tFontFlagsItalic      = (tFlags & 0x02) ? true : false;
+    var tFontFlagsBold        = (tFlags & 0x01) ? true : false;
+    var tLangCode = tReader.getUint8();
+    var tFontNameLen = tReader.getUint8();
+    var tFontName = (tFontNameLen > 0) ? tReader.getString(tFontNameLen) : null;
+    var hasMultibyteChar = function(pStr) {
+      for (var i = 0, il = pStr.length; i < il; i++) {
+        if (pStr.charCodeAt(i) > 0x7F) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (hasMultibyteChar(tFontName) || tFontName.indexOf('_?') === 0) {
+      // _????: Flash Pro generates this magical font name if Japanese font is used in English OS.
+
+      // Font name with multibyte-string tends not to be supported.:
+      // TODO: We need to find appropreate font family for Japanese chars.
+      tFontName = 'Osaka';
+    }
+
+    var tNumGlyphs = tReader.getUint16();
+    var tFontAscent = 0;
+    var tFontDescent = 0;
+    var tFontLeading = 0;
+    var tKerningCount = 0;
+    var tFontKerningTable = null;
+
+    if (tNumGlyphs === 0) { // no Glyphs
+      var tFont = Font.load(tReader, null, null);
+      // Need to skip CodeTableOffset?
+      //tFontFlagsWideOffsets ? tReader.getUint32() : tReader.getUint16();
+      tFont.id = tId;
+      tFont.shiftJIS = tFontFlagsShiftJIS;
+      tFont.smalltext =tFontFlagsSmallText;
+      tFont.ansi = tFontFlagsANSI;
+      tFont.italic = tFontFlagsItalic;
+      tFont.bold = tFontFlagsBold;
+      tFont.langCode = tLangCode;
+      tFont.name = tFontName;
+      pParser.swf.fonts[tId] = tFont;
+      if (tFontFlagsHasLayout) {
+        tFontAscent = tReader.getInt16();
+        tFontDescent = tReader.getInt16();
+        tFontLeading = tReader.getInt16();
+
+        tKerningCount = tReader.getUint16();
+        tFontKerningTable = new Array(tKerningCount);
+
+        for (var i = 0 ; i < tKerningCount; i++) {
+          tFontKerningTable[i] = KERNINGRECORD.load(tReader, tFontFlagsWideCodes);
+        }
+        tFont.ascent = tFontAscent;
+        tFont.descent = tFontDescent;
+        tFont.leading = tFontLeading;
+        tFont.kerningTable = tFontKerningTable;
+      }
+      return ;
+    }
+    var tOffsetTable = new Array(tNumGlyphs);
+    var tCodeTableOffset = 0;
+    var tOffsetOfOffsetTable = tReader.tell();
+
+    if (tFontFlagsWideOffsets) {
+      for (var i = 0 ; i < tNumGlyphs ; i++) {
+        tOffsetTable[i] = tReader.getUint32();
+      }
+
+      tCodeTableOffset = tReader.getUint32();
+    } else {
+      for (var i = 0 ; i < tNumGlyphs ; i++) {
+        tOffsetTable[i] = tReader.getUint16();
+      }
+
+      tCodeTableOffset = tReader.getUint16();
+    }
+
+    var tFont = Font.load(tReader, tOffsetOfOffsetTable, tOffsetTable);
+
+    tReader.seekTo(tOffsetOfOffsetTable + tCodeTableOffset);
+
+    var tCodeTable = new Array(tNumGlyphs);
+
+    if (tFontFlagsWideCodes) {
+      for (var i = 0 ; i < tNumGlyphs ; i++) {
+        tCodeTable[i] = tReader.getUint16();
+      }
+    } else {
+      for (var i = 0 ; i < tNumGlyphs ; i++) {
+        tCodeTable[i] = tReader.getUint8();
+      }
+    }
+
+    var tFontAdvanceTable = new Array(tNumGlyphs);
+    var tFontBoundsTable = new Array(tNumGlyphs);
+
+    if (tFontFlagsHasLayout) {
+      tFontAscent = tReader.getInt16();
+      tFontDescent = tReader.getInt16();
+      tFontLeading = tReader.getInt16();
+
+      for (var i = 0 ; i < tNumGlyphs ; i++) {
+        tFontAdvanceTable[i] = tReader.getInt16();
+      }
+
+      for (var i = 0 ; i < tNumGlyphs ; i++) {
+        tFontBoundsTable[i] = RECT.load(tReader);
+      }
+
+      tKerningCount = tReader.getUint16();
+      tFontKerningTable = new Array(tKerningCount);
+
+      for (var i = 0 ; i < tKerningCount; i++) {
+        tFontKerningTable[i] = KERNINGRECORD.load(tReader, tFontFlagsWideCodes);
+      }
+    }
+
+    tFont.id = tId;
+    tFont.shiftJIS = tFontFlagsShiftJIS;
+    tFont.smalltext =tFontFlagsSmallText;
+    tFont.ansi = tFontFlagsANSI;
+    tFont.italic = tFontFlagsItalic;
+    tFont.bold = tFontFlagsBold;
+    tFont.langCode = tLangCode;
+    tFont.name = tFontName;
+    tFont.ascent = tFontAscent;
+    tFont.descent = tFontDescent;
+    tFont.leading = tFontLeading;
+    tFont.advanceTable = tFontAdvanceTable;
+    tFont.boundsTable = tFontBoundsTable;
+    tFont.kerningTable = tFontKerningTable;
+
+    var buildLookupTable = function (pCodeTable) {
+      // Create a lookup table for searching glyphs by char code.
+      var tTable = new Object();
+      var tShapes = tFont.shapes;
+
+      for (var i = 0; i < tNumGlyphs; i++) {
+        var tEntry = new Object();
+        tEntry.shape = tShapes[i];
+
+        if (tFontFlagsHasLayout) {
+          tEntry.advance = tFontAdvanceTable[i];
+          tEntry.bounds = tFontBoundsTable[i];
+        }
+
+        tTable[pCodeTable[i] + ''] = tEntry;
+      }
+
+      return tTable;
+    };
+
+    if (tFontFlagsShiftJIS && tCodeTable) {
+      // Converts the code table into UCS characters.
+      var tLength = tCodeTable.length, tCharCode;
+      var tBuffer = Buffer.create(tLength * 2);
+      var tData = tBuffer.data;
+
+      for (var i = 0, j = 0, il = tLength; i < il; i++) {
+        tCharCode = tCodeTable[i];
+
+        if (tCharCode < 256) {
+          tData[j++] = tCharCode;
+        } else if (tCharCode < 65536) {
+          tData[j++] = (tCharCode >> 8) & 0xff;
+          tData[j++] = tCharCode & 0xff;
+        }
+      }
+      var tDecoder = new Decoder('shift_jis');
+      var tString = tDecoder.decode(tBuffer);
+      var tCharCodeArray = new Array();
+
+      for (var i = 0; i < tLength; i++) {
+        if (tCharCode = tString.charCodeAt(i)) {
+          tCharCodeArray.push(tCharCode);
+        }
+      }
+      
+      tFont.codeTable = tCharCodeArray;
+      tFont.lookupTable = buildLookupTable(tCharCodeArray);
+    } else {
+      tFont.codeTable = tCodeTable;
+      tFont.lookupTable = buildLookupTable(tCodeTable);
+    }
+    pParser.swf.fonts[tId] = tFont;
+  }
+
+}(this));
+
+/**
+ * @author Yoshihiro Yamazaki
+ *
+ * Copyright (C) 2012 QuickSWF project
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.Parser.prototype['37'] = defineEditText;
+
+  var RECT = global.quickswf.structs.RECT;
+  var RGBA = global.quickswf.structs.RGBA;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.EditText}
+   */
+  function EditText() {
+    this.id = -1;
+    this.bounds = null;
+    this.wordwrap = false;
+    this.multiline = false;
+    this.password = false;
+    this.readonly = false;
+    this.autosize = false;
+    this.noselect = false;
+    this.border = false;
+    this.wasstatic = false;
+    this.html = false;
+    this.useoutline = false;
+    this.font = 0;
+    this.fontclass = null;
+    this.fontheight = 0;
+    this.textcolor = null;
+    this.maxlength = 0;
+    this.align = 0;
+    this.leftmargin = 0;
+    this.rightmargin = 0;
+    this.indent = 0;
+    this.leading = 0;
+    this.variablename = null;
+    this.initialtext = null;
+  }
+
+  EditText.prototype.displayListType = 'DefineEditText';
+
+  /**
+   * Loads a EditText type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @return {quickswf.structs.EditText} The loaded EditText.
+   */
+  EditText.load = function(pReader) {
+    var tEditText = new EditText();
+    return tEditText;
+  };
+
+  function defineEditText(pLength) {
+    parseEditText(this);
+  }
+
+  function parseEditText(pParser) {
+    var tReader = pParser.r;
+    var tId = tReader.getUint16();
+    var tBounds = RECT.load(tReader);
+    var tFlags1 = tReader.getUint8();
+    var tFlags2 = tReader.getUint8();
+    var tHasText      = (tFlags1 & 0x80) ? true : false;
+    var tWordWrap     = (tFlags1 & 0x40) ? true : false;
+    var tMultiline    = (tFlags1 & 0x20) ? true : false;
+    var tPassword     = (tFlags1 & 0x10) ? true : false;
+    var tReadOnly     = (tFlags1 & 0x08) ? true : false;
+    var tHasTextColor = (tFlags1 & 0x04) ? true : false;
+    var tHasMaxLength = (tFlags1 & 0x02) ? true : false;
+    var tHasFont      = (tFlags1 & 0x01) ? true : false;
+    var tHasFontClass = (tFlags2 & 0x80) ? true : false;
+    var tAutoSize     = (tFlags2 & 0x40) ? true : false;
+    var tHasLayout    = (tFlags2 & 0x20) ? true : false;
+    var tNoSelect     = (tFlags2 & 0x10) ? true : false;
+    var tBorder       = (tFlags2 & 0x08) ? true : false;
+    var tWasStatic    = (tFlags2 & 0x04) ? true : false;
+    var tHTML         = (tFlags2 & 0x02) ? true : false;
+    var tUseOutline   = (tFlags2 & 0x01) ? true : false;
+    var tFontId = -1;
+    var tFont = null;
+
+    if (tHasFont) {
+      tFontId = tReader.getUint16();
+      tFont = pParser.swf.fonts[tFontId + ''];
+    }
+
+    var tFontClass = null;
+
+    if (tHasFontClass) {
+      tFontClass = tReader.getString();
+    }
+
+    var tFontHeight = 0;
+
+    if (tHasFont) {
+      tFontHeight = tReader.getUint16();
+    }
+
+    var tTextColor = null;
+
+    if (tHasTextColor) {
+      tTextColor = RGBA.load(tReader, true);
+    }
+
+    var tMaxLength = 0;
+
+    if (tHasMaxLength) {
+      tMaxLength = tReader.getUint16();
+    }
+
+    var tAlign = 0;
+    var tLeftMargin = 0;
+    var tRightMargin = 0;
+    var tIndent = 0;
+    var tLeading = 0;
+
+    if (tHasLayout) {
+      tAlign = tReader.getUint8();
+      tLeftMargin = tReader.getUint16();
+      tRightMargin = tReader.getUint16();
+      tIndent = tReader.getUint16();
+      tLeading = tReader.getUint16();
+    }
+
+    var tVariableName = tReader.getString();
+    var tInitialText = null;
+
+    if (tHasText) {
+      tInitialText = tReader.getString();
+    }
+
+    var tEditText = EditText.load(tReader);
+
+    tEditText.id = tId;
+    tEditText.bounds = tBounds;
+    tEditText.wordwrap = tWordWrap;
+    tEditText.multiline = tMultiline;
+    tEditText.password = tPassword;
+    tEditText.readonly = tReadOnly;
+    tEditText.autosize = tAutoSize;
+    tEditText.noselect = tNoSelect;
+    tEditText.border = tBorder;
+    tEditText.wasstatic = tWasStatic;
+    tEditText.html = tHTML;
+    tEditText.useoutline = tUseOutline;
+    tEditText.font = tFontId;
+    tEditText.fontclass = tFontClass;
+    tEditText.fontheight = tFontHeight;
+    tEditText.textcolor = tTextColor;
+    tEditText.maxlength = tMaxLength;
+    tEditText.align = tAlign;
+    tEditText.leftmargin = tLeftMargin;
+    tEditText.rightmargin = tRightMargin;
+    tEditText.indent = tIndent;
+    tEditText.leading = tLeading;
+    tEditText.variablename = tVariableName;
+    tEditText.initialtext = tInitialText;
+
+    pParser.register(tId, tEditText);
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+  
+  global.quickswf.Parser.prototype['1'] = showFrame;
+
+  function showFrame(pLength) {
+    var tCurrentFrame = this.currentFrame;
+
+    if (this.currentSprite.frames[tCurrentFrame] === void 0) {
+      this.currentSprite.frames[tCurrentFrame] = [];
+    }
+
+    this.currentFrame = tCurrentFrame + 1;
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.Parser.prototype['5'] = parseRemoveObject;
+  global.quickswf.Parser.prototype['28'] = parseRemoveObject2;
+
+  function parseRemoveObject(pLength) {
+    this.r.getUint16();
+    parseRemoveObject2.call(this, pLength);
+  }
+
+  function parseRemoveObject2(pLength) {
+    var tDepth = this.r.getUint16();
+    this.add({
+      type: 'remove',
+      depth: tDepth
+    });
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.Parser.prototype['4'] = placeObject;
+  global.quickswf.Parser.prototype['26'] = placeObject2;
+
+  var MATRIX = global.quickswf.structs.MATRIX;
+  var CXFORM = global.quickswf.structs.CXFORM;
+  var CLIPACTIONS = global.quickswf.structs.CLIPACTIONS;
+
+  function placeObject(pLength) {
+    var tReader = this.r;
+    var tId = tReader.getUint16();
+    var tDepth = tReader.getUint16();
+    var tMatrix = MATRIX.load(tReader);
+
+    var tPackage = {
+      type: 'add',
+      id: tId,
+      matrix: tMatrix,
+      depth: tDepth,
+      name: null
+    };
+
+    this.add(tPackage);
+  }
+
+  function placeObject2(pLength) {
+    var tReader = this.r;
+    var tStartIndex = tReader.tell();
+
+    var tFlags = tReader.getUint8();
+    var tDepth = tReader.getUint16();
+
+    var tPackage = {
+      type: '',
+      id: -1,
+      matrix: null,
+      depth: tDepth,
+      name: null
+    };
+
+    var tColorTransform = null;
+    var tClipDepth = 0;
+    var tRatio = -1;
+
+    var tId;
+    if (tFlags & (1 << 1)) { // hasCharacter
+      tId = tPackage.id = tReader.getUint16();
+    }
+
+    if (tFlags & (1 << 2)) { // hasMatrix
+      tPackage.matrix = MATRIX.load(tReader);
+    }
+
+    if (tFlags & (1 << 3)) { // hasColorTransform
+      tColorTransform = CXFORM.load(tReader, true);
+    }
+
+    if (tFlags & (1 << 4)) { // hasRatio
+      tRatio = tReader.getUint16();
+    }
+
+    if (tFlags & (1 << 5)) { // hasName
+      tPackage.name = tReader.getString();
+    }
+
+    if (tFlags & (1 << 6)) {
+      tClipDepth = tReader.getUint16();
+    }
+
+    var tClipActions = null;
+    
+    if (tFlags & (1 << 7)) {
+      tClipActions = CLIPACTIONS.load(tReader, this.swf.version);
+      this.add({
+        type: 'clipActions',
+        clipActions: tClipActions
+      });
+    }
+
+    var tMove = tFlags & 1;
+
+    if (tMove && tId !== void 0) {
+      tPackage.type = 'replace';
+      this.add(tPackage);
+    } else if (!tMove && tId !== void 0) {
+      tPackage.type = 'add';
+      this.add(tPackage);
+    } else if (tMove && tId === void 0 && tPackage.matrix) {
+      tPackage.type = 'move';
+      this.add(tPackage);
+    }
+
+    if (tClipDepth > 0) {
+      this.add({
+        type: 'clip',
+        depth: tDepth,
+        clipDepth: tClipDepth,
+        clipActions: tClipActions
+      });
+    }
+
+    if (tColorTransform !== null) {
+      this.add({
+         type: 'colorTransform',
+         depth: tDepth,
+         colorTransform: tColorTransform
+       });
+    }
+
+    if (tRatio !== -1) {
+      this.add({
+        type: 'ratio',
+        depth: tDepth,
+        ratio: tRatio
+      });
+    }
+
+    if (tReader.tell() < tStartIndex + pLength) {
+      /*
+      tClipActions = CLIPACTIONS.load(tReader, this.swf.version);
+      this.add({
+        type: 'clipActions',
+        clipActions: tClipActions
+      });
+      // It's not following the spec....
+      */
+    }
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.Parser.prototype['9'] = setBackgroundColor;
+
+  var RGBA = global.quickswf.structs.RGBA;
+
+  function setBackgroundColor(pLength) {
+    // TODO: support wmmode transparent.
+    var tRGBA = RGBA.load(this.r, false);
+    this.add({type: 'background', color: tRGBA});
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.Parser.prototype['43'] = frameLabel;
+
+  function frameLabel(pLength) {
+    var tLabel = this.r.getString();
+    if (!(tLabel in this.currentSprite.frameLabels)) {
+      this.currentSprite.frameLabels[tLabel] = this.currentFrame;
+    }
+  }
+
+}(this));
+
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+  
+  global.quickswf.Parser.prototype['0'] = end;
+
+  function end(pLength) {
+    this.currentSprite = this.spriteStack.pop();
+    this.currentFrame = this.frameStack.pop();
+  }
+
+}(this));
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2012 QuickSWF project
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.Parser.prototype['7'] = defineButton;
+  global.quickswf.Parser.prototype['34'] = defineButton2;
+
+  var MATRIX = global.quickswf.structs.MATRIX;
+  var CXFORM = global.quickswf.structs.CXFORM;
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.Button}
+   */
+  function Button(pId, pRecordList, pCondActionList, pTrackAsMenu) {
+    this.id = pId;
+    this.records = pRecordList;
+    this.condActions = pCondActionList;
+    this.isMenu = pTrackAsMenu;
+  }
+
+  Button.prototype.displayListType = 'DefineButton';
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.BUTTONRECORD}
+   */
+  function BUTTONRECORD(pId, pDepth, pMatrix, pStates, pCx, pFl, pBm) {
+    this.id = pId;
+    this.depth = pDepth;
+    this.matrix = pMatrix;
+    this.colorTransform = pCx;
+    this.filterList = pFl;
+    this.blendMode = pBm;
+    this.state = {
+        hitTest : (pStates >> 3) & 0x1,
+        down    : (pStates >> 2) & 0x1,
+        over    : (pStates >> 1) & 0x1,
+        up      : (pStates >> 0) & 0x1
+      };
+  }
+
+
+  /**
+   * Loads a BUTTONRECORD type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @return {quickswf.structs.BUTTONRECORD} The loaded BUTTONRECORD.
+   */
+  BUTTONRECORD.load = function(pReader, pWithinDB2) {
+    var tFlags  = pReader.getUint8();
+    var tId     = pReader.getUint16();
+    var tDepth  = pReader.getUint16();
+    var tMatrix = MATRIX.load(pReader);
+    var tButtonStates = tFlags & 0xf;
+    var tColorTransform = null;
+    var tHasBlendMode  = (tFlags >> 5) & 0x1;
+    var tHasFilterList = (tFlags >> 4) & 0x1;
+    var i, tFilterNum, tFilterId, tBytesToSkip;
+
+    if (pWithinDB2) {
+      tColorTransform = CXFORM.load(pReader, true);
+      if (tHasFilterList) {
+        // Just skipping...
+        tBytesToSkip = [23, 9, 15, 27, NaN, NaN, 80, NaN];
+        tFilterNum = pReader.getUint8();
+        for (i = 0; i < tFilterNum; i++) {
+          tFilterId = pReader.getUint8();
+          pReader.seek(tBytesToSkip[tFilterId]);
+        }
+      }
+      if (tHasBlendMode) {
+        // Just skipping...
+        pReader.seek(1);
+      }
+    }
+    return new BUTTONRECORD(tId, tDepth, tMatrix, tButtonStates,
+                tColorTransform, null, null);
+  };
+
+  /**
+   * @constructor
+   * @class {quickswf.structs.BUTTONCONDACTION}
+   */
+  function BUTTONCONDACTION(pCond, pAction) {
+    this.cond = pCond;
+    this.action = pAction;
+  }
+
+
+  /**
+   * Loads a BUTTONCONDACTION type.
+   * @param {quickswf.Reader} pReader The reader to use.
+   * @return {quickswf.structs.BUTTONCONDACTION} The loaded BUTTONCONDACTION.
+   */
+  BUTTONCONDACTION.load = function(pReader, pBounds) {
+    var tSize = pReader.getUint16();
+    var tFlags = pReader.getUint16();
+    var tIndex = pReader.tell();
+    var tLength = tSize ? tSize - 4 : pBounds - tIndex;
+    var tButtonAction = pReader.getCopy(tLength);
+
+    var tCond = {
+        idleToOverDown    : (tFlags >>  7) & 0x1,
+        outDownToIdle     : (tFlags >>  6) & 0x1,
+        outDownToOverDown : (tFlags >>  5) & 0x1,
+        overDownToOutDown : (tFlags >>  4) & 0x1,
+        overDownToOverUp  : (tFlags >>  3) & 0x1,
+        overUpToOverDown  : (tFlags >>  2) & 0x1,
+        overUpToIdle      : (tFlags >>  1) & 0x1,
+        idleToOverUp      : (tFlags >>  0) & 0x1,
+        keyPress          : (tFlags >>  9) & 0x7f,
+        overDownToIdle    : (tFlags >>  8) & 0x1
+      };
+
+    return new BUTTONCONDACTION(tCond, tButtonAction);
+  };
+
+  function defineButton(pLength) {
+    var tReader = this.r;
+    var tBounds = tReader.tell() + pLength;
+    var tId = tReader.getUint16();
+
+    // Parse button records. (n >= 1)
+    var tButtonRecords = new Array();
+    do {
+      tButtonRecords.push(BUTTONRECORD.load(tReader, false));
+    } while (tReader.peekBits(8));
+    tReader.getUint8(); // Last one byte
+
+    // ActionScript
+    var tButtonAction = tReader.getCopyTo(tBounds);
+
+    // Store the button records to the dictionary.
+    var tCondAction = new BUTTONCONDACTION(null, tButtonAction);
+    this.register(tId, new Button(tId, tButtonRecords, [tCondAction], false));
+  }
+
+  function defineButton2(pLength) {
+    var tReader = this.r;
+    var tBounds = tReader.tell() + pLength;
+    var tId = tReader.getUint16();
+    var tFlags  = tReader.getUint8();
+    var tTrackAsMenu = tFlags & 1;
+    var tActionOffset = tReader.getUint16();
+
+    if (tActionOffset > 3 || tActionOffset === 0) {
+      // Parse button records. (n >= 1)
+      var tButtonRecords = new Array();
+      while (tReader.peekBits(8)) {
+        tButtonRecords.push(BUTTONRECORD.load(tReader, true));
+      }
+    }
+    tReader.getUint8(); // Last one byte
+
+    // Condition + ActionScript
+    var tButtonActions = new Array();
+    if (tActionOffset > 0) {
+      var tLast, tCondAction;
+      do {
+        tLast = tReader.peekBits(16) === 0;
+        tCondAction = BUTTONCONDACTION.load(tReader, tBounds);
+        tButtonActions.push(tCondAction);
+      } while (!tLast);
+    }
+    // Store the button records to the dictionary.
+    this.register(tId, new Button(tId, tButtonRecords, tButtonActions, tTrackAsMenu));
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  global.quickswf.Parser.prototype['12'] = doAction;
+
+  function doAction(pLength) {
+    this.add({
+      type: 'script',
+      script: this.r.getCopy(pLength)
+    });
+  }
+
+}(this));
+
+/**
+ * @author Yuta Imaya
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2014 QuickSWF Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+  quickswf.Parser.prototype['20'] = defineBitsLossless;
+  quickswf.Parser.prototype['36'] = defineBitsLossless2;
+
+  var fromBuffer = benri.content.Blob.fromBuffer;
+  var Buffer = benri.io.Buffer;
+
+  //var mHaveAndroidAlphaBug = quickswf.browser.HavePutImageDataAlphaBug;
+  var mAdler32 = quickswf.utils.Adler32;
+  var mCRC32 = quickswf.utils.CRC32;
+
+  /** @const @type {number} */
+  var mBlockSize = 0xffff;
+
+  /**
+   * @this {quickswf.Parser}
+   * @param {number} pLength tag length.
+   */
+  function defineBitsLossless(pLength) {
+    /** @type {number} */
+    var tId = this.r.getUint16();
+    /** @type {Lossless} */
+    var tLossless = new Lossless(this, pLength, false);
+
+    tLossless.parse();
+
+    tLossless.getImage(tId);
+    /*if (tLossless.format === LosslessFormat.COLOR_MAPPED && mHaveCreateObjectURL) {
+      tLossless.getImage(tId);
+    } else {
+      tLossless.getCanvas(tId);
+    }*/
+  }
+
+  /**
+   * @param {number} pLength tag length.
+   */
+  function defineBitsLossless2(pLength) {
+    /** @type {number} */
+    var tId = this.r.getUint16();
+    /** @type {Lossless} */
+    var tLossless = new Lossless(this, pLength, true);
+
+    tLossless.parse();
+
+    tLossless.getImage(tId);
+    /*if (tLossless.format === LosslessFormat.COLOR_MAPPED && mHaveCreateObjectURL) {
+      tLossless.getImage(tId);
+    } else {
+      tLossless.getCanvas(tId);
+    }*/
+  }
+
+  /**
+   * @enum {number}
+   */
+  var LosslessFormat = {
+    COLOR_MAPPED: 3,
+    RGB15: 4,
+    RGB24: 5
+  };
+
+  /**
+   * @enum {number}
+   */
+  var PngColourType = {
+    GRAYSCALE: 0,
+    TRUECOLOR: 2,
+    INDEXED_COLOR: 3,
+    GRAYSCALE_WITH_ALPHA: 4,
+    TRUECOLOR_WITH_ALPHA: 6
+  };
+
+  /**
+   * lossless image parser.
+   * @param {quickswf.Parser} parser swf parser object.
+   * @param {number} pLength tag length.
+   * @param {boolean=} withAlpha alpha channel support flag.
+   * @constructor
+   */
+  function Lossless(parser, pLength, withAlpha) {
+    /** @type {SWF} */
+    this.swf = parser.swf;
+    /** @type {Breader} */
+    this.reader = parser.r;
+    /** @type {number} */
+    this.size = pLength - (2 + 1 + 2 + 2);
+    /** @type {number} */
+    this.width;
+    /** @type {number} */
+    this.height;
+    /** @type {!(Array.<number>|Uint8Array)} */
+    this.plain;
+    /** @type {LosslessFormat} */
+    this.format;
+    /** @type {PngColourType} */
+    this.colourType;
+    /** @type {!(Array.<number>|Uint8Array)} */
+    this.palette;
+    /** @type {!Uint8Array} */
+    this.png;
+    /** @type {number} */
+    this.pp = 0;
+    /** @type {number} */
+    this.withAlpha = withAlpha ? 1 : 0;
+
+    if (withAlpha) {
+      this.writeIDAT = this.writeIDATwithAlpha;
+    }
+  }
+
+  /**
+   * @return {number}
+   */
+  Lossless.prototype.calcBufferSize = function() {
+    /** @type {number} */
+    var size = 0;
+    /** @type {number} */
+    var pixelWidth;
+    /** @type {number} */
+    var imageSize;
+
+    // PNG Signature
+    size += 8;
+
+    // IHDR
+    size += /* IHDR data */ 13 + /* chunk */ 12;
+
+    // PLTE
+    if (this.colourType === PngColourType.INDEXED_COLOR) {
+      size += /* PLTE data */ this.palette.length + /* chunk */ 12;
+
+      // tRNS
+      if (this.withAlpha) {
+        size += /* tRNS data */ this.trns.length + /* chunk */ 12;
+      }
+
+      pixelWidth = 1;
+    } else {
+      pixelWidth = this.withAlpha ? 4 : 3;
+    }
+
+    // IDAT
+    imageSize = (this.width * pixelWidth + /* filter */ 1) * this.height;
+    size += ( /* ZLIB non-compressed */
+      /* cmf    */ 1 +
+      /* flg    */ 1 +
+      /* data   */ imageSize +
+      /* header */ (
+      (/* bfinal, btype */ 1 +
+        /* len           */ 2 +
+        /* nlen          */ 2) *
+        /* number of blocks */ (1 + (imageSize / mBlockSize | 0))
+      ) +
+      /* adler  */ 4
+    ) + 12;
+
+    // IEND
+    size += /* chunk*/ 12;
+
+    return size;
+  };
+
+  /**
+   * parse lossless image.
+   */
+  Lossless.prototype.parse = function() {
+    /** @type {Breader} */
+    var tReader = this.reader;
+    /** @type {LosslessFormat} */
+    var tFormat = this.format = tReader.getUint8();
+    /** @type {number} */
+    var tPaletteSize;
+    /** @type {!(Array.<number>|Uint8Array)} */
+    var tPalette;
+    var tPaletteData;
+    /** @type {number} */
+    var tPp = 0;
+    /** @type {number} */
+    var tTp = 0;
+    /** @type {!(Array.<number>|Uint8Array)} */
+    var tTmpPalette;
+    /** @type {!(Array.<number>|Uint8Array)} */
+    var tTrns;
+    var tTrnsData;
+    /** @type {number} */
+    var alpha;
+    /** @type {number} */
+    var bufferSize;
+    /** @type {number} */
+    var i;
+
+    this.width = tReader.getUint16();
+    this.height = tReader.getUint16();
+
+    // indexed-color
+    if (tFormat === LosslessFormat.COLOR_MAPPED) {
+      this.colourType = PngColourType.INDEXED_COLOR;
+
+      // palette
+      tPaletteSize = (tReader.getUint8() + 1);
+      if (this.withAlpha) {
+        tTrns = this.trns = Buffer.create(tPaletteSize);
+        tTrnsData = tTrns.data;
+      }
+      tPaletteSize *= (3 + this.withAlpha);
+      --this.size;
+
+      // buffer size
+      bufferSize = tPaletteSize +
+        /* width with padding * height */((this.width + 3) & -4) * this.height;
+    // truecolor
+    } else {
+      this.colourType = (!this.withAlpha) ?
+        PngColourType.TRUECOLOR : PngColourType.TRUECOLOR_WITH_ALPHA;
+
+      // buffer size
+      if (tFormat === LosslessFormat.RGB24) {
+        bufferSize = 4 * this.width * this.height;
+      } else if (tFormat === LosslessFormat.RGB15) {
+        bufferSize = 2 * this.width * this.height;
+      }
+    }
+
+    // compressed image data
+    this.plain = (new benri.io.compression.Inflator('inflate'))
+    .inflate(
+      tReader.getCopy(this.size),
+      {
+        bufferSize: bufferSize
+      } 
+    );
+
+    // palette
+    if (tFormat === LosslessFormat.COLOR_MAPPED) {
+      if (!this.withAlpha) {
+        // RGB palette
+        this.palette = this.plain.copy(0, tPaletteSize);
+      } else {
+        // RGBA palette
+        tTmpPalette = this.plain.copy(0, tPaletteSize).data;
+        tPalette = this.palette = Buffer.create(tPaletteSize * 3 / 4);
+        tPaletteData = tPalette.data;
+
+        for (i = 0; tTp < tPaletteSize; i += 4) {
+          alpha = tTrnsData[tTp++] = tTmpPalette[i + 3];
+          tPaletteData[tPp++] = tTmpPalette[i    ] * 255 / alpha | 0; // red
+          tPaletteData[tPp++] = tTmpPalette[i + 1] * 255 / alpha | 0; // green
+          tPaletteData[tPp++] = tTmpPalette[i + 2] * 255 / alpha | 0; // blue
+        }
+      }
+
+      this.plain = this.plain.copyTo(tPaletteSize, this.plain.size);
+    }
+  };
+
+  /**
+   * create new Image element.
+   * @param {number} pId The ID of this image.
+   * @return {Object} Image information.
+   */
+  Lossless.prototype.getImage = function(pId) {
+    /** @type {benri.io.Buffer} */
+    var tPng = this.getPNG();
+
+    this.swf.assetManifest.addBuffer(pId + '', tPng, 'image/png');
+  };
+
+  /**
+   * create PNG buffer.
+   * @return {benri.io.Buffer} png buffer.
+   */
+  Lossless.prototype.getPNG = function() {
+    this.png = Buffer.create(this.calcBufferSize());
+
+    this.writeSignature();
+    this.writeIHDR();
+
+    if (this.format === LosslessFormat.COLOR_MAPPED) {
+      this.writePLTE();
+
+      if (this.withAlpha) {
+        this.writeTRNS();
+      }
+    }
+
+    this.writeIDAT();
+    this.writeIEND();
+
+    this.finish();
+
+    return this.png;
+  };
+
+  /**
+   * truncate output buffer.
+   * @return {benri.io.Buffer} png bytearray.
+   */
+  Lossless.prototype.finish = function() {
+    this.png = this.png.copyTo(0, this.pp);
+
+    return this.png;
+  };
+
+  /**
+   * write png signature.
+   */
+  Lossless.prototype.writeSignature = function() {
+    /** @const @type {Array.<number>} */
+    var signature = Buffer.fromArray([137, 80, 78, 71, 13, 10, 26, 10]);
+
+    this.png.copyFrom(signature, this.pp);
+
+    this.pp += 8;
+  };
+
+  /**
+   * write png chunk.
+   * @param {string} pType chunk type.
+   * @param {!(Array.<number>|Uint8Array)} pData chunk data.
+   */
+  Lossless.prototype.writeChunk = function(pType, pData) {
+    /** @type {number} */
+    var tDataLength = pData.length;
+    /** @type {Array.<number>} */
+    var tTypeArray = [
+      pType.charCodeAt(0) & 0xff, pType.charCodeAt(1) & 0xff,
+      pType.charCodeAt(2) & 0xff, pType.charCodeAt(3) & 0xff
+    ];
+    /** @type {number} */
+    var tCrc32;
+
+    var tPng = this.png;
+    var tPngData = tPng.data;
+    var tPp = this.pp;
+
+    // length
+    tPngData[tPp++] = (tDataLength >> 24) & 0xff;
+    tPngData[tPp++] = (tDataLength >> 16) & 0xff;
+    tPngData[tPp++] = (tDataLength >>  8) & 0xff;
+    tPngData[tPp++] = (tDataLength      ) & 0xff;
+
+    // type
+    tPngData[tPp++] = tTypeArray[0];
+    tPngData[tPp++] = tTypeArray[1];
+    tPngData[tPp++] = tTypeArray[2];
+    tPngData[tPp++] = tTypeArray[3];
+
+    // data
+    tPng.copyFrom(pData, tPp);
+    tPp += tDataLength;
+
+    // crc32
+    tCrc32 = mCRC32.update(pData, mCRC32.calc(Buffer.fromArray(tTypeArray)));
+    tPngData[tPp++] = (tCrc32 >> 24) & 0xff;
+    tPngData[tPp++] = (tCrc32 >> 16) & 0xff;
+    tPngData[tPp++] = (tCrc32 >>  8) & 0xff;
+    tPngData[tPp++] = (tCrc32      ) & 0xff;
+
+    this.pp = tPp;
+  };
+
+  /**
+   * write PNG IHDR chunk.
+   */
+  Lossless.prototype.writeIHDR = function() {
+    /** @type {number} */
+    var tWidth = this.width;
+    /** @type {number} */
+    var tHeight = this.height;
+    /** @type {PngColourType} */
+    var tColourType = this.colourType;
+
+    this.writeChunk('IHDR', Buffer.fromArray([
+      /* width       */
+      (tWidth  >> 24) & 0xff, (tWidth  >> 16) & 0xff,
+      (tWidth  >>  8) & 0xff, (tWidth       ) & 0xff,
+      /* height      */
+      (tHeight >> 24) & 0xff, (tHeight >> 16) & 0xff,
+      (tHeight >>  8) & 0xff, (tHeight      ) & 0xff,
+      /* bit depth   */ 8,
+      /* colour type */ tColourType,
+      /* compression */ 0,
+      /* filter      */ 0,
+      /* interlace   */ 0
+    ]));
+  };
+
+  /**
+   * write PNG PLTE chunk.
+   */
+  Lossless.prototype.writePLTE = function() {
+    this.writeChunk('PLTE', this.palette);
+  };
+
+  /**
+   * write PNG tRNS chunk.
+   */
+  Lossless.prototype.writeTRNS = function() {
+    this.writeChunk('tRNS', this.trns);
+  };
+
+  /**
+   * wrtie PNG IDAT chunk.
+   */
+  Lossless.prototype.writeIDAT = function() {
+    /** @type {number} */
+    var tSize;
+    /** @type {number} */
+    var tLength;
+    /** @type {!(Array.<number>|Uint8Array)} */
+    var tImage;
+    var tImageData;
+    /** @type {number} */
+    var tOp = 0;
+    /** @type {number} */
+    var tIp = 0;
+    /** @type {number} */
+    var tRed;
+    /** @type {number} */
+    var tGreen;
+    /** @type {number} */
+    var tBlue;
+    /** @type {number} */
+    var tReserved;
+    /** @type {number} */
+    var tX = 0;
+    /** @type {number} */
+    var tWidthWithPadding;
+
+    var tPlain = this.plain;
+    var tPlainData = tPlain.data;
+    var tWidth = this.width;
+    var tHeight = this.height;
+    var tFormat = this.format;
+
+    // calculate buffer size
+    switch (this.colourType) {
+      case PngColourType.INDEXED_COLOR:
+        tLength = tWidth;
+        break;
+      case PngColourType.TRUECOLOR:
+        tLength = tWidth * 3;
+        break;
+      default:
+        quickswf.logger.warn('Invalid png colour type');
+    }
+
+    tSize = tLength * tHeight + tHeight;
+
+    // create png idat data
+    tImage = Buffer.create(tSize);
+    tImageData = tImage.data;
+    
+    if (tFormat === LosslessFormat.COLOR_MAPPED) {
+      // indexed-color png
+      tWidthWithPadding = (tWidth + 3) & -4;
+
+      while (tOp < tSize) {
+        // scanline filter
+        tImageData[tOp++] = 0;
+
+        // write color-map index
+        tImage.copyFrom(tPlain.copyTo(tIp, tIp + tWidth), tOp);
+        tOp += tWidth;
+
+        // next
+        tIp += tWidthWithPadding;
+      }
+    } else {
+      // truecolor png
+      while (tOp < tSize) {
+        // scanline filter
+        if (tX++ % tWidth === 0) {
+          tImageData[tOp++] = 0;
+        }
+
+        // read RGB
+        if (tFormat === LosslessFormat.RGB24) {
+          tReserved = tPlainData[tIp++];
+          tRed      = tPlainData[tIp++];
+          tGreen    = tPlainData[tIp++];
+          tBlue     = tPlainData[tIp++];
+        } else if (tFormat === LosslessFormat.RGB15) {
+          tReserved = (tPlainData[tIp++] << 8) | tPlainData[tIp++];
+          tRed   = (tReserved >> 7) & 0xf8; // >> 10 << 3, 0x1f << 3
+          tGreen = (tReserved >> 2) & 0xf8; // >> 5  << 3, 0x1f << 3
+          tBlue  = (tReserved << 3) & 0xf8; //       << 3, 0x1f << 3
+        }
+
+        // write RGB
+        tImageData[tOp++] = tRed;
+        tImageData[tOp++] = tGreen;
+        tImageData[tOp++] = tBlue;
+      }
+    }
+
+    this.writeChunk('IDAT', this.fakeZlib(tImage));
+  };
+
+  /**
+   * wrtie PNG IDAT chunk (with alpha channel).
+   */
+  Lossless.prototype.writeIDATwithAlpha = function() {
+    /** @type {number} */
+    var tSize;
+    /** @type {number} */
+    var tLength;
+    /** @type {!(Array.<number>|Uint8Array)} */
+    var tImage;
+    var tImageData;
+    /** @type {number} */
+    var tOp = 0;
+    /** @type {number} */
+    var tIp = 0;
+    /** @type {number} */
+    var tRed;
+    /** @type {number} */
+    var tGreen;
+    /** @type {number} */
+    var tBlue;
+    /** @type {number} */
+    var tAlpha;
+    /** @type {number} */
+    var tX = 0;
+    /** @type {number} */
+    var tWidthWithPadding;
+
+    var tPlain = this.plain;
+    var tPlainData = tPlain.data;
+    var tWidth = this.width;
+    var tHeight = this.height;
+    var tFormat = this.format;
+
+    // calculate buffer size
+    switch (this.colourType) {
+      case PngColourType.INDEXED_COLOR:
+        tLength = tWidth;
+        break;
+      case PngColourType.TRUECOLOR_WITH_ALPHA:
+        tLength = tWidth * 4;
+        break;
+      default:
+        quickswf.logger.warn('Invalid png colour type');
+    }
+
+    tSize = (tLength + 1) * tHeight;
+
+    // create png idat data
+    tImage = Buffer.create(tSize);
+    tImageData = tImage.data;
+    
+    if (tFormat === LosslessFormat.COLOR_MAPPED) {
+      // indexed-color png
+      tWidthWithPadding = (tWidth + 3) & -4;
+
+      while (tOp < tSize) {
+        // scanline filter
+        tImageData[tOp++] = 0;
+
+        // write color-map index
+        tImage.copyFrom(tPlain.copyTo(tIp, tIp + tWidth), tOp);
+        tOp += tWidth;
+
+        // next
+        tIp += tWidthWithPadding;
+      }
+    } else {
+      // truecolor png
+      while (tOp < tSize) {
+        // scanline filter
+        if (tX++ % tWidth === 0) {
+          tImageData[tOp++] = 0;
+        }
+
+        // read RGB
+        tAlpha = tPlainData[tIp++];
+        tRed   = tPlainData[tIp++] * 255 / tAlpha | 0;
+        tGreen = tPlainData[tIp++] * 255 / tAlpha | 0;
+        tBlue  = tPlainData[tIp++] * 255 / tAlpha | 0;
+
+        // write RGB
+        tImageData[tOp++] = tRed;
+        tImageData[tOp++] = tGreen;
+        tImageData[tOp++] = tBlue;
+        tImageData[tOp++] = tAlpha;
+      }
+    }
+
+    this.writeChunk('IDAT', this.fakeZlib(tImage));
+  };
+
+  /**
+   * wrtie PNG IEND chunk.
+   */
+  Lossless.prototype.writeIEND = function() {
+    this.writeChunk('IEND', Buffer.fromArray([]));
+  };
+
+  /**
+   * create non-compressed zlib buffer.
+   * @param {!(Array.<number>|Uint8Array)} pData plain data.
+   * @return {!(Array.<number>|Uint8Array)}
+   */
+  Lossless.prototype.fakeZlib = function(pData) {
+    /** @type {number} */
+    var tBfinal;
+    /** @type {number} */
+    var tBtype = 0; // Non-compressed
+    /** @type {number} */
+    var tLen;
+    /** @type {number} */
+    var tNlen;
+    /** @type {!(Array.<number>|Uint8Array)} */
+    var tBlock;
+    /** @type {number} */
+    var tAdler32;
+    /** @type {number} */
+    var tIp = 0;
+    /** @type {number} */
+    var tOp = 0;
+    /** @type {number} */
+    var tSize = (
+      /* cmf    */ 1 +
+      /* flg    */ 1 +
+      /* data   */ pData.length +
+      /* header */ (
+        (/* bfinal, btype */ 1 +
+         /* len           */ 2 +
+         /* nlen          */ 2) *
+         /* number of blocks */ (1 + (pData.length / mBlockSize | 0))
+      ) +
+      /* adler  */ 4
+    );
+    /** @type {Uint8Array} */
+    var tOutput = Buffer.create(tSize);
+    var tOutputData = tOutput.data;
+
+    // zlib header
+    tOutputData[tOp++] = 0x78; // CINFO: 7, CMF: 8
+    tOutputData[tOp++] = 0x01; // FCHECK: 1, FDICT, FLEVEL: 0
+
+    // zlib body
+    do {
+      tBlock = pData.copyTo(tIp, tIp += mBlockSize);
+      tBfinal = (tBlock.length < mBlockSize || tIp + tBlock.length === pData.length) ? 1 : 0;
+
+      // block header
+      tOutputData[tOp++] = tBfinal;
+
+      // len
+      tLen = tBlock.length;
+      tOutputData[tOp++] = (tLen      ) & 0xff;
+      tOutputData[tOp++] = (tLen >>> 8) & 0xff;
+
+      // nlen
+      tNlen = 0xffff - tLen;
+      tOutputData[tOp++] = (tNlen      ) & 0xff;
+      tOutputData[tOp++] = (tNlen >>> 8) & 0xff;
+
+      // data
+      tOutput.copyFrom(tBlock, tOp);
+      tOp += tBlock.length;
+    } while (!tBfinal);
+
+    // adler-32
+    tAdler32 = mAdler32(pData);
+    tOutputData[tOp++] = (tAdler32 >> 24) & 0xff;
+    tOutputData[tOp++] = (tAdler32 >> 16) & 0xff;
+    tOutputData[tOp++] = (tAdler32 >>  8) & 0xff;
+    tOutputData[tOp++] = (tAdler32      ) & 0xff;
+
+    return tOutput;
+  };
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2012 Jason Parrott.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  quickswf.Parser.prototype['6'] = defineBits;
+  quickswf.Parser.prototype['8'] = defineJpegTable;
+  quickswf.Parser.prototype['21'] = defineBitsJpeg2;
+  quickswf.Parser.prototype['35'] = defineBitsJpeg3;
+
+  var fromBuffer = benri.content.Blob.fromBuffer;
+  var Buffer = benri.io.Buffer;
+
+  function defineBits(pLength) {
+    var tId = this.r.getUint16();
+    getJPEG(tId, this, pLength - 2);
+  }
+
+  function defineBitsJpeg2(pLength) {
+    var tReader = this.r;
+    var tId = tReader.getUint16();
+
+    if (tReader.getString(4, 'ascii') === '\x89PNG') { // PNG file
+      tReader.seek(-4);
+      this.swf.assetManifest.addBuffer(tId + '', tReader.getCopy(pLength - 2), 'image/png');
+    } else { // JPEG file
+      tReader.seek(-4);
+      getJPEG(tId, this, pLength - 2);
+    }
+  }
+
+  function defineBitsJpeg3(pLength) {
+    var tReader = this.r;
+
+    var tId = tReader.getUint16();
+    var tAlphaOffset = tReader.getUint32();
+
+    var tBlob, tDelay, tSelf = this;
+    var tAlphaData;
+
+    if (tReader.getString(4, 'ascii') === '\x89PNG') { // PNG file
+      quickswf.logger.error('PNG in DefineBitsJpeg3');
+    } else {
+      tReader.seek(-4);
+      // JPEG file
+      getJPEG(tId, this, tAlphaOffset);
+      // alpha table
+      tAlphaData = (new benri.io.compression.Inflator('inflate'))
+        .inflate(tReader.getCopy(pLength - 6 - tAlphaOffset));
+
+      this.swf.assetManifest.onEntryLoad(tId + '', createOnJpeg3NonAlphaLoad(tAlphaData, tId + ''));
+    }
+  }
+
+  function createOnJpeg3NonAlphaLoad(pAlphaData, pId) {
+    return function onLoad(pData, pManifest) {
+      pManifest.ignoreEntryLoad(pId, onLoad);
+
+      // replace the pixel data with the pixel + alpha data.
+      var tImage = pData.blob;
+      var tWidth = tImage.getWidth();
+      var tHeight = tImage.getHeight();
+      var tAlphaData = pAlphaData.data;
+      var tIndex, tLength;
+      var tAlpha, tInverseAlpha;
+
+      var tPixelArray = tImage.getBytes();
+
+      for (tIndex = 0, tLength = tAlphaData.length; tIndex < tLength; ++tIndex) {
+        tAlpha = tAlphaData[tIndex];
+        tInverseAlpha = 255 / tAlpha;
+
+        tPixelArray[tIndex * 4] *= tInverseAlpha;
+        tPixelArray[tIndex * 4 + 1] *= tInverseAlpha;
+        tPixelArray[tIndex * 4 + 2] *= tInverseAlpha;
+        tPixelArray[tIndex * 4 + 3] = tAlpha;
+      }
+
+      tImage.setBytes(tPixelArray, 0, 0, tWidth, tHeight);
+    };
+  }
+
+  function getJPEG(pId, pParser, pLength) {
+    var tReader = pParser.r;
+    var tLastByte = tReader.tell() + pLength;
+    var tTag;
+    var tTagLength;
+
+    var tSOS = null;
+    var tAPP0 = [0xFF, 0xE0, 0x0, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x0, 0x01, 0x01, 0x01, 0x0, 0x48, 0x0, 0x48, 0x0, 0x0];
+    var tSOF0 = null;
+    var tSOF2 = null;
+    var tDQT = null;
+    var tDHT = null;
+    var tDRI = null;
+
+    var tNewDQT;
+    var tNewDHT;
+
+    while (tReader.tell() < tLastByte) {
+      if (tReader.getUint8() !== 0xFF) {
+        quickswf.logger.error('Could not read JPEG.');
+
+        return null;
+      }
+
+      tTag = tReader.getUint8();
+
+      if (tTag === 0xD8 || tTag === 0xD9) { // SOI and EOI
+        //ignore
+        continue;
+      } else if (tTag === 0xDA) { // SOS. No length
+        tReader.seek(-2);
+        tSOS = tReader.getCopyTo(tLastByte);
+      } else {
+        tTagLength = tReader.getUBits(16) + 2;
+
+        tReader.align();
+        tReader.seek(-4);
+
+        switch (tTag) {
+          case 0xE0: // APP0
+            tAPP0 = tReader.getCopy(tTagLength);
+
+            break;
+          case 0xDB: // DQT
+            if (tDQT === null) {
+              tDQT = tReader.getCopy(tTagLength);
+            } else {
+              tNewDQT = Buffer.fromParts([
+                tDQT,
+                tReader.getCopy(tTagLength)
+              ]);
+
+              tDQT = tNewDQT;
+            }
+
+            break;
+          case 0xC4: // DHT
+            if (tDHT === null) {
+              tDHT = tReader.getCopy(tTagLength);
+            } else {
+              tNewDHT = Buffer.fromParts([
+                tDHT,
+                tReader.getCopy(tTagLength)
+              ]);
+
+              tDHT = tNewDHT;
+            }
+
+            break;
+          case 0xC0: // SOF0
+            tSOF0 = tReader.getCopy(tTagLength);
+
+            break;
+          case 0xC2: // SOF2
+            tSOF2 = tReader.getCopy(tTagLength);
+
+            break;
+          case 0xDD: // DRI
+            tDRI = tReader.getCopy(tTagLength);
+
+            break;
+          default:
+            quickswf.logger.notice('Unknown JPEG tag', tTag);
+            tReader.seek(tTagLength);
+
+            break;
+        }
+      }
+    }
+
+    if (tDQT === null) {
+      tDQT = pParser.swf.jpegTableDQT;
+    }
+
+    if (tDHT === null) {
+      tDHT = pParser.swf.jpegTableDHT;
+    }
+
+    var tSOF = tSOF0 !== null ? tSOF0 : tSOF2;
+    
+    pParser.swf.assetManifest.addBuffer(pId + '', Buffer.fromParts([
+      [0xFF, 0xD8],
+      tAPP0,
+      tSOF,
+      tDQT,
+      tDHT,
+      tDRI,
+      tSOS
+    ]), 'image/jpeg');
+  }
+
+  function defineJpegTable(pLength) {
+    var tReader = this.r;
+    var tDQT = null;
+    var tDHT = null;
+    var tLastByte = tReader.tell() + pLength;
+    var tTag;
+    var tLength;
+    var tNewDQT;
+    var tNewDHT;
+
+    while (tReader.tell() < tLastByte) {
+      if (tReader.getUint8() !== 0xFF) {
+        quickswf.logger.error('Could not read JPEG Table');
+
+        return;
+      }
+
+      tTag = tReader.getUint8();
+
+      if (tTag === 0xD8 || tTag === 0xD9) {
+        continue;
+      }
+
+      tLength = tReader.getUBits(16);
+      tReader.align();
+
+      tReader.seek(-3);
+
+      switch (tTag) {
+        case 0xDB: // DQT
+          if (tDQT === null) {
+            tDQT = tReader.getCopy(tLength + 2);
+          } else {
+            tNewDQT = Buffer.fromParts([
+              tDQT,
+              tReader.getCopy(tLength + 2)
+            ]);
+
+            tDQT = tNewDQT;
+          }
+          break;
+        case 0xC4: // DHT
+          if (tDHT === null) {
+            tDHT = tReader.getCopy(tLength + 2);
+          } else {
+            tNewDHT = Buffer.fromParts([
+              tDHT,
+              tReader.getCopy(tLength + 2)
+            ]);
+
+            tDHT = tNewDHT;
+          }
+          break;
+        default:
+          quickswf.logger.warn('Unknown JPEG Table chunk.');
+          break;
+      }
+
+      tReader.seek(-1);
+    }
+
+    this.swf.jpegTableDQT = tDQT;
+    this.swf.jpegTableDHT = tDHT;
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function() {
+
+  /**
+   * @class
+   * @extends {benri.content.Blob}
+   */
+  var Text = (function(pSuper) {
+    var MimeType = benri.content.MimeType;
+    var Delay = benri.concurrent.Delay;
+
+    /**
+     * @constructor
+     * @param {string} pText
+     * @param {benri.content.MimeType} pType The Mimetype
+     */
+    function Text(pText, pType) {
+      pSuper.call(this, pType || new MimeType('text/plain'));
+
+      this.text = pText;
+    }
+
+    Text.fromBuffer = function(pData, pType) {
+      var tBlob = new Text('', pType);
+      var tDelay = new Delay();
+
+      tBlob.setBuffer(pData, pType.params.charset ? pType.params.charset : 'ascii');
+
+      // TODO: Support streaming this?
+      return (new Delay()).resolve(tBlob);
+    };
+
+    Text.loadFromURL = function(){}
+
+    var tProto = Text.prototype = Object.create(pSuper.prototype);
+    tProto.constructor = Text;
+
+    tProto.setBuffer = function(pBuffer, pEncoding) {
+      var tDecoder = new benri.text.Decoder(pEncoding);
+
+      this.text = tDecoder.decode(pBuffer);
+    };
+
+    tProto.getBuffer = function(pEncoding) {
+      return benri.io.Buffer.fromString(this.text, pEncoding);
+    };
+
+    return Text;
+  })(benri.content.Blob);
+
+  benri.text.Text = Text;
+
+  benri.content.Blob.register(['text/plain', 'text/*'], function(pEvent) {
+    pEvent.add(Text, 10);
+  });
+
+}());
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  var benri = global.benri;
+  var MimeType = benri.content.MimeType;
+
+  /**
+   * @class
+   * @extends {benri.content.Blob}
+   */
+  var MediaData = (function(pSuper) {
+    /**
+     * @constructor
+     */
+    function MediaData(pType, pData, pMetadata) {
+      pSuper.call(this, new MimeType(pType));
+      this.data = pData;
+      this.metadata = pMetadata;
+    }
+
+    MediaData.prototype = Object.create(pSuper.prototype);
+    MediaData.prototype.constructor = MediaData;
+
+    /**
+     * Returns metadata.
+     * @return {object} An object holding metadata.
+     */
+    MediaData.prototype.getMetaData = function () {
+      return this.metadata;
+    };
+
+    return MediaData;
+
+  })(benri.content.Blob);
+
+  benri.media.MediaData = MediaData;
+
+}(this));
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  var benri = global.benri;
+
+  /**
+   * @class
+   * @extends {benri.media.MediaData}
+   */
+  var AudioData = (function(pSuper) {
+
+
+    /**
+     * A class representing audio data ready for playback.
+     * @constructor
+     */
+    function AudioData(pType, pData, pMetadata) {
+      pSuper.call(this, pType, pData, pMetadata);
+    }
+
+    AudioData.prototype = Object.create(pSuper.prototype);
+    AudioData.prototype.constructor = AudioData;
+
+    return AudioData;
+
+  }(benri.media.MediaData));
+
+  benri.media.audio.AudioData = AudioData;
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var EventEmitter = benri.event.EventEmitter;
+  var GlobalXMLHttpRequest = global.XMLHttpRequest;
+  var Blob = benri.content.Blob;
+  var MimeType = benri.content.MimeType;
+  var Buffer = benri.io.Buffer;
+  var Response = benri.net.Response;
+  var Delay = benri.concurrent.Delay;
+
+  benri.impl.add('net.Request', function(pEvent) {
+    if (GlobalXMLHttpRequest) {
+      pEvent.add(XMLHttpRequestImpl, 11);
+    }
+  });
+
+  var mPool = [];
+
+  function fromPool() {
+    return mPool.pop() || new GlobalXMLHttpRequest();
+  }
+
+  function toPool(pXHR) {
+    mPool.push(pXHR);
+  }
+
+  function getBlobDelay(pXHR) {
+    var tResponse;
+    var tType = new MimeType(pXHR.getResponseHeader('Content-Type') || 'application/octet-binary');
+
+    if (pXHR._benri_overriden) {
+      // This is for old browsers.
+      return Blob.fromBuffer(Buffer.fromString(pXHR.responseText), tType);
+    }
+
+    tResponse = pXHR.response;
+
+    if (typeof tResponse === 'string') {
+      return Blob.fromBuffer(Buffer.fromString(tResponse), tType);
+    } else if (tResponse === null) {
+      return (new Delay()).reject('Empty Response');
+    } else {
+      return Blob.fromBuffer(Buffer.fromArray(new Uint8Array(tResponse)), tType);
+    }
+  }
+
+  function XMLHttpRequestImpl(pRequest) {
+    this.request = pRequest;
+    this.xhr = null;
+
+    EventEmitter(this);
+  }
+
+  XMLHttpRequestImpl.prototype.send = function(pData) {
+    var tRequest = this.request;
+    var tXHR = this.xhr = fromPool();
+
+    var tHeaders = tRequest.getAllHeaders();
+    var tTimeout = tRequest.timeout;
+
+    var tSelf = this;
+
+    function onProgress(pEvent) {
+      tSelf.emit('progress', {
+        current: pEvent.loaded,
+        total: pEvent.lengthComputable ? pEvent.total : -1
+      });
+    }
+
+    function onLoad(pEvent) {
+      var tStatus = this.status;
+      var tResponse, tBuffer;
+
+      if (tStatus >= 200 && tStatus < 400) {
+        if (tSelf.request.isRaw) {
+          tResponse = tXHR.response;
+
+          if (tResponse === null) {
+            tSelf.emit('error', {
+              type: 'error',
+              status: tXHR.status,
+              message: 'Empty response'
+            });
+
+            return;
+          }
+
+          if (typeof tResponse === 'string') {
+            tBuffer = Buffer.fromString(tResponse);
+          } else {
+            tBuffer = Buffer.fromArray(new Uint8Array(tResponse));
+          }
+
+          tSelf.emit('load', {
+            response: new Response(
+              tStatus,
+              this.statusText,
+              tXHR.getAllResponseHeaders(),
+              tBuffer
+            )
+          });
+        } else {
+        getBlobDelay(tXHR).then(
+            function(pBlob) {
+              tSelf.emit('load', {
+                response: new Response(
+                  tStatus,
+                  this.statusText,
+                  tXHR.getAllResponseHeaders(),
+                  pBlob
+                )
+              });
+            },
+            function(pReason) {
+              tSelf.emit('error', {
+                type: 'error',
+                status: tXHR.status,
+                message: pReason
+              });
+            }
+          );
+        }
+      } else {
+        tSelf.emit('error', {
+          type: 'http',
+          status: tStatus,
+          message: this.statusText
+        });
+      }
+    }
+
+    function onError(pEvent) {
+      tSelf.emit('error', {
+        type: 'error',
+        status: tXHR.status,
+        message: tXHR.statusText || 'Unknown'
+      });
+    }
+
+    function onAbort(pEvent) {
+      tSelf.emit('error', {
+        type: 'abort',
+        status: 0,
+        message: 'Aborted'
+      });
+    }
+
+    function onTimeout(pEvent) {
+      tSelf.emit('error', {
+        type: 'timeout',
+        status: 0,
+        message: 'Timeout'
+      });
+    }
+
+    function onLoadEnd() {
+      tXHR.removeEventListener('progress', onProgress, false);
+      tXHR.removeEventListener('error', onError, false);
+      tXHR.removeEventListener('load', onLoad, false);
+      tXHR.removeEventListener('abort', onAbort, false);
+      tXHR.removeEventListener('timeout', onTimeout, false);
+      tXHR.removeEventListener('loadend', onLoadEnd, false);
+
+      tSelf.xhr = null;
+      tXHR._benri_overriden = false;
+
+      toPool(tXHR);
+
+      tXHR = null;
+    }
+
+    tXHR.addEventListener('progress', onProgress, false);
+    tXHR.addEventListener('error', onError, false);
+    tXHR.addEventListener('load', onLoad, false);
+    tXHR.addEventListener('abort', onAbort, false);
+    tXHR.addEventListener('timeout', onTimeout, false);
+    tXHR.addEventListener('loadend', onLoadEnd, false);
+
+    tXHR.timeout = tTimeout;
+
+    tXHR.open(tRequest.method, tRequest.url.toString(), true);
+
+    for (var k in tHeaders) {
+      tXHR.setRequestHeader(k, tHeaders[k]);
+    }
+
+    if (tRequest.isRaw) {
+      if ('responseType' in tXHR) {
+        tXHR.responseType = 'arraybuffer';
+      } else {
+        tXHR.overrideMimeType('text/plain;charset=x-user-defined');
+        tXHR._benri_overriden = true;
+      }
+    }
+
+    tXHR.send(pData);
+  };
+
+  XMLHttpRequestImpl.prototype.abort = function() {
+    if (this.xhr !== null) {
+      this.xhr.abort();
+    }
+  };
+
+}(this));
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  if (!('HTMLAudioElement' in global)) {
+    return;
+  }
+
+  var benri = global.benri;
+  var Delay = benri.concurrent.Delay;
+  var Blob = benri.impl.web.Blob;
+  var createObjectURL = benri.impl.web.createObjectURL;
+  var revokeObjectURL = benri.impl.web.revokeObjectURL;
+
+  /**
+   * @class
+   * @extends {benri.media.audio.AudioData}
+   */
+  var HTMLAudio = (function(pSuper) {
+
+    /**
+     * A class representing audio data ready for playback.
+     * @constructor
+     */
+    function HTMLAudio(pData) {
+      pSuper.call(this, 'audio/*', pData);
+    }
+
+    HTMLAudio.prototype = Object.create(pSuper.prototype);
+    HTMLAudio.prototype.constructor = HTMLAudio;
+
+    return HTMLAudio;
+
+  }(benri.media.audio.AudioData));
+
+  HTMLAudio.fromBuffer = function(pData, pType) {
+    var tDelay = new Delay();
+    var tType = pType.toString();
+    var tBlob = new Blob([pData.data], {type: tType});
+    var tURL = createObjectURL(tBlob);
+
+    var tAudio = new global.Audio();
+    tAudio.src = tURL;
+
+    tAudio.addEventListener('loadeddata', function() {
+      revokeObjectURL(tURL);
+      tDelay.resolve(new HTMLAudio(tAudio));
+    }, false);
+
+    tAudio.addEventListener('error', function(e) {
+      revokeObjectURL(tURL);
+      tDelay.reject(e);
+    }, false);
+
+    return tDelay;
+  };
+
+  benri.content.Blob.register('audio/*', function(pEvent) {
+    pEvent.add(HTMLAudio, 11);
+  });
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function() {
+
+  /**
+   * @class
+   * @extends {benri.content.Blob}
+   */
+  var Image = (function(pSuper) {
+    var MimeType = benri.content.MimeType;
+    var Blob = benri.content.Blob;
+    var Delay = benri.concurrent.Delay;
+
+    var mWildImageMimeType = new MimeType('image/*');
+
+    /**
+     * @constructor
+     * @param {benri.content.MimeType} pType The Mimetype
+     */
+    function Image(pWidth, pHeight) {
+      pSuper.call(this, new MimeType('image/*'));
+
+      this._width = pWidth;
+      this._height = pHeight;
+    }
+
+    Image.create = function(pWidth, pHeight) {
+      return (new Blob.getClass(mWildImageMimeType))(pWidth, pHeight);
+    };
+
+    Image.fromBuffer = function(pData, pType) {
+      return (new Delay()).reject('Not implemented');
+    };
+
+    var tProto = Image.prototype = Object.create(pSuper.prototype);
+    tProto.constructor = Image;
+
+    tProto.setBuffer = function(pBuffer) {
+      
+    };
+
+    tProto.getBuffer = function() {
+      
+    };
+
+    tProto.getBytes = function(pX, pY, pWidth, pHeight, pStride) {
+
+    };
+
+    tProto.setBytes = function(pBytes, pX, pY, pWidth, pHeight, pStride) {
+
+    };
+
+    tProto.getWidth = function() {
+      return this._width;
+    };
+
+    tProto.getHeight = function() {
+      return this._height;
+    };
+
+    return Image;
+  })(benri.content.Blob);
+
+  benri.graphics.Image = Image;
+
+  benri.content.Blob.register('image/*', function(pEvent) {
+    pEvent.add(Image, 5);
+  });
+
+}());
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  if (!('HTMLCanvasElement' in global)) {
+    return;
+  }
+
+  var mem = benri.mem;
+  var Delay = benri.concurrent.Delay;
+
+  var mInstancePoolEnabled = true;
+  var mLRUPoolEnabled = true;
+  var ANTIALIAS = 'benri.graphics.surface.antialias';
+
+  var mAntialias = benri.env.getVar(ANTIALIAS) || false;
+
+  benri.env.on('setvar', function(pEvent) {
+    if (pEvent.varName === ANTIALIAS) {
+      mAntialias = pEvent.varValue;
+    }
+  });
+
+  var TYPE_IMAGE = 0x1;
+  var TYPE_CANVAS = 0x2;
+  var TYPE_VIDEO = 0x3;
+
+  var mHaveUint8ClampedArray = 'Uint8ClampedArray' in global;
+
+  /**
+   * @class
+   * @extends {benri.graphics.Image}
+   */
+  var DOMImage = (function(pSuper) {
+
+    /**
+     * @constructor
+     */
+    function DOMImage(pWidth, pHeight, pImage) {
+      if (!pWidth) {
+        pWidth = 1;
+      }
+
+      if (!pHeight) {
+        pHeight = 1;
+      }
+
+      if (!pImage) {
+        pImage = _createHTMLCanvas(pWidth, pHeight);
+      }
+
+      if (pImage instanceof global.HTMLImageElement) {
+        this._domType = TYPE_IMAGE;
+      } else if (pImage instanceof global.HTMLCanvasElement) {
+        this._domType = TYPE_CANVAS;
+      } else if (pImage instanceof global.HTMLVideoElement) {
+        this._domType = TYPE_VIDEO;
+      } else {
+        throw new Error('Invalid DOMImage');
+      }
+
+      pSuper.call(this, pWidth, pHeight);
+
+      this.domImage = pImage;
+
+      this.on('destroy', function () {
+        this.recycle && this.recycle();
+      });
+
+      this._preAllocatedImage = null;
+      this._preAllocatedType = -1;
+    }
+
+    DOMImage.fromImage = function(pImage) {
+      var tWidth = pImage.getWidth();
+      var tHeight = pImage.getHeight();
+      var tImage = new DOMImage(tWidth, tHeight, void 0);
+
+      tImage.setBytes(
+        pImage.getBytes(0, 0, tWidth, tHeight, tWidth),
+        0, 0, tWidth, tHeight, tWidth
+      );
+
+      return tImage;
+    };
+
+    var tProto = DOMImage.prototype = Object.create(pSuper.prototype);
+    tProto.constructor = DOMImage;
+
+    tProto.getType = function() {
+      return this._domType;
+    };
+
+    tProto.getBytes = function(pX, pY, pWidth, pHeight, pStride) {
+      var tDOMImage = this.domImage;
+      var tImageData;
+      var tBytes;
+
+      if (!pX) {
+        pX = 0;
+      }
+
+      if (!pY) {
+        pY = 0;
+      }
+
+      if (!pWidth) {
+        pWidth = this.getWidth();
+      }
+
+      if (!pHeight) {
+        pHeight = this.getHeight();
+      }
+
+      if (this._domType === TYPE_CANVAS) {
+        tImageData = tDOMImage.getContext('2d').getImageData(pX, pY, pWidth, pHeight);
+        tBytes = tImageData.data;
+        tBytes._domImageData = tImageData;
+
+        return tBytes;
+      } else {
+        var tCanvas = _createHTMLCanvas(pWidth, pHeight);
+        _resetHTMLCanvas(tCanvas);
+        var tContext = tCanvas.getContext('2d');
+        tContext.drawImage(tDOMImage, 0, 0, pWidth, pHeight, 0, 0, pWidth, pHeight);
+        tImageData = tContext.getImageData(pX, pY, pWidth, pHeight);
+
+        tBytes = tImageData.data;
+        tBytes._domImageData = tImageData;
+
+        return tBytes;
+      }
+    };
+
+    tProto.setBytes = function(pBytes, pX, pY, pWidth, pHeight, pStride) {
+      var tContext;
+      var tImageData = pBytes._domImageData;
+      var tDOMImage = this.domImage;
+      var tThisWidth = tDOMImage.width;
+      var tThisHeight = tDOMImage.height;
+      var tCanvas;
+
+      if (this._domType !== TYPE_CANVAS) {
+        tCanvas = _createHTMLCanvas(tThisWidth, tThisHeight);
+        _resetHTMLCanvas(tCanvas);
+
+        tContext = tCanvas.getContext('2d');
+        
+        if (pX !== 0 || pY !== 0 || tThisWidth !== tDOMImage.width || tThisHeight !== tDOMImage.height) {
+          tContext.drawImage(tDOMImage, 0, 0, tThisWidth, tThisHeight, 0, 0, tThisWidth, tThisHeight);
+        }
+
+        this.domImage = tCanvas;
+        this._domType = TYPE_CANVAS;
+      } else {
+        tCanvas = tDOMImage;
+        tContext = tCanvas.getContext('2d');
+      }
+
+      if (tImageData && tImageData.width === pWidth && tImageData.height === pHeight) {
+        tContext.putImageData(tImageData, pX, pY);
+      } else {
+        tImageData = tContext.getImageData(pX, pY, pWidth, pHeight);
+        var tRawData = tImageData.data;
+
+        if (mHaveUint8ClampedArray === true && tRawData instanceof Uint8ClampedArray) {
+          tRawData.set(pBytes);
+        } else {
+          for (var i = 0, il = pBytes.length; i < il; i++) {
+            tRawData[i] = pBytes[i];
+          }
+        }
+
+        tContext.putImageData(tImageData, pX, pY);
+      }
+    };
+
+    tProto.setBuffer = function(pBuffer, pType) {
+      
+    };
+
+    tProto.getBuffer = function() {
+      return null;
+    };
+
+    return DOMImage;
+  })(benri.graphics.Image);
+
+  benri.impl.web.graphics.DOMImage = DOMImage;
+
+  var Blob = benri.impl.web.Blob;
+  var createObjectURL = benri.impl.web.createObjectURL;
+  var revokeObjectURL = benri.impl.web.revokeObjectURL;
+
+  DOMImage.fromBuffer = function(pBuffer, pType) {
+    var tDelay = new Delay();
+    
+    var tBlob = new Blob([pBuffer.data], {type: pType.toString()});
+    var tURL = createObjectURL(tBlob);
+
+    var tImage = new global.Image();
+    tImage.src = tURL;
+
+    tImage.onload = function() {
+      revokeObjectURL(tURL);
+      tDelay.resolve(new DOMImage(this.width, this.height, this));
+    };
+
+    tImage.onerror = function(e) {
+      revokeObjectURL(tURL);
+      tDelay.reject(e);
+    }
+
+    return tDelay;
+  };
+
+  benri.content.Blob.register('image/*', function(pEvent) {
+    pEvent.add(DOMImage, 11);
+  });
+
+
+  function _createHTMLCanvas(pWidth, pHeight) {
+    var tCanvas = document.createElement('canvas');
+    tCanvas.width = Math.ceil(pWidth);
+    tCanvas.height = Math.ceil(pHeight);
+    tCanvas.style.webkitTransform = 'translateZ(0)';
+
+    var tContext = tCanvas.getContext('2d');
+
+    if (tContext.webkitImageSmoothingEnabled !== mAntialias) {
+      tContext.webkitImageSmoothingEnabled = mAntialias;
+    }
+
+    return tCanvas;
+  };
+
+  function _resetHTMLCanvas(pCanvas) {
+    var tContext = pCanvas.getContext('2d');
+    tContext.setTransform(1, 0, 0, 1, 0, 0);
+    tContext.globalCompositeOperation = 'source-over';
+    tContext.globalAlpha = 1;
+    tContext.clearRect(0, 0, pCanvas.width + 1, pCanvas.height + 1);
+    return pCanvas;
+  };
+
+  if (mInstancePoolEnabled) {
+
+    var KEY_BASE = 1.38;
+    var LOG_KEY_BASE = Math.log(KEY_BASE);
+    var mTotalAllocNum = 0;
+    var mPoolTimeLimit = 100000;
+    var mInitialAllocNum = 1;
+
+    // TODO: Need to find out the universally applicable numbers.
+    var mAllocNums = [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ];
+
+    var mAllocSizes = new Array(mAllocNums.length);
+    for (var i = 0, il = mAllocSizes.length; i < il; i++) {
+      mAllocSizes[i] = Math.ceil(Math.pow(KEY_BASE, i));
+    }
+
+    var mRefill = function (pPool, pPoolIndex) {
+      var tPool = pPool.data;
+      if (!tPool) {
+        tPool = pPool.data = [];
+      }
+      var tWaterLevel = pPool.waterLevel;
+      if (!tWaterLevel) {
+        tWaterLevel = pPool.waterLevel = [];
+      }
+      var tCrudeSum = 0;
+      var tAlloc = function (pIndex, pAllocNum) {
+        var tSize = mAllocSizes[pIndex];
+        var tPoolLane = tPool[pIndex], tInstance, tInstanceData;
+
+        if (tPoolLane === void 0) {
+          tPoolLane = tPool[pIndex] = [];
+        }
+//if (pAllocNum - tPoolLane.length > 0) {
+//console.log('Alloc: index [' + pIndex + '] num=' + (pAllocNum - tPoolLane.length));
+//}
+        for (var i = tPoolLane.length; i < pAllocNum; i++) {
+          tInstance = new DOMImage(tSize, tSize, void 0);
+          tInstanceData = tInstance.__instanceData = {};
+          tInstanceData.lastRecycled = new Date();
+          tPoolLane.push(tInstance);
+          mTotalAllocNum++;
+          tCrudeSum += tSize;
+        }
+        // Set up a water level, an array to keep track of how many instances are used at a given time.
+        // waterLevel[i][0] : holds the number of the instances currently allocated from the i-th pool.
+        // waterLevel[i][1] : holds the peak number of the instances allocated from the i-th pool.
+        if (!tWaterLevel[pIndex]) {
+          tWaterLevel[pIndex] = [0, 0];
+        }
+      };
+
+
+      for (var i = 0, il = mAllocNums.length; i < il; i++) {
+        var tValue = mAllocNums[i];
+        if (tValue) {
+          tAlloc(i, tValue);
+        }
+      }
+
+      if (pPoolIndex !== void 0) {
+        var tLane = tPool[pPoolIndex];
+        if (!tLane || tLane.length === 0) {
+          if (mAllocSizes[pPoolIndex] === void 0) {
+            mAllocSizes[pPoolIndex] = Math.ceil(Math.pow(KEY_BASE, pPoolIndex));
+          }
+          tAlloc(pPoolIndex, mInitialAllocNum);
+          //if (mAllocNums[tPoolIndex] === void 0) {
+          //  mAllocNums[tPoolIndex] = mInitialAllocNum;
+          //}
+        }
+      }
+//if (mPool._statisticsReportCallback) {
+//  console.log('Refilled!!!');
+//  mPool._statisticsReportCallback(pPool);
+//}
+      return tCrudeSum;
+    };
+
+    var mObtain = function (pPool, pArgs) {
+      var tPool = pPool.data;
+      var tWaterLevel = pPool.waterLevel;
+      var tWidth = pArgs[0];
+      var tHeight = pArgs[1];
+      var tImage = pArgs[2];
+
+      // Never refilled.
+      if (!tPool) {
+        return null;
+      }
+
+      // Determine the pool index.
+      var tPoolIndex = Math.ceil(
+        Math.log(Math.max(tWidth, tHeight)) / LOG_KEY_BASE
+      );
+
+      // Make a room for the pool index.
+      var tPoolLane = tPool[tPoolIndex];
+      if (!tPoolLane) {
+        tPoolLane = tPool[tPoolIndex] = [];
+      }
+
+      // Allocate the instance from the pool.
+      tInstance = tPoolLane.pop();
+
+      // Pool gets empty.
+      if (!tInstance) {
+        mRefill(pPool, tPoolIndex);
+        tInstance = tPoolLane.pop();
+      }
+
+      if (!tInstance) {
+        return null;
+      }
+
+      // Initialize the instance
+      if (!tWidth) {
+        tWidth = 1;
+      }
+      if (!tHeight) {
+        tHeight = 1;
+      }
+      tInstance._width = tWidth;
+      tInstance._height = tHeight;
+
+      // Update the preallocated image if exists.
+      if (tImage) {
+        tInstance._preAllocatedImage = tInstance.domImage;
+        tInstance._preAllocatedImageType = tInstance._domType;
+        tInstance.domImage = tImage;
+        if (tImage instanceof global.HTMLImageElement) {
+          tInstance._domType = TYPE_IMAGE;
+        } else if (tImage instanceof global.HTMLCanvasElement) {
+          tInstance._domType = TYPE_CANVAS;
+        } else if (tImage instanceof global.HTMLVideoElement) {
+          tInstance._domType = TYPE_VIDEO;
+        } else {
+          throw new Error('Invalid DOMImage');
+        }
+      } else {
+        if (tInstance._domType === TYPE_CANVAS) {
+          _resetHTMLCanvas(tInstance.domImage);
+        }
+      }
+
+      // Update the water level.
+      var tItem = tWaterLevel[tPoolIndex];
+      if (!tItem) {
+        tItem = tWaterLevel[tPoolIndex] = [0, 0];
+      }
+      tItem[0]++; // Current number of the used instances.
+      tItem[1] = Math.max(tItem[1], tItem[0]); // Records the peak number.
+
+      // Attach the instance specific info.
+      var tInstanceData = tInstance.__instanceData;
+      tInstanceData.poolIndex = tPoolIndex;
+      tInstanceData.lastObtained = new Date();
+
+      return tInstance;
+    };
+
+    var mRecycle = function (pPool, pInstance) {
+      var tPool = pPool.data;
+
+      // Never refilled.
+      if (!tPool) {
+        return;
+      }
+
+      var tWaterLevel = pPool.waterLevel;
+      var tInstanceData = pInstance.__instanceData;
+
+      // Restore some properties.
+      mem.Keeper(pInstance);
+      pInstance.onFor('destroy', function () {
+        pInstance.recycle && pInstance.recycle();
+      }, 1);
+
+      // Update the preallocated image if exists.
+      if (pInstance._preAllocatedImage) {
+        pInstance.domImage = pInstace._preAllocatedImage;
+        pInstance._domImageType = pInstace._preAllocatedImageType;
+        delete pInstace._preAllocatedImage;
+        delete pInstace._preAllocatedImageType;
+      }
+
+      if (!tInstanceData) {
+        // Instances allocated outside the pool.
+        return;
+      }
+
+      // Update the water level.
+      if (tWaterLevel) {
+        tWaterLevel[tInstanceData.poolIndex][0]--;
+      }
+
+      // Put the instance back to the pool.
+      tPool[tInstanceData.poolIndex].push(pInstance);
+
+      // Attach the instance specific data.
+      tInstanceData.lastRecycled = new Date();
+    };
+
+    var mCleanup = function (pPool) {
+      var tPool = pPool.data;
+
+      // Never refilled.
+      if (!tPool) {
+        return 0;
+      }
+      var tThreshold = Date.now() - mPoolTimeLimit;
+      var tCrudeSum = 0;
+
+      for (var i = 0, il = tPool.length; i < il; i++) {
+        var tPoolLane = tPool[i];
+        if (!tPoolLane) {
+          mAllocNums[i] = 0;
+          continue;
+        }
+        for (var j = tPoolLane.length; j--;) {
+          var tInstance = tPoolLane[j];
+          var tInstanceData = tInstance.__instanceData;
+          if (!tInstanceData ||
+            tInstanceData.lastRecycled.getTime() < tThreshold) {
+            tPoolLane.splice(j, 1);
+            mTotalAllocNum--;
+            tCrudeSum += tInstance._width;
+          }
+        }
+        //mAllocNums[i] = tPoolLane.length;
+      }
+//if (mPool._statisticsReportCallback) {
+//  console.log('CleanUp!!!');
+//  mPool._statisticsReportCallback(pPool);
+//}
+      return tCrudeSum;
+    };
+
+    var mReport = function (pPool) {
+      var tPool = pPool.data;
+
+      // Never refilled.
+      if (!tPool) {
+        return;
+      }
+
+      var tWaterLevel = pPool.waterLevel;
+      var i, il, n;
+
+      // Copy the information about the unused instances.
+      var tUnusedInstanceNum = 0;
+      for (i = 0, il = tPool.length; i < il; i++) {
+        if (tPool[i]) {
+          tUnusedInstanceNum += tPool[i].length;
+        }
+      }
+
+      // Copy the information about the currently used instances.
+      var tPeakWaterLevel = 0, tPeakWaterLevelPerId = new Array(il);
+      for (i = 0; i < il; i++) {
+        if (tWaterLevel[i]) {
+          n = tPeakWaterLevelPerId[i] = tWaterLevel[i][1];
+          tPeakWaterLevel += n;
+        }
+      }
+
+      console.log(
+        JSON.stringify({
+          'type' : 'DOMImage',
+          'total number of objects in this pool' : mTotalAllocNum,
+          'currentlly used' : (mTotalAllocNum - tUnusedInstanceNum),
+          'currentlly unused' : tUnusedInstanceNum,
+          'peak' : tPeakWaterLevel,
+          'peak (per id)' : tPeakWaterLevelPerId
+        }, null, 2)
+      );
+    };
+
+    var mPool = new mem.InstancePool({
+      refill : mRefill,
+      obtain : mObtain,
+      recycle : mRecycle,
+      name : 'DOMImage',
+      supervisor : mem.getDefaultNativeSupervisor(),
+      tag : 'image',
+      cleanUpCallback : mCleanup,
+      statisticsReportCallback : mReport,
+      autoCleanUp : true,
+      lazyAlloc : true
+    });
+
+
+    // Wraps the pool's methods around DOMImage type.
+    DOMImage.obtain = function (pWidth, pHeight, pImage) {
+      return mPool.obtain([pWidth, pHeight, pImage]);
+    };
+
+    DOMImage.prototype.recycle = function () {
+      mPool.recycle(this);
+    };
+
+  } else {
+
+    DOMImage.obtain = function (pWidth, pHeight, pImage) {
+      return new DOMImage(pWidth, pHeight, pImage);
+    };
+
+    DOMImage.recycle = function () {
+      ;
+    };
+  }
+
+  if (mLRUPoolEnabled) {
+    var MAX_SIZE = 10;
+
+    var mIndexGenerator = function (pArgs) {
+      var tWidth = pArgs[0];
+      var tHeight = pArgs[1];
+
+      return tWidth + ',' + tHeight;
+    };
+
+    var mCreate = function (pArgs) {
+      var tWidth = pArgs[0];
+      var tHeight = pArgs[1];
+
+      return new DOMImage(tWidth, tHeight, void 0);
+    };
+
+    var mReset = function (pInstance) {
+      _resetHTMLCanvas(pInstance.domImage);
+    };
+
+    var mDestroy = function (pInstance) {
+      pInstance.destroy();
+    };
+
+    var mLRUPool = new mem.LRUPool({
+      maxLength : MAX_SIZE,
+      indexGenerator : mIndexGenerator,
+      create : mCreate,
+      reset : mReset,
+      destroy : mDestroy
+    });
+    
+
+    DOMImage.obtainFromLRUPool = function (pWidth, pHeight) {
+      return mLRUPool.obtain([pWidth, pHeight]);
+    };
+
+
+  } else {
+    DOMImage.obtainFromLRUPool = function (pWidth, pHeight) {
+      return new DOMImage(pWidth, pHeight, void 0);
+    };
+  }
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var benri = global.benri;
+
+  /**
+   * @class
+   * @extends {benri.graphics.Image}
+   */
+  var Texture = (function(pSuper) {
+    /**
+     * @constructor
+     * @param {[type]} pSurface
+     */
+    function Texture(pSurface, pWidth, pHeight, pImage) {
+      pSuper.call(this, pWidth, pHeight);
+
+      this.id = -1;
+
+      this.surface = pSurface;
+
+      pSurface.registerTexture(this);
+      this.setImage(pImage);
+
+      this.on('destroy', onDestroy);
+    }
+
+    Texture.prototype = Object.create(pSuper.prototype);
+    Texture.prototype.constructor = Texture;
+
+    Texture.prototype.getBytes = function(pX, pY, pWidth, pHeight, pStride) {
+      return this.surface.getTextureBytes(this, pX, pY, pWidth, pHeight, pStride);
+    };
+
+    Texture.prototype.setBytes = function(pBytes, pX, pY, pWidth, pHeight, pStride) {
+      this.surface.setTextureBytes(this, pBytes, pX, pY, pWidth, pHeight, pStride);
+    };
+
+    /**
+     * Sets the backing Image of this texture.
+     * As a rule, once you set an Image to a Texture,
+     * the passed Image's getBytes and setBytes results
+     * will become undefined and should never be used.
+     * This is to allow cross platform methods of handling
+     * what exactly a texture is and how it deals with
+     * the backing Image.
+     * @param {benri.graphics.draw.AbstractImage} pImage
+     */
+    Texture.prototype.setImage = function(pImage) {
+      this.surface.setTextureImage(this, pImage);
+    };
+  
+    function onDestroy(pData, pTarget) {
+      pTarget.surface.destroyTexture(pTarget);
+    }
+
+    return Texture;
+  })(benri.graphics.Image);
+
+  benri.graphics.render.Texture = Texture;
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  if (!global.HTMLCanvasElement) {
+    return;
+  }
+
+  /**
+   * @class
+   * @extends {benri.graphics.Surface}
+   */
+  var Canvas2DSurface = (function(pSuper) {
+    var DOMImage = benri.impl.web.graphics.DOMImage;
+    var Matrix2D = benri.geometry.Matrix2D;
+    var Records = benri.graphics.Records;
+    var Shader = benri.graphics.shader.Shader;
+    var Texture = benri.graphics.render.Texture;
+    var flag = benri.graphics.Surface.flag;
+
+    var mFragmentShaders = benri.impl.web.graphics.shader.fragment;
+
+    /**
+     * @constructor
+     */
+    function Canvas2DSurface(pWidth, pHeight, pHints) {
+      pSuper.call(this, pWidth, pHeight, pHints);
+
+      var tFlags = this._flags = [];
+
+      tFlags[flag.ANTIALIAS] = false;
+      this._fragments = tFlags[flag.FRAGMENTS] = true;
+      this._stencilTest = tFlags[flag.STENCIL_TEST] = false;
+
+      this.textures = [];
+
+      var tTarget = this.canvasTarget = createCanvasTarget(this, pWidth, pHeight, this.hints.recycle, null);
+      this.canvas = tTarget.canvas;
+      this.context = tTarget.context;
+
+      /**
+       * An array of currently existing targets.
+       * @private
+       * @type {Target}
+       */
+      this._targets = [tTarget];
+
+      this._targetStatus = [{
+        identityTransform: true
+      }];
+
+      this._targetStatusStack = [[]];
+      
+      this._activeTarget = 0;
+
+      this._compositeCanvasStack = [];
+
+      this.colors = null;
+    }
+  
+    var tProto = Canvas2DSurface.prototype = Object.create(pSuper.prototype);
+    tProto.constructor = Canvas2DSurface;
+
+    tProto.updateUniforms = function(pProgram) {
+      var tMatrix = pProgram.matrix;
+
+      this.setTransform(
+        tMatrix.a,
+        tMatrix.b,
+        tMatrix.c,
+        tMatrix.d,
+        tMatrix.e,
+        tMatrix.f
+      );
+    };
+
+    tProto.saveContext = function () {
+      var tId = this._activeTarget;
+      var tCurrentStatus = this._targetStatus[tId];
+
+      this._targetStatusStack[tId].push({
+        identityTransform: tCurrentStatus.identityTransform
+      });
+
+      this.context.save();
+    };
+
+    tProto.restoreContext = function () {
+      var tId = this._activeTarget;
+
+      this._targetStatus[tId] = this._targetStatusStack[tId].pop();
+      
+      this.context.restore();
+    };
+
+    tProto.setIdentityTransform = function () {
+      var tId = this._activeTarget;
+      var tStatus = this._targetStatus[tId];
+
+      if (tStatus.identityTransform) {
+        return;
+      }
+
+      this.context.setTransform(1, 0, 0, 1, 0, 0);
+      tStatus.identityTransform = true;
+    };
+
+    tProto.setTransform = function (pA, pB, pC, pD, pE, pF) {
+      this.context.setTransform(pA, pB, pC, pD, pE, pF);
+
+      this._targetStatus[this._activeTarget].identityTransform = false;
+    };
+
+    tProto.transform = function (pA, pB, pC, pD, pE, pF) {
+      this.context.transform(pA, pB, pC, pD, pE, pF);
+
+      this._targetStatus[this._activeTarget].identityTransform = false;
+    };
+
+    tProto.getImageDOMElement = function(pImage) {
+      var tConstructor = pImage.constructor;
+
+      if (tConstructor === Texture) {
+        return this.textures[pImage.id].image.domImage;
+      } else if (tConstructor === DOMImage) {
+        return pImage.domImage;
+      } else {
+        return DOMImage.fromImage(pImage).domImage;
+      }
+    };
+
+    tProto.enable = function(pFlag) {
+      this._flags[pFlag] = true;
+
+      if (pFlag === flag.STENCIL_TEST) {
+        this._stencilTest = true;
+      } else if (pFlag === flag.FRAGMENTS) {
+        this._fragments = true;
+      } else if (pFlag === flag.STENCIL_SAVE) {
+        this.saveContext();
+      }
+    };
+
+    tProto.disable = function(pFlag) {
+      this._flags[pFlag] = false;
+
+      if (pFlag === flag.STENCIL_TEST) {
+        this._stencilTest = false;
+      } else if (pFlag === flag.FRAGMENTS) {
+        this._fragments = false;
+      } else if (pFlag === flag.STENCIL_SAVE) {
+        this.restoreContext();
+      }
+    };
+
+    tProto.isEnabled = function(pFlag) {
+      return this._flags[pFlag] || false;
+    };
+ 
+    tProto.image = function(pImage, pWidth, pHeight, pSrcRect, pProgram) {
+      this.render(
+        null,
+        Records.RAW,
+        {
+          image: this.getImageDOMElement(pImage),
+          width: pWidth,
+          height: pHeight,
+          srcX: pSrcRect.origin.x,
+          srcY: pSrcRect.origin.y,
+          srcWidth: pSrcRect.getWidth(),
+          srcHeight: pSrcRect.getHeight()
+        },
+        pProgram
+      );
+    };
+
+    tProto.fastImage = function(pImage, pProgram) {
+      var tWidth = pImage.getWidth();
+      var tHeight = pImage.getHeight();
+
+      this.render(
+        null,
+        Records.RAW,
+        {
+          image: this.getImageDOMElement(pImage),
+          width: tWidth,
+          height: tHeight,
+          srcX: 0,
+          srcY: 0,
+          srcWidth: tWidth,
+          srcHeight: tHeight
+        },
+        pProgram
+      );
+    };
+
+    tProto.text = function(pText, pStyle, pProgram) {
+      this.updateUniforms(pProgram);
+
+      pProgram.fillType = Records.TEXT;
+      pProgram.fillTypeText = 'fillStyle';
+      pProgram.fillData = null;
+      pProgram.colors = [pStyle.color];
+
+      var tFont = pStyle.font;
+      var tContext = this.context;
+      var tLeading = tFont.leading * pStyle.fontHeight / 1024;
+      var tStringList, tString = pText + '';
+      var tFontString = (tFont.italic ? 'italic ' : '') + (tFont.bold ? 'bold ' : '') + pStyle.fontHeight + 'px ' + tFont.name;
+      var tYPos = 0, tWidth = pStyle.maxWidth;
+      var tXPos = pStyle.leftMargin + (pStyle.align === 'left' ? 0 : (pStyle.align === 'center' ? tWidth / 2 : tWidth));
+      var i, il;
+
+      // CnvasRenderingContext2D.fillText() forcibly converts all the spaces into ASCII spaces.
+      // However, the space characters are sometimes used for making visual space.
+      // So, here we do such the conversion more precise way so that we can preserve the original layout.
+      tContext.font = tFontString;
+
+      var tSpaceWidth = tContext.measureText('\u0020').width;
+      var tIdeographicSpaceWidth = tContext.measureText('\u3000').width;
+      var tSpaceMultRate = (tSpaceWidth && tIdeographicSpaceWidth ? tIdeographicSpaceWidth / tSpaceWidth : 4);
+
+      // This function takes an arbitrary number of the ideographic spaces (U+3000,)
+      // and returns how many ASCII spaces (U+0020) are needed for filling the same on-screen area
+      // that the ideographic spaces would have ocupied.
+      var howManySpaces = function (pString) {
+        return Math.round(pString.length * tSpaceMultRate);
+      };
+
+      tString = tString.replace(/\u3000+/g, function (pMatched) {
+        // Generating sucessive SPACE characters.
+        return Array(howManySpaces(pMatched) + 1).join('\u0020');
+      });
+
+      // Fold the text.
+      var tCharCode, tStringTarget = '';
+      tStringList = [];
+
+      for (i = 0, il = tString.length; i < il; i++) {
+        tCharCode = tString.charCodeAt(i);
+
+        // We take account of line breaks even when TextStyle.multiline is true.
+        if (tCharCode === 10 || tCharCode === 13) {
+          tStringList.push(tStringTarget);
+          tStringTarget = '';
+          continue;
+        }
+
+        tStringTarget += tString[i];
+
+        if (i === il - 1
+          || (pStyle.multiline
+              && tContext.measureText(tStringTarget + tString[i + 1]).width > tWidth)) {
+          tStringList.push(tStringTarget);
+          tStringTarget = '';
+        }
+      }
+
+      var tShaders = pProgram.getShaders(Shader.TYPE_FRAGMENT);
+      var tShader;
+      var tShaderImpl;
+      var i;
+      var tShadersLength = tShaders.length;
+
+      for (i = 0; i < tShadersLength; i++) {
+        tShader = tShaders[i];
+        mFragmentShaders[tShader.name].pre(tShader, this, pProgram);
+      }
+
+      for (i = 0; i < tShadersLength; i++) {
+        tShader = tShaders[i];
+        tShaderImpl = mFragmentShaders[tShader.name];
+
+        if (tShaderImpl.style) {
+          tShaderImpl.style(tShader, this, pProgram);
+        }
+      }
+
+      tContext.textBaseline = 'top';
+      tContext.textAlign = pStyle.align;
+
+      for (i = 0, il = tStringList.length; i < il; i++) {
+        tString = tStringList[i];
+        tContext.fillText(tString, tXPos, tYPos);
+        tYPos += (tLeading + pStyle.fontHeight);
+      }
+
+      this.setTargetFresh(false);
+
+      for (i = 0; i < tShadersLength; i++) {
+        tShader = tShaders[i];
+        mFragmentShaders[tShader.name].post(tShader, this, pProgram);
+      }
+
+      this.setIdentityTransform();
+    };
+
+    tProto.clearColor = function(pColor) {
+      var tWidth = this.width;
+      var tHeight = this.height;
+      var tContext = this.context;
+      var tAlpha = pColor.getRGBA()[3];
+
+      this.saveContext();
+      this.setIdentityTransform();
+
+      if (tAlpha !== 0xFF) {
+        // Only clear if we are clearing transparent
+        // for performance.
+        // Also, we have an amazing hack here to support
+        // Samsung Galaxy S devices as well as a couple
+        // other devices. If you do not scale this,
+        // the first pixel of the next fill will override
+        // all other drawing operations and only that one
+        // pixel will show over the canvas... yeah...
+        // The +1 is for some random devices bugging out if
+        // you clear the buffer at exact dimensions.
+        
+        tContext.scale(1, 1);
+        tContext.clearRect(0, 0, tWidth + 1, tHeight + 1);
+        this.setTargetFresh(true);
+      }
+
+      if (tAlpha !== 0) {
+        tContext.fillStyle = pColor.toCSSString();
+        tContext.fillRect(0, 0, tWidth, tHeight);
+        this.setTargetFresh(false);
+      }
+
+      this.restoreContext();
+    };
+
+    function sizzorTestLocationVerticies(pVerticies, pOffsetX, pOffsetY, pWidth, pHeight) {
+      var tVertex;
+      var tX, tY;
+
+      var tMinX = 2147483647;
+      var tMinY = 2147483647;
+      var tMaxX = -2147483648;
+      var tMaxY = -2147483648;
+
+      for (var i = 0, il = pVerticies.length; i < il; i++) {
+        tVertex = pVerticies[i];
+        tX = tVertex[0];
+        tY = tVertex[1];
+
+        // Chances are this first two if statements
+        // will return true right away so we do them
+        // first.
+        if (tX > pOffsetX && tX < pWidth && tY > pOffsetY && tY < pHeight) {
+          return true;
+        }
+
+        if (tX < tMinX) {
+          tMinX = tX;
+        }
+
+        if (tX > tMaxX) {
+          tMaxX = tX;
+        }
+
+        if (tY < tMinY) {
+          tMinY = tY;
+        }
+
+        if (tY > tMaxY) {
+          tMaxY = tY;
+        }
+      }
+
+      if (
+          tMaxX <= 0 || tMinX >= pWidth ||
+          tMaxY <= 0 || tMinY >= pHeight
+        ) {
+        return false;
+      }
+
+      return true;
+    }
+
+    function sizzorTestPolygonVerticies(pVerticies, pOffsetX, pOffsetY, pWidth, pHeight) {
+      var tX, tY;
+
+      var tMinX = 2147483647;
+      var tMinY = 2147483647;
+      var tMaxX = -2147483648;
+      var tMaxY = -2147483648;
+
+      for (var i = 0, il = pVerticies.length; i < il; i += 2) {
+        tX = pVerticies[i];
+        tY = pVerticies[i + 1];
+
+        // Chances are this first two if statements
+        // will return true right away so we do them
+        // first.
+        if (tX > pOffsetX && tX < pWidth && tY > pOffsetY && tY < pHeight) {
+          return true;
+        }
+
+        if (tX < tMinX) {
+          tMinX = tX;
+        }
+
+        if (tX > tMaxX) {
+          tMaxX = tX;
+        }
+
+        if (tY < tMinY) {
+          tMinY = tY;
+        }
+
+        if (tY > tMaxY) {
+          tMaxY = tY;
+        }
+      }
+
+      if (
+          tMaxX <= 0 || tMinX >= pWidth ||
+          tMaxY <= 0 || tMinY >= pHeight
+        ) {
+        return false;
+      }
+
+      return true;
+    }
+
+    var mRawSizzorPolygon = new benri.geometry.Polygon([
+      0, 0,
+      0, 0,
+      0, 0,
+      0, 0
+    ]);
+
+    tProto.render = function(pVerticies, pFillType, pFillData, pProgram) {
+      var tFragments = this._fragments;
+
+      if (pVerticies) {
+        this.setIdentityTransform();
+
+        var tFinalLocationData = this.specifyVerticies(
+          pVerticies,
+          pProgram
+        );
+
+        if (
+            !this._stencilTest &&
+            sizzorTestLocationVerticies(
+              tFinalLocationData,
+              0,
+              0,
+              this.canvas.width,
+              this.canvas.height
+            ) === false
+          ) {
+          // Don't render stuff we can't see.
+          return;
+        }
+
+        var tVertexBuffer = pVerticies.buffer;
+
+        // tessellate the verticies making primitives.
+        this.tessellate(
+          pVerticies.type,
+          tFinalLocationData, // A new array of vertex locations
+          tVertexBuffer.locationSize,
+          tVertexBuffer.attributes,
+          pProgram
+        );
+      } else {
+        if (!tFragments && this._stencilTest) {
+          if (pFillType === Records.RAW) {
+            this.updateUniforms(pProgram);
+            this.context.rect(0, 0, pFillData.width, pFillData.height);
+          } else {
+            this.setIdentityTransform();
+            this.context.rect(0, 0, this.getCurrentWidth(), this.getCurrentHeight());
+          }
+          this.setTargetFresh(false);
+        } else {
+          if (pFillType === Records.RAW) {
+            var tSizzorVerticies = mRawSizzorPolygon.verticies;
+            tSizzorVerticies[0] = tSizzorVerticies[1] = tSizzorVerticies[3] = tSizzorVerticies[6] = 0;
+            tSizzorVerticies[2] = tSizzorVerticies[4] = pFillData.width;
+            tSizzorVerticies[5] = tSizzorVerticies[7] = pFillData.height;
+
+            mRawSizzorPolygon.transform(pProgram.matrix);
+
+            if (sizzorTestPolygonVerticies(tSizzorVerticies, 0, 0, this.canvas.width, this.canvas.height) === false) {
+              // Don't render things we can't see.
+              return;
+            }
+          }
+
+          this.updateUniforms(pProgram);
+        }
+      }
+
+      if (tFragments) {
+        // Rasterize
+        this.rasterize(
+          pFillType,
+          pFillData,
+          pProgram
+        );
+      } else if (this._stencilTest) {
+        this.context.clip();
+      }
+    };
+
+    tProto.resetTargetStatus = function (pId) {
+      var tId = pId || this._activeTarget;
+
+      this._targetStatus[tId] = {
+        identityTransform: true
+      };
+
+      this._targetStatusStack[tId] = [];
+    };
+
+    tProto.createTarget = function(pWidth, pHeight, pAttachments) {
+      var tTargets = this._targets;
+
+      for (var i = 0;; i++) {
+        if (tTargets[i] === void 0) {
+          tTargets[i] = createCanvasTarget(this, pWidth, pHeight, true, pAttachments);
+          this.resetTargetStatus(i);
+
+          return i;
+        }
+      }
+    };
+
+    tProto.destroyTarget = function(pId) {
+      if (this._targets[pId] !== void 0) {
+        this._targets[pId].release();
+        this._targets[pId] = void 0;
+      }
+    };
+
+    tProto.setTarget = function(pId) {
+      var tTarget = this._targets[pId];
+
+      if (tTarget !== void 0) {
+        this._activeTarget = pId;
+        this.context = tTarget.context;
+        this.canvas = tTarget.canvas;
+      }
+    };
+
+    tProto.getTarget = function() {
+      return this._activeTarget;
+    };
+
+    tProto.target = function(pId, pProgram) {
+      var tTarget = this._targets[pId];
+
+      if (tTarget !== void 0) {
+        this.render(
+          null,
+          Records.RAW,
+          {
+            image: tTarget.canvas,
+            width: tTarget.width,
+            height: tTarget.height,
+            srcX: 0,
+            srcY: 0,
+            srcWidth: tTarget.width,
+            srcHeight: tTarget.height
+          },
+          pProgram
+        );
+
+        this.setTargetFresh(false);
+      }
+    };
+
+    tProto.attachToTarget = function(pId, pAttachments) {
+      var tTarget = this._targets[pId];
+      var tFragment0;
+
+      if (tTarget === void 0) {
+        return;
+      }
+
+      if (pAttachments.fragments) {
+        var tCanvas, tContext;
+        tFragment0 = pAttachments.fragments[0];
+
+        if (tFragment0 !== void 0) {
+          if (tTarget.attachments.fragments[0]) {
+            if (tTarget.key !== null) {
+              tTarget.image.release(tTarget.key);
+              tTarget.key = null;
+            }
+
+            tTarget.image = null;
+          }
+
+          tTarget.attachments.fragments[0] = tFragment0;
+
+          if (tFragment0 !== null) {
+            var tImage = tTarget.image = tFragments[0];
+
+            if (tImage) {
+              var tCanvas = tTarget.canvas = pSurface.getImageDOMElement(tImage);
+              var tContext = tTarget.context = tCanvas.getContext('2d');
+
+              tTarget.key = tImage.keep();
+              tContext.setTransform(1, 0, 0, 1, 0, 0);
+              tContext.clearRect(0, 0, tTarget.width + 1, tTarget.height + 1);
+              this.saveContext();
+
+              this.setTargetFresh(true);
+            } else {
+              tTarget.canvas = null;
+              tTarget.context = null;
+            }
+          }
+        }
+
+        if (this._activeTarget === pId) {
+          this.canvas = tCanvas;
+          this.context = tContext;
+        }
+      }
+    };
+
+    tProto.getTargetAttachments = function(pId) {
+      var tTarget = this._targets[pId];
+
+      if (tTarget !== void 0) {
+        return tTarget.attachments;
+      }
+
+      return null;
+    };
+
+    tProto.getTargetWidth = function(pId) {
+      if (this._targets[pId] !== void 0) {
+        return this._targets[pId].width;
+      }
+    };
+
+    tProto.getTargetHeight = function(pId) {
+      if (this._targets[pId] !== void 0) {
+        return this._targets[pId].height;
+      }
+    };
+
+    tProto.registerTexture = function(pTexture) {
+      var tTextures = this.textures;
+
+      for (var i = 0; ; i++) {
+        if (tTextures[i] === void 0) {
+          pTexture.id = i;
+          tTextures[i] = null;
+          return;
+        }
+      }
+    };
+
+    tProto.setTextureImage = function(pTexture, pImage) {
+      var tDestroy = false;
+      if (pImage === null) {
+        pImage = DOMImage.obtain(pTexture.getWidth(), pTexture.getHeight());
+        tDestroy = true;
+      } else {
+        if (pImage.constructor !== DOMImage) {
+          pImage = DOMImage.fromImage(pImage);
+          tDestroy = true;
+        }
+      }
+
+      this.textures[pTexture.id] = {
+        image: pImage,
+        key: pImage.keep()
+      };
+
+      if (tDestroy) {
+        pImage.destroy();
+      }
+    };
+
+    tProto.setTextureBytes = function(pTexture, pBytes, pX, pY, pWidth, pHeight, pStride) {
+      this.textures[pTexture.id].image.setBytes(pBytes, pX, pY, pWidth, pHeight, pStride);
+    };
+
+    tProto.getTextureBytes = function(pTexture, pX, pY, pWidth, pHeight, pStride) {
+      return this.textures[pTexture.id].image.getBytes(pX, pY, pWidth, pHeight, pStride);
+    };
+
+    tProto.destroyTexture = function(pTexture) {
+      var tId = pTexture.id;
+
+      if (tId === -1) {
+        return;
+      }
+
+      var tImageData = this.textures[tId];
+      tImageData.image.release(tImageData.key);
+
+      this.textures[tId] = void 0;
+    };
+
+    tProto.getImage = function(pId) {
+      var tTarget = this._targets[pId];
+
+      if (tTarget !== void 0) {
+        return tTarget.image;
+      }
+
+      return null;
+    };
+
+    tProto.destroy = function() {
+      var i, il;
+      var tTargets = this._targets;
+
+      this.context = null;
+      this.canvas = null;
+      this.canvasTarget = null;
+
+      for (i = 0, il = tTargets.length; i < il; i++) {
+        if (tTargets[i] !== void 0) {
+          tTargets[i].release();
+        }
+      }
+
+      var tTextures = this.textures;
+
+      for (i = 0, il = tTextures.length; i < il; i++) {
+        tTextures[i].image.release(tTextures[i].key);
+      }
+
+      this._targets = null;
+      this._textures = null;
+    };
+
+    function reflowHackFlush() {
+      var tCanvas = this._targets[0].canvas;
+
+      // A hack for devices that have a bug
+      // where their real size is 'forgotten'
+      // and the whole canvas is not updated
+      // properly. This forces the browser to
+      // reflow and repaint the canvas.
+
+      if (tCanvas.width > 256 || tCanvas.height > 256) {
+        // This bug only happens with canvases
+        // less than 256x256
+        return;
+      }
+
+      var tComputedStyle = getComputedStyle(tCanvas);
+
+      if (tComputedStyle !== null) {
+        var tPosition = tComputedStyle.position;
+
+        if (tPosition === 'static') {
+          tCanvas.style.position = 'relative';
+        } else if (tPosition === 'relative') {
+          tCanvas.style.position = 'static';
+        } else if (tPosition === 'absolute') {
+          tCanvas.style.position = 'float';
+        } else if (tPosition === 'float') {
+          tCanvas.style.position = 'absolute';
+        } else {
+          tCanvas.style.position = 'static';
+        }
+
+        tCanvas.clientLeft;
+        tCanvas.style.position = tPosition;
+      }
+    }
+
+    if (benri.impl.web.graphics.bugs.canvasSizeBug) {
+      tProto.flush = reflowHackFlush;
+    }
+
+    benri.env.on('setvar', function(pEvent) {
+      if (pEvent.varName === 'benri.impl.web.graphics.canvasSizeBug') {
+        if (pEvent.varValue === true) {
+          tProto.flush = reflowHackFlush;
+        } else {
+          tProto.flush = function() {};
+        }
+      }
+    });
+
+    tProto.specifyVerticies = function(pVerticies, pProgram) {
+      var tVertexShaders = pProgram.getShaders(Shader.TYPE_VERTEX);
+      var tVertexShadersLength = tVertexShaders.length;
+      var tVertexBuffer = pVerticies.buffer;
+      var i;
+      var tVertexLocations;
+      var tVertexAttributes;
+
+      tVertexBuffer.seek(0);
+
+      tVertexLocations = tVertexBuffer.locations;
+      tVertexAttributes = tVertexBuffer.attributes;
+
+      if (tVertexShadersLength !== 0) {
+        // For each vertex we do lots of stuff.
+        // First off, the vertex shader.
+
+        for (i = 0; i < tVertexShadersLength; i++) {
+          tVertexLocations = tVertexShaders[i].execute(tVertexLocations, tVertexAttributes);
+        }
+
+        return tVertexLocations;
+      } 
+
+      return tVertexLocations;
+    };
+
+    tProto.tessellate = function(pType, pVertexLocations, pLocationSize, pAttributes, pProgram) {
+      var tContext = this.context;
+      var i, il;
+
+      tContext.beginPath();
+
+      if (pType === Records.PATH) {
+        var tVectorOps = pAttributes.vectorOp;
+        var tVectorOpsData = tVectorOps.data;
+        var tVectorOp;
+        var tVertexLocation;
+        var tAnchor;
+
+        for (i = 0, il = pVertexLocations.length; i < il; i++) {
+          tVertexLocation = pVertexLocations[i];
+          tVectorOp = tVectorOpsData[i][0];
+
+          if (tVectorOp === 0x2) {
+            // anchor
+            tContext.lineTo(tVertexLocation[0] | 0, tVertexLocation[1] | 0);
+          } else if (tVectorOp === 0x3) {
+            // control
+            tAnchor = pVertexLocations[i + 1];
+
+            tContext.quadraticCurveTo(
+              tVertexLocation[0] | 0,
+              tVertexLocation[1] | 0,
+              tAnchor[0] | 0,
+              tAnchor[1] | 0
+            );
+
+            i++;
+          } else if (tVectorOp === 0x1) {
+            // move
+            tContext.moveTo(tVertexLocation[0] | 0, tVertexLocation[1] | 0);
+          }
+        }
+      } else {
+        // TODO: handle this later.
+      }
+    };
+
+    tProto.pushCompositeCanvas = function(pWidth, pHeight, pRecycle) {
+      var tCompositeImage;
+
+      if (pRecycle) {
+        tCompositeImage = DOMImage.obtain(pWidth, pHeight);
+      } else {
+        tCompositeImage = DOMImage.obtainFromLRUPool(pWidth, pHeight);
+      }
+
+      this._compositeCanvasStack.push({
+        image: tCompositeImage,
+        context: this.context,
+        width: pWidth,
+        height: pHeight
+      });
+
+      this.context = tCompositeImage.domImage.getContext('2d');
+    };
+
+    tProto.takeCompositeCanvas = function() {
+      var tComposite = this._compositeCanvasStack.pop();
+      var tCompositeImage = tComposite.image;
+      this.context = tComposite.context;
+
+      return tCompositeImage;
+    };
+
+    tProto.popCompositeCanvas = function(pAlphaMultiplier, pGlobalCompositeOperation) {
+      var tComposite = this._compositeCanvasStack.pop();
+
+      var tCompositeImage = tComposite.image;
+      var tWidth = tComposite.width;
+      var tHeight = tComposite.height;
+      var tContext = this.context = tComposite.context;
+      var tPreviousAlpha;
+
+      if (pAlphaMultiplier !== 1) {
+        tPreviousAlpha = tContext.globalAlpha;
+        tContext.globalAlpha = pAlphaMultiplier;
+      }
+
+      var tPreviousGlobalCompositeOperation = tContext.globalCompositeOperation;
+      tContext.globalCompositeOperation = pGlobalCompositeOperation;
+
+      tContext.drawImage(tCompositeImage.domImage, 0, 0, tWidth, tHeight, 0, 0, tWidth, tHeight);
+      this.setIdentityTransform();
+
+      tContext.globalCompositeOperation = tPreviousGlobalCompositeOperation;
+
+      if (pAlphaMultiplier !== 1) {
+        tContext.globalAlpha = tPreviousAlpha;
+      }
+
+      tCompositeImage.destroy();
+    };
+
+    tProto.getCurrentWidth = function() {
+      var tCompositeCanvasStack = this._compositeCanvasStack;
+      var tLength = tCompositeCanvasStack.length
+
+      if (tLength > 0) {
+        return tCompositeCanvasStack[tLength - 1].width;
+      }
+
+      return this.getTargetWidth(this.getTarget());
+    };
+
+    tProto.getCurrentHeight = function() {
+      var tCompositeCanvasStack = this._compositeCanvasStack;
+      var tLength = tCompositeCanvasStack.length;
+
+      if (tLength > 0) {
+        return tCompositeCanvasStack[tLength - 1].height;
+      }
+
+      return this.getTargetHeight(this.getTarget());
+    };
+
+    tProto.rasterize = function(pFillType, pFillData, pProgram) {
+      var tContext = this.context;
+      var tOriginalContext = tContext;
+      var tShaders = pProgram.getShaders(Shader.TYPE_FRAGMENT);
+      var tShader;
+      var tShaderImpl;
+      var i;
+      var il = tShaders.length;
+      var tSkipFill = false;
+
+      pProgram.fillType = pFillType;
+      pProgram.fillTypeText = pFillType === Records.FILL ? 'fillStyle' : 'strokeStyle';
+      pProgram.fillData = pFillData;
+      pProgram.colors = [];
+
+      if (pFillType === Records.STROKE) {
+        tContext.lineWidth = pFillData.width * pProgram.matrix.getScaleX();
+        tContext.lineCap = pFillData.cap;
+        tContext.lineJoin = pFillData.join;
+      }
+
+      for (i = 0; i < il; i++) {
+        tShader = tShaders[i];
+        mFragmentShaders[tShader.name].pre(tShader, this, pProgram);
+      }
+
+      for (i = 0; i < il; i++) {
+        tShader = tShaders[i];
+        tShaderImpl = mFragmentShaders[tShader.name];
+
+        if (tShaderImpl.style) {
+          tSkipFill = tShaderImpl.style(tShader, this, pProgram);
+        }
+      }
+
+      if (tSkipFill === false) {
+        if (pFillType === Records.RAW) {
+          tContext.drawImage(
+            pFillData.image,
+            pFillData.srcX,
+            pFillData.srcY,
+            pFillData.srcWidth,
+            pFillData.srcHeight,
+            0,
+            0,
+            pFillData.width,
+            pFillData.height
+          );
+        } else if (pFillType === Records.FILL) {
+          tContext.fill();
+        } else if (pFillType === Records.STROKE) {
+          tContext.stroke();
+        }
+      }
+
+      this.setTargetFresh(false);
+
+      for (i = 0; i < il; i++) {
+        tShader = tShaders[i];
+        mFragmentShaders[tShader.name].post(tShader, this, pProgram);
+      }
+
+      this.context = tOriginalContext;
+    };
+
+    tProto.isTargetFresh = function() {
+      return this._targets[this._activeTarget].isFresh;
+    };
+
+    tProto.setTargetFresh = function(pIsFresh) {
+      this._targets[this._activeTarget].isFresh = pIsFresh;
+    };
+
+    function CanvasTarget(pSurface, pAttachments, pWidth, pHeight, pKeep) {
+      // TODO: We are breaking the rules for now.
+      // Only fragments[0] is supported/handled right now.
+
+      var tFragments = pAttachments.fragments.slice(0);
+      var tCanvas, tContext;
+      var tImage = this.image = tFragments[0];
+
+      if (tImage) {
+        tCanvas = this.canvas = pSurface.getImageDOMElement(tImage);
+        tContext = this.context = tCanvas.getContext('2d');
+
+        // For iOS 7 bug where the page lang
+        // attribute is set to something other than
+        // en, fonts change randomly.
+        tCanvas.setAttribute('lang', 'en');
+
+        this.context.save();
+      } else {
+        tCanvas = this.canvas = null;
+        tContext = this.context = null;
+      }
+
+      this.attachments = {
+        fragments: tFragments
+      };
+
+      this.width = pWidth;
+      this.height = pHeight;
+
+      if (pKeep) {
+        this.key = tImage.keep();
+      } else {
+        this.key = null;
+      }      
+      
+      this.isFresh = true;
+    }
+
+    CanvasTarget.prototype.release = function() {
+      if (this.context !== null) {
+        this.context.restore();
+      }
+
+      if (this.key !== null) {
+        this.image.release(this.key);
+        this.key = null;
+      } else {
+        this.image.destroy();
+      }
+
+      this.image = this.attachments = this.canvas = this.context = null;
+    };
+
+    CanvasTarget.prototype.clear = function() {
+      this.context.clearRect(0, 0, this.width + 1, this.height + 1);
+    };
+
+    CanvasTarget.prototype.drawTo = function(pContext) {
+      pContext.drawImage(this.canvas, 0, 0, this.width, this.height, 0, 0, this.width, this.height);
+    };
+
+    function createCanvasTarget(pSurface, pWidth, pHeight, pRecycle, pAttachments) {
+      if (pWidth === -1) {
+        pWidth = pSurface.canvasTarget.width;
+      }
+
+      if (pHeight === -1) {
+        pHeight = pSurface.canvasTarget.height;
+      }
+
+      if (pAttachments && pAttachments.fragments) {
+        return new CanvasTarget(pSurface, pAttachments, pWidth, pHeight, true);
+      } else {
+        return new CanvasTarget(pSurface, {
+          fragments: [pRecycle ? DOMImage.obtain(pWidth, pHeight) : new DOMImage(pWidth, pHeight)]
+        }, pWidth, pHeight, false);
+      }
+    };
+
+    return Canvas2DSurface;
+  }(benri.graphics.Surface));
+
+  benri.impl.add('graphics.surface', function(pData) {
+    pData.add(Canvas2DSurface, 7);
+  });
+
+  benri.impl.web.graphics.Canvas2DSurface = Canvas2DSurface;
+
+}(this));
+
+/**
+ * @author Jason Parrott
+ *
+ * Copyright (C) 2013 BenriJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
   var Matrix2D = benri.geometry.Matrix2D;
   var Color = benri.graphics.draw.Color;
   var Texture = benri.graphics.render.Texture;
@@ -20515,10 +25280,9 @@ benri.impl.shared.text = {};
   var Keeper = benri.mem.Keeper;
   var Shader = benri.graphics.shader.Shader;
   var Records = benri.graphics.Records;
-  var getImpl = benri.impl.get;
   var VertexBuffer = benri.geometry.VertexBuffer;
   var Matrix2D = benri.geometry.Matrix2D;
-  var AbstractImage = benri.graphics.draw.AbstractImage;
+  var Image = benri.graphics.Image;
 
   var mProgramIdCounter = 0;
 
@@ -20552,13 +25316,13 @@ benri.impl.shared.text = {};
 
     Keeper(this);
 
-    this.onDestroy(onDestroy);
+    this.on('destroy', onDestroy);
   }
 
-  function onDestroy() {
-    var tUniforms = this._uniforms;
-    var tUniformKeeperKeys = this._uniformKeeperKeys;
-    var tShaders = this._shaders;
+  function onDestroy(pData, pTarget) {
+    var tUniforms = pTarget._uniforms;
+    var tUniformKeeperKeys = pTarget._uniformKeeperKeys;
+    var tShaders = pTarget._shaders;
     var tShader;
     var tCurrentShaders;
     var tShaderIndex, tShadersLength, i, il, k;
@@ -20578,9 +25342,9 @@ benri.impl.shared.text = {};
       tUniforms[k].release(tUniformKeeperKeys[k]);
     }
 
-    this._uniformTypes = null;
-    this._uniforms = null;
-    this._uniformKeeperKeys = null;
+    pTarget._uniformTypes = null;
+    pTarget._uniforms = null;
+    pTarget._uniformKeeperKeys = null;
   }
 
   Program.prototype.attachShader = function(pShader) {
@@ -20619,7 +25383,7 @@ benri.impl.shared.text = {};
     var tUniformType = this._uniformTypes[pName];
     var tUniforms = this._uniforms;
 
-    if (tUniformType === AbstractImage && tUniforms[pName]) {
+    if (tUniformType === Image && tUniforms[pName]) {
       tUniforms[pName].release(this._uniformKeeperKeys[pName]);
 
       if (pValue) {
@@ -21178,7 +25942,7 @@ benri.impl.shared.text = {};
    * the SWF file on the screen.
    */
   Compositor.prototype.getSurface = function() {
-    return this.context.getImage(0)._domImage;
+    return this.context.getImage(0).domImage;
   };
 
 }(this));
@@ -21201,6 +25965,7 @@ benri.impl.shared.text = {};
   var Color = benri.graphics.draw.Color;
   var ComponentColor = benri.graphics.draw.ComponentColor;
   var StrokeStyle = benri.graphics.draw.StrokeStyle;
+  var GradientStyle = benri.graphics.draw.GradientStyle;
 
   var Records = benri.graphics.Records;
   
@@ -21236,6 +26001,7 @@ benri.impl.shared.text = {};
     var tShaderColor;
     var tShaderPositions;
     var tShaderColors;
+    var tGradientStyle;
 
     function interpolate(pStart, pEnd, pRatio) {
       return pStart + (pEnd - pStart) * pRatio;
@@ -21274,13 +26040,14 @@ benri.impl.shared.text = {};
 
         tStops = pStyle.gradient.stops;
 
-        tShaderPositions = tShader.getPositions();
-        tShaderColors = tShader.getPositionColors();
+        tGradientStyle = tShader.getGradientStyle();
+        tShaderPositions = tGradientStyle.colorStops;
+        tShaderColors = tGradientStyle.stopColors;
 
         for (i = 0, il = tStops.length; i < il; i++) {
           tStop = tStops[i];
 
-          tShaderPositions[i] = interpolate(tStop.ratio, tStop.endRatio, tRatio) / 255;
+          tShaderPositions[i] = interpolate(tStop.ratio, tStop.endRatio, tRatio);
 
           tShaderColor = tShaderColors[i];
           tStartColor = tStop.color;
@@ -21293,6 +26060,9 @@ benri.impl.shared.text = {};
             interpolate(tStartColor.alpha * 255, tEndColor.alpha * 255, tRatio)
           );
         }
+
+        tGradientStyle.convertToRatio(255);
+        tGradientStyle.generateSignature();
       }
     }
   }
@@ -21339,7 +26109,7 @@ benri.impl.shared.text = {};
     /**
      * Gradient Stops.
      */
-    var tStops, tStop, tShaderColors, tShaderPositions;
+    var tStops, tStop, tShaderColors, tShaderPositions, tGradientStyle;
 
     /**
      * The Bitmap for patterns.
@@ -21390,8 +26160,8 @@ benri.impl.shared.text = {};
           tStop = tStops[i];
           tColor = tStop.color;
 
-          tShaderPositions[i] = tStop.ratio / 255;
-          tShaderColors[i] = new ComponentColor(tColor.red, tColor.green, tColor.blue, tColor.alpha * 255)
+          tShaderPositions[i] = tStop.ratio;
+          tShaderColors[i] = new ComponentColor(tColor.red, tColor.green, tColor.blue, tColor.alpha * 255);
         }
 
         if (tType === 0x10) {
@@ -21401,11 +26171,17 @@ benri.impl.shared.text = {};
           pRecords.program(tProgramPackage.program);
 
           tShader = tProgramPackage.shaders.linearGradient;
+
+          tGradientStyle = new GradientStyle(GradientStyle.TYPE_LINEAR);
+          tGradientStyle.startPoint = new Point(-16384, 0);
+          tGradientStyle.endPoint = new Point(16384, 0);
+          tGradientStyle.colorStops = tShaderPositions;
+          tGradientStyle.stopColors = tShaderColors;
+          tGradientStyle.convertToRatio(255);
+          tGradientStyle.generateSignature();
+
           tUniforms = {};
-          tUniforms[tShader.getUniformName('startPoint')] = new Point(-16384, 0);
-          tUniforms[tShader.getUniformName('endPoint')] = new Point(16384, 0);
-          tUniforms[tShader.getUniformName('positions')] = tShaderPositions;
-          tUniforms[tShader.getUniformName('positionColors')] = tShaderColors;
+          tUniforms[tShader.getUniformName('gradientStyle')] = tGradientStyle;
           tUniforms[tShader.getUniformName('matrix')] = tMatrix;
 
           pRecords.uniforms(tUniforms);
@@ -21416,11 +26192,19 @@ benri.impl.shared.text = {};
           pRecords.program(tProgramPackage.program);
 
           tShader = tProgramPackage.shaders.radialGradient;
+
+          tGradientStyle = new GradientStyle(GradientStyle.TYPE_RADIAL);
+          tGradientStyle.startPoint = new Point(0, 0);
+          tGradientStyle.endPoint = new Point(0, 0);
+          tGradientStyle.startRadius = 0;
+          tGradientStyle.endRadius = 16384;
+          tGradientStyle.colorStops = tShaderPositions;
+          tGradientStyle.stopColors = tShaderColors;
+          tGradientStyle.convertToRatio(255);
+          tGradientStyle.generateSignature();
+
           tUniforms = {};
-          tUniforms[tShader.getUniformName('startPoint')] = new Point(0, 0);
-          tUniforms[tShader.getUniformName('radius')] = 16384;
-          tUniforms[tShader.getUniformName('positions')] = tShaderPositions;
-          tUniforms[tShader.getUniformName('positionColors')] = tShaderColors;
+          tUniforms[tShader.getUniformName('gradientStyle')] = tGradientStyle;
           tUniforms[tShader.getUniformName('matrix')] = tMatrix;
 
           pRecords.uniforms(tUniforms);
@@ -21432,18 +26216,26 @@ benri.impl.shared.text = {};
           pRecords.program(tProgramPackage.program);
 
           tShader = tProgramPackage.shaders.radialGradient;
+
+          tGradientStyle = new GradientStyle(GradientStyle.TYPE_RADIAL);
+          tGradientStyle.startPoint = new Point(0, 0);
+          tGradientStyle.endPoint = new Point(0, 0);
+          tGradientStyle.startRadius = 0;
+          tGradientStyle.endRadius = 16384;
+          tGradientStyle.colorStops = tShaderPositions;
+          tGradientStyle.stopColors = tShaderColors;
+          tGradientStyle.convertToRatio(255);
+          tGradientStyle.generateSignature();
+
           tUniforms = {};
-          tUniforms[tShader.getUniformName('startPoint')] = new Point(0, 0);
-          tUniforms[tShader.getUniformName('radius')] = 16384;
-          tUniforms[tShader.getUniformName('positions')] = tShaderPositions;
-          tUniforms[tShader.getUniformName('positionColors')] = tShaderColors;
+          tUniforms[tShader.getUniformName('gradientStyle')] = tGradientStyle;
           tUniforms[tShader.getUniformName('matrix')] = tMatrix;
 
           pRecords.uniforms(tUniforms);
         }
       } else if (tType & 0x40) {
         // Repeating Bitmap or Clipped Bitmap
-        tBitmap = pResources.get('image', pStyle.bitmapId);
+        tBitmap = pResources.get(pStyle.bitmapId);
 
         if (!tBitmap) {
           tProgramPackage = tProgramPackageBase.color;
@@ -21590,10 +26382,11 @@ benri.impl.shared.text = {};
       this.numOfConnections++;
     }
 
-    function getNextConnection() {
+    function getNextConnection(pBothDirection) {
       var tConnections = this.c;
       var tSubConnections;
       var tConnection;
+      var tKey = this.key;
       var i, il;
 
       for (var k in tConnections) {
@@ -21602,7 +26395,7 @@ benri.impl.shared.text = {};
 
         for (i = 0; i < il; i++){
           tConnection = tSubConnections[i];
-          if (tConnection.isStartPoint(this.key)) {
+          if (pBothDirection || tConnection.isStartPoint(tKey)) {
             return tConnection;
           }          
         }
@@ -21726,11 +26519,13 @@ benri.impl.shared.text = {};
     var tPointA, tPointB, tCurrentPoint, tNextPoint;
     var tNextPointX, tNextPointY;
     var tAToB;
+    var tReverseDirection;
 
     var tEdge;
     var tEdgeType;
 
     var tIsLine = pType === 'line';
+    var tBothDirection = tIsLine;
     var tProgram;
     var tStrokeStyle;
 
@@ -21772,7 +26567,7 @@ benri.impl.shared.text = {};
         }
 
         // Grab the first edge of this point. We use it as our starting edge.
-        tPointConnection = tPointA.getNextConnection();
+        tPointConnection = tPointA.getNextConnection(tBothDirection);
 
         if (tPointConnection === null) {
           if (!tIsLine) {
@@ -21854,7 +26649,7 @@ benri.impl.shared.text = {};
 
         do {
           tEdgeType = tEdge.type;
-
+          tReverseDirection = tPointConnection.isStartPoint(tNextPoint.key);
           // Draw the current edge.
           if (tEdgeType === 2) { // Curve
             tPath.qc(
@@ -21880,13 +26675,13 @@ benri.impl.shared.text = {};
             }
           }
 
-          tCurrentPoint.disconnect(tPointConnection.key, true);
+          tCurrentPoint.disconnect(tPointConnection.key, !tReverseDirection);
 
           if (!tNextPoint) {
             break;
           }
 
-          tNextPoint.disconnect(tCurrentPoint.key, false);
+          tNextPoint.disconnect(tCurrentPoint.key, tReverseDirection);
 
           // Check if we have completed a shape
           if (tFinalPointX === tNextPointX && tFinalPointY === tNextPointY) {
@@ -21895,7 +26690,7 @@ benri.impl.shared.text = {};
             break;
           }
 
-          tPointConnection = tNextPoint.getNextConnection();
+          tPointConnection = tNextPoint.getNextConnection(false);
 
           if (!tPointConnection) {
             // This will happen with lines (strokes) that
@@ -22099,7 +26894,7 @@ benri.impl.shared.text = {};
       tFillStyle = tFillStyles[i];
 
       if (tFillStyle && (tFillStyle.type === 0x41 || tFillStyle.type === 0x43)) {
-        tBitmap = pResources.get('image', tFillStyle.bitmapId);
+        tBitmap = pResources.get(tFillStyle.bitmapId);
 
         if (tBitmap) {
           tNumberOfBitmaps++;
@@ -22149,7 +26944,7 @@ benri.impl.shared.text = {};
             tFillStyle = tFillStyles[j];
 
             if (tFillStyle && (tFillStyle.type === 0x41 || tFillStyle.type === 0x43)) {
-              tBitmap = pResources.get('image', tFillStyle.bitmapId);
+              tBitmap = pResources.get(tFillStyle.bitmapId);
 
               if (tBitmap) {
                 tNumberOfBitmaps++;
@@ -22667,7 +27462,7 @@ benri.impl.shared.text = {};
     // Convert and draw the SWF shape in to the new Canvas.
     // Note that only the draw commands were created at this point.
     // We have not flushed the commands or generated a bitmap yet.
-    var tRenderData = mShapeUtils.drawShape(tTempShape, this.swf.mediaLoader, false);
+    var tRenderData = mShapeUtils.drawShape(tTempShape, this.swf.assetManifest, false);
 
     if ('shapeCache' in this.options) {
       tRenderData.disableCache = !this.options.shapeCache;
@@ -22712,7 +27507,7 @@ benri.impl.shared.text = {};
     tTempShape.lineStyles = mMorphShapeUtils.convertLineStyles(pMorphShape.lineStyles);
     tTempShape.records = mMorphShapeUtils.generateRecords(pMorphShape.startEdges, pMorphShape.endEdges);
 
-    var tRenderData = mShapeUtils.drawShape(tTempShape, this.swf.mediaLoader, true);
+    var tRenderData = mShapeUtils.drawShape(tTempShape, this.swf.assetManifest, true);
 
     // We don't want to cache morph shapes yet.
     tRenderData.disableCache = true;
@@ -22723,29 +27518,6 @@ benri.impl.shared.text = {};
       endBounds: pMorphShape.endBounds
     });
   };
-}(this));
-
-/**
- * @author Kuu Miyazaki
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var getImpl = benri.impl.get;
-
-  /**
-   * Factory method to create an abstruct image.
-   * @param {number} pWidth
-   * @param {number} pHeight
-   * @return {benri.graphics.draw.AbstractImage} Platform dependent image object.
-   */
-  benri.graphics.draw.createImage = function(pWidth, pHeight) {
-    return new (getImpl('graphics.draw.image').best.clazz)(pWidth, pHeight);
-  };
-
 }(this));
 
 /**
@@ -23086,8 +27858,6 @@ benri.impl.shared.text = {};
 
     tRecords.clearColor(pColor || new Color(0, 0, 0, 0));
   };
-
-  var getImpl = benri.impl.get;
 
   /**
    * Flush the drawing records of this Canvas to the underlying Surface.
@@ -23926,7 +28696,7 @@ benri.impl.shared.text = {};
         if (!tGlyph) {
           tShape = tSwfFont.shapes[tGlyphIndex];
           tShape.fillStyles[0].color = tTextRecord.color;
-          tGlyph = createGlyph(tCharCode, tShape, Math.floor(tSwfGlyph.advance / tFontScale), tSWF.mediaLoader);
+          tGlyph = createGlyph(tCharCode, tShape, Math.floor(tSwfGlyph.advance / tFontScale), tSWF.assetManifest);
           tFont.setGlyph(tCharCode, tGlyph);
         }
 
@@ -23997,5153 +28767,370 @@ benri.impl.shared.text = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  benri.event.StoppableEventEmitter = StoppableEventEmitter;
-
-  var EventEmitter = benri.event.EventEmitter;
-  var on = EventEmitter.on;
-  var ignore = EventEmitter.ignore;
-
-  function StoppableEventEmitter(pInstance) {
-    pInstance = pInstance || this;
-
-    pInstance._events = {};
-
-    pInstance.on = on;
-    pInstance.ignore = ignore;
-    pInstance.emit = emit;
-  }
-
-  function emit(pName, pData) {
-    var tNode = this._events[pName];
-    var tCallback;
-    var tStop = false;
-
-    function stop() {
-      tStop = true;
-    }
-
-    if (tNode === void 0) {
-      return true;
-    }
-
-    pData.stop = stop;
-
-    do {
-      tCallback = tNode.data;
-      tCallback(pData, this);
-
-      tNode = tNode.next;
-    } while (tStop === false && tNode !== null);
-
-    return !tStop;
-  }
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 TheatreScript Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  /**
-   * @class
-   * @extends {theatre.Prop}
-   */
-  var RenderProp = (function(pSuper) {
-    var StoppableEventEmitter = benri.event.StoppableEventEmitter;
-
-    /**
-     * @constructor
-     */
-    function RenderProp(pRenderManagerProp, pBaseHash) {
-      pSuper.call(this);
-
-      StoppableEventEmitter(this);
-
-      this.type = 'render';
-
-      this.renderManagerProp = pRenderManagerProp;
-
-      this.isVisible = true;
-
-      this._currentCallback = null;
-    }
-
-    var tProto = RenderProp.prototype = Object.create(pSuper.prototype);
-    tProto.constructor = RenderProp;
-
-    function createOnActorEnter(pRenderProp) {
-      return function onActorEnter(pData, pTarget) {
-        pRenderProp.renderManagerProp.register(pRenderProp);
-        pTarget.onFor('leave', (pRenderProp._currentCallback = createOnActorLeave(pRenderProp)), 1);
-      };
-    }
-
-    function createOnActorLeave(pRenderProp) {
-      return function onActorLeave(pData, pTarget) {
-        pRenderProp.renderManagerProp.unregister(pRenderProp);
-        pTarget.onFor('enter', (pRenderProp._currentCallback = createOnActorEnter(pRenderProp)), 1);
-      };
-    }
-
-    function onActorEnter(pData, pTarget) {
-      pTarget.onFor('leave', onActorLeave, 1);
-    }
-
-    var superOnAdd = pSuper.prototype.onAdd;
-
-    tProto.onAdd = function onAdd(pActor) {
-      superOnAdd.call(this, pActor);
-
-      if (pActor.stageId === -1) {
-        pActor.onFor('enter', (this._currentCallback = createOnActorEnter(this)), 1);
-      } else {
-        this.renderManagerProp.register(this);
-        pActor.onFor('leave', (this._currentCallback = createOnActorLeave(this)), 1);
-      }
-    };
-
-    var superOnRemove = pSuper.prototype.onRemove;
-
-    tProto.onRemove = function onRemove() {
-      if (this.actor.stageId !== -1) {
-        this.renderManagerProp.unregister(this);
-        this.actor.ignore('leave', this._currentCallback);
-      } else {
-        this.actor.ignore('enter', this._currentCallback);
-      }
-
-      this._currentCallback = null;
-
-      superOnRemove.call(this);
-    };
-
-    tProto.getRenderable = function getRenderable() {
-      var tPackage = {
-        renderable: null
-      };
-
-      this.emit('renderable', tPackage);
-
-      return tPackage.renderable;
-    };
-
-    tProto.preRender = function preRender(pPackage) {
-      return this.emit('prerender', pPackage);
-    };
-
-    tProto.postRender = function postRender(pPackage) {
-      this.emit('postrender', pPackage);
-    };
-
-    tProto.finalizeRender = function finalizeRender(pPackage) {
-      this.emit('finalizerender', pPackage);
-    };
-
-    return RenderProp;
-  })(theatre.Prop);
-
-  theatre.crews.render.RenderProp = RenderProp;
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 TheatreScript Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  theatre.crews.render.RenderManagerProp = RenderManagerProp;
-
-  var requestAnimationFrame;
-
-  if (global.requestAnimationFrame !== void 0) {
-    requestAnimationFrame = global.requestAnimationFrame;
-  } else if (global.webkitRequestAnimationFrame !== void 0) {
-    requestAnimationFrame = global.webkitRequestAnimationFrame;
-  } else if (global.mozRequestAnimationFrame !== void 0) {
-    requestAnimationFrame = global.mozRequestAnimationFrame;
-  } else {
-    requestAnimationFrame = function(pCallback) {
-      return setTimeout(pCallback, 20);
-    };
-  }
-
-  /**
-   * @class
-   * @extends {theatre.Prop}
-   */
-  var RenderManagerProp = (function(pSuper) {
-    var RenderProp = theatre.crews.render.RenderProp;
-    var CacheManager = theatre.crews.render.CacheManager;
-    var EventEmitter = benri.event.EventEmitter;
-
-    /**
-     * @constructor
-     */
-    function RenderManagerProp(pCamera) {
-      pSuper.call(this);
-
-      this.type = 'renderManager';
-
-      EventEmitter(this);
-
-      this.camera = pCamera;
-      this.cacheManager = new CacheManager(pCamera);
-      this.onRevalidated = null;
-
-      this._animationFrameId = -1;
-      this._props = new Array(256);
-
-      this.syncRendering = false;
-
-      this.makeRenderable = makeRenderable;
-      this.register = register;
-      this.unregister = unregister;
-    }
-  
-    var tProto = RenderManagerProp.prototype = Object.create(pSuper.prototype);
-    tProto.constructor = RenderManagerProp;
-  
-    tProto.onEnter = function(pStage) {
-      pSuper.prototype.onEnter.call(this, pStage);
-
-      var tStageManager = pStage.stageManager;
-      var onRevalidated = this.onRevalidated = createOnRevalidated(this, this.syncRendering);
-
-      pStage.on('revalidated', onRevalidated);        
-    };
-
-    tProto.onLeave = function() {
-      this.stage.ignore('revalidated', this.onRevalidated);
-    };
-
-    function makeRenderable(pActor) {
-      var tProp = new RenderProp(this);
-      pActor.props.add(tProp);
-
-      return tProp;
-    }
-
-    function register(pProp) {
-      this._props[pProp.actor.stageId] = pProp;
-    }
-
-    function unregister(pProp) {
-      this._props[pProp.actor.stageId] = void 0;
-    }
-
-    return RenderManagerProp;
-  })(theatre.Prop);
-
-
-  function createOnRevalidated(pRenderManagerProp, pSyncRendering) {
-    return function onRevalidated(pData, pTarget) {
-      var tInExecute = pTarget.inExecute;
-
-      if (pSyncRendering === false) {
-        if (pRenderManagerProp._animationFrameId === -1) {
-          pRenderManagerProp._animationFrameId = requestAnimationFrame((function() {
-
-            return function() {
-              onAnimationFrame(pRenderManagerProp, tInExecute);
-            };
-          }()));
-        }
-      } else {
-          onAnimationFrame(pRenderManagerProp, tInExecute);
-      }
-
-      /*if (pTarget.stage.inExecute === true) {
-        pTarget.stage.onFor('leavestep', function() {
-          onAnimationFrame(pRenderManagerProp, true);
-        }, 1);
-      } else {
-        onAnimationFrame(pRenderManagerProp, false);
-      }*/
-    };
-  }
-
-  function onAnimationFrame(pRenderManagerProp, pDoCache) {
-    pRenderManagerProp._animationFrameId = -1;
-
-    var tProps = pRenderManagerProp._props;
-    var tCamera = pRenderManagerProp.camera;
-    var tContext = tCamera.context;
-    var tPackage = {
-      context: tContext
-    };
-
-    tContext.matrix.reset();
-    tContext.backgroundColor = tCamera.backgroundColor;
-    tContext.clear();
-
-    pRenderManagerProp.emit('render', tPackage);
-
-    var tActor = pRenderManagerProp.stage.stageManager;
-    var tProp;
-    var tRenderable;
-    var tNode = tActor.node;
-
-    var tCurrentNode = tActor.node;
-    var tNextNode;
-    var tLeaveNodeStack = new Array();
-    var tCanContinue = true;
-    var tHasChild;
-
-    var tCacheProp;
-    var tCache;
-    var tCacheManager = pRenderManagerProp.cacheManager;
-
-    main: while (true) {
-      tActor = tCurrentNode.actor;
-      tProp = tProps[tActor.stageId];
-      tNextNode = tCurrentNode.next;
-      tHasChild = tCurrentNode.hasChild;
-
-      if (tProp === void 0) {
-        if (!tHasChild) {
-          do {
-            tCurrentNode = tLeaveNodeStack.pop();
-            tActor = tCurrentNode.actor;
-            tProp = tProps[tActor.stageId];
-
-            if (tProp !== void 0) {
-              tCacheProp = tActor.props.renderCache;
-
-              if (tCacheProp !== void 0) {
-                tCache = tCacheManager.finishCache(tCacheProp);
-
-                if (tCache !== null) {
-                  tProp.emit('finishcache', tPackage);
-                  tProp.emit('rendercache', tPackage);
-
-                  tContext.matrix.recycle();
-                  tContext.matrix = tCamera.getMatrix(tActor.getAbsolutePosition());
-
-                  tCache.render();
-                }
-              }
-
-              tProp.finalizeRender(tPackage);
-            }
-
-            if (tLeaveNodeStack.length === 0) {
-              break main;
-            }
-          } while(!tCurrentNode.nextSibling);
-        } else {
-          tLeaveNodeStack.push(tCurrentNode);
-        }
-
-        tCurrentNode = tNextNode;
-
-        continue;
-      }
-
-      tCanContinue = (tProp.isVisible === true && tProp.preRender(tPackage) === true);
-
-      if (tCanContinue === true) {
-        tCacheProp = tActor.props.renderCache;
-
-        if (tCacheProp !== void 0) {
-          tCache = tCacheManager.getCache(tCacheProp.hash);
-
-          if (tCache !== void 0) {
-            if (tCacheProp.isInvalid(pRenderManagerProp, tCache) === true) {
-              tCache.destroy();
-              tCache = void 0;
-            } else {
-              // No need to process the children anymore.
-              tCanContinue = false;
-
-              tProp.emit('rendercache', tPackage);
-
-              tContext.matrix.recycle();
-              tContext.matrix = tCamera.getMatrix(tActor.getAbsolutePosition());
-
-              tCache.render();
-
-              tProp.finalizeRender(tPackage);
-
-              tNextNode = tCurrentNode.nextSibling;
-
-              if (!tNextNode) {
-                tNextNode = tCurrentNode.getTailNode().next;
-              } else {
-                tCurrentNode = tNextNode;
-
-                continue;
-              }
-            }
-          } else if (pDoCache === true && tCacheProp.isCachable(pRenderManagerProp) === true) {
-            if (tCacheManager.startCache(tCacheProp) === true) {
-              tProp.emit('startcache', tPackage);
-            }
-          }
-        } else {
-          tCache = void 0;
-        }
-
-        if (tCache === void 0) {
-          tRenderable = tProp.getRenderable();
-
-          if (tRenderable !== null) {
-            tContext.matrix.recycle();
-            tContext.matrix = tCamera.getMatrix(tActor.getAbsolutePosition());
-
-            tRenderable.render(tContext);
-          }
-
-          tLeaveNodeStack.push(tCurrentNode);
-        }
-      } else {
-        tProp.finalizeRender(tPackage);
-
-        tNextNode = tCurrentNode.nextSibling;
-
-        if (!tNextNode) {
-          tNextNode = tCurrentNode.getTailNode().next;
-        } else {
-          tCurrentNode = tNextNode;
-
-          continue;
-        }
-      }
-
-      if (tHasChild === false || tCanContinue === false) {
-        do {
-          tCurrentNode = tLeaveNodeStack.pop();
-          tActor = tCurrentNode.actor;
-          tProp = tProps[tActor.stageId];
-
-          if (tProp !== void 0) {
-            tCacheProp = tActor.props.renderCache;
-
-            if (tCacheProp !== void 0) {
-              tCache = tCacheManager.finishCache(tCacheProp);
-
-              if (tCache !== null) {
-                tProp.emit('finishcache', tPackage);
-                tProp.emit('rendercache', tPackage);
-
-                tContext.matrix.recycle();
-                tContext.matrix = tCamera.getMatrix(tActor.getAbsolutePosition());
-
-                tCache.render();
-              }
-            }
-
-            tProp.finalizeRender(tPackage);
-          }
-
-          if (tLeaveNodeStack.length === 0) {
-            break main;
-          }
-        } while(!tCurrentNode.nextSibling);
-      }
-
-      tCurrentNode = tNextNode;
-    }
-
-    pRenderManagerProp.emit('finalizerender', tPackage);
-
-    tCacheManager.cleanup();
-
-    tContext.flush();
-  }
-
-  theatre.crews.render.RenderManagerProp = RenderManagerProp;
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var EventEmitter = global.benri.event.EventEmitter;
-
-  /**
-   * @class
-   * A class that stores past cues.
-   * When using on() with this class, if the given
-   * event name has already had a cue fired,
-   * the handler will be executed right away with
-   * the old data.
-   * @constructor
-   */
-  function PersistentEventEmitter(pInstance) {
-    pInstance = pInstance || this;
-
-    EventEmitter(pInstance);
-
-    pInstance._eventResults = {};
-
-    pInstance._baseOn = pInstance.on;
-    pInstance._baseEmit = pInstance.emit;
-    pInstance._emittingEventStack = [];
-
-    pInstance.on = on;
-    pInstance.emit = emit;
-    pInstance.resetEvent = resetEvent;
-  }
-
-  function on(pName, pCallback, pCount) {
-    this._baseOn(pName, pCallback, pCount);
-
-    var tEventResults = this._eventResults;
-
-    if (pName in tEventResults && this._emittingEventStack.indexOf(pName) === -1) {
-      pCallback(tEventResults[pName], this);
-    }
-  }
-
-  function emit(pName, pData) {
-    this._eventResults[pName] = pData;
-
-    this._emittingEventStack.push(pName);
-    this._baseEmit(pName, pData);
-    this._emittingEventStack.pop();
-  }
-
-  function resetEvent(pName) {
-    if (!pName) {
-      this._eventResults = {};
-    } else {
-      delete this._eventResults[pName];
-    }
-  }
-
-  global.benri.event.PersistentEventEmitter = PersistentEventEmitter;
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 SWFCrew Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-  var theatre = global.theatre,
-      swfcrew = theatre.crews.swf,
-      quickswf = global.quickswf,
-      AlphabetJS = global.AlphabetJS,
-      Uint8Array = benri.io.Uint8Array,
-      PersistentEventEmitter = global.benri.event.PersistentEventEmitter;
-  /**
-   * @constructor
-   */
-  function Loader() {
-    PersistentEventEmitter(this);
-    this.swf = null;
-    this.options = {};
-    this.actionScriptLoader = null;
-    this.actionScriptProgram = null;
-    this.actorMap = [];
-    this.actorNameMap = {};
-    this.fontCache = [];
-    this.media = null;
-    this.url = null;
-  }
-
-  swfcrew.Loader = Loader;
-
-  Loader.prototype.register = function(pId, pClass, pArgs) {
-    pArgs.displayListId = pId;
-    
-    this.actorMap[pId] = {
-      clazz: pClass,
-      args: pArgs
-    }
-  };
-
-  Loader.prototype.load = function(pSWF, pOptions) {
-    this.options = pOptions = (pOptions || {});
-    this.swf = pSWF;
-
-    if ('antialias' in pOptions) {
-      benri.env.setVar('benri.graphics.surface.antialias', pOptions.antialias);
-    }
-
-    this.emit('loadstart', this);
-
-    var tASType = pOptions.asType || 'AS1VM';
-
-    var tActionScriptProgram = this.actionScriptProgram = AlphabetJS.createProgram(tASType, swfcrew.ASHandlers);
-    var tActionScriptLoader = this.actionScriptLoader = AlphabetJS.createLoader(tASType);
-    var tActorTypes = swfcrew.actors;
-
-    this.media = pSWF.mediaLoader;
-
-    var tDictionaryToActorMap = this.actorMap;
-    var i, il;
-    var tHandlers = swfcrew.handlers;
-    var tDictionary = pSWF.orderedDictionary;
-    var tId;
-    var tObject;
-    var tDisplayListType;
-
-    for (i = 0, il = tDictionary.length; i < il; i++) {
-      tObject = tDictionary[i];
-      tId = tObject.id;
-      tDisplayListType = tObject.displayListType;
-
-      if (tHandlers[tDisplayListType] === void 0) {
-        continue;
-      }
-
-      tHandlers[tDisplayListType].call(this, tObject);
-    }
-
-    tHandlers['DefineSprite'].call(this, pSWF.rootSprite);
-
-    if (this.url) {
-      this.url.query.setEncoding(pSWF.encoding);
-      this.options.rootVars = this.url.query.toJSON();
-    }
-
-    this.emit('loadcomplete', this);
-  };
-
-  Loader.prototype.setFontCache = function(pId, pFont) {
-    this.fontCache[pId] = pFont;
-  };
-
-  Loader.prototype.getFontCache = function(pId) {
-    return this.fontCache[pId] || null;
-  };
-
-  Loader.prototype.clearFontCache = function() {
-    this.fontCache.length = 0;
-  };
-
-
-  /**
-   * @class
-   * @extends Loader
-   */
-  var DataLoader = (function(pSuper) {
-    function DataLoader() {
-      pSuper.call(this);
-      this.data = null;
-    }
-
-    DataLoader.prototype = Object.create(pSuper.prototype);
-    DataLoader.prototype.constructor = DataLoader;
-
-    DataLoader.prototype.load = function(pData, pOptions) {
-      this.options = pOptions = (pOptions || {});
-      this.data = pData;
-
-      var tSelf = this;
-      var tParser = new quickswf.Parser(pData);
-
-      tSelf.emit('parsestart', this);
-
-      tParser.parse(
-        function(pSWF) {
-          tSelf.swf = pSWF;
-          tSelf.emit('parsecomplete', this);
-          pSuper.prototype.load.call(tSelf, pSWF, pOptions);
-        },
-        function(pError) {
-          tSelf.emit('error', pError);
-        }
-      );
-    };
-
-    return DataLoader;
-  })(Loader);
-
-  swfcrew.DataLoader = DataLoader;
-
-  /**
-   * @class
-   * @extends DataLoader
-   */
-  var URLLoader = (function(pSuper) {
-    function URLLoader() {
-      pSuper.call(this);
-    }
-
-    URLLoader.prototype = Object.create(pSuper.prototype);
-    URLLoader.prototype.constructor = URLLoader;
-
-    URLLoader.prototype.load = function(pURL, pOptions) {
-      this.options = pOptions = (pOptions || {});
-
-      var tSelf = this;
-      var tRequest = new benri.net.Request(pURL, 'GET', true);
-
-      tRequest.send(null)
-      .then(function(pResponse) {
-        tSelf.emit('downloadcomplete', tSelf);
-        tSelf.url = tRequest.url;
-        pSuper.prototype.load.call(tSelf, new Uint8Array(pResponse.body.getBuffer()), pOptions);
-      })
-      .as(function(e) {
-        tSelf.emit('downloadprogress', e);
-        // TODO: Progressive Loading
-      })
-      .or(function(e) {
-        tSelf.emit('error', e);
-      });
-
-      tSelf.emit('downloadstart', this);
-    };
-
-    return URLLoader;
-  })(DataLoader);
-
-  swfcrew.URLLoader = URLLoader;
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var EventEmitter = benri.event.EventEmitter;
-
-  benri.event.EventLooper = EventLooper;
-
-  function EventLooper() {
-    EventEmitter(this);
-
-    this.loop = loop;
-  }
-
-  function loop() {
-    // Might return, might not. You should do
-    // no logic after calling this function.
-    // The backend implementation should make sure
-    // that the VM will not exit after calling this.
-  }
-
-  function timeout(pMillseconds) {
-
-  }
-
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var benri = global.benri;
-  var env = benri.env = {};
-
-  benri.event.EventEmitter(env);
-
-  var mVars = [];
-
-  env.setVar = function(pName, pValue) {
-    mVars[pName] = pValue + '';
-
-    env.emit('setvar', {
-      varName: pName,
-      varValue: pValue
-    });
-  };
-
-  env.getVar = function(pName) {
-    return mVars[pName] || null;
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2014 BenriJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  var bugs = {};
+  benri.content.Manifest = Manifest;
 
-  benri.impl.web.graphics = {
-    bugs: bugs
-  };
-
-  /** @const @type {boolean} */
-  bugs.putImageDataAlphaBug = detectPutImageDataBug();
-
-  /** @const @type {boolean} */
-  bugs.repeatPatternBug = detectRepeatPatternBug();
-
-  /** @const @type {boolean} */
-  bugs.canvasSizeBug = detectCanvasSizeBug();
-
-  /**
-   * @return {boolean}
-   */
-  function detectPutImageDataBug() {
-    /** @type {HTMLCanvasElement} */
-    var tCanvas = document.createElement('canvas');
-    /** @type {CanvasRenderingContext2D} */
-    var tContext = tCanvas.getContext('2d');
-    /** @type {ImageData} */
-    var tImageData;
-    /** @type {!(CanvasPixelArray|Uint8ClampedArray)} */
-    var tPixelArray;
-
-    tCanvas.width = tCanvas.height = 1;
-    tImageData = tContext.createImageData(1, 1);
-    tPixelArray = tImageData.data;
-
-    tPixelArray[0] = tPixelArray[3] = 128;
-
-    tContext.putImageData(tImageData, 0, 0);
-    tImageData = tContext.getImageData(0, 0, 1, 1);
-    tPixelArray = tImageData.data;
-
-    return (tPixelArray[0] === 255);
-  }
-
-  function detectRepeatPatternBug() {
-    var tPatternCanvas = document.createElement('canvas');
-    tPatternCanvas.width = 1;
-    // iOS doesn't care about the size, but Chrome
-    // needs width or height to be larger than the other.
-    tPatternCanvas.height = 3;
-    var tPatternContext = tPatternCanvas.getContext('2d');
-
-    tPatternContext.fillStyle = 'red';
-    tPatternContext.fillRect(0, 0, 1, 3);
-
-    var tCanvas = document.createElement('canvas');
-
-    // iOS needs to be above 5000 total pixels,
-    // Chrome needs to be a box larger than 256 (the render square).
-    tCanvas.width = 257;
-    tCanvas.height = 257;
-
-    var tContext = tCanvas.getContext('2d');
-    var tPattern = tContext.createPattern(tPatternCanvas, 'repeat');
-
-    tContext.fillStyle = tPattern;
-
-    tContext.setTransform(1.1, 0, 0, 1.1, 0, 0);
-    tContext.fillRect(0, 0, 257, 257);
-
-    return (tContext.getImageData(1, 0, 1, 1).data[0] !== 255);
-  }
-
-  function detectCanvasSizeBug() {
-    // sadly, we actually can't detect this
-    // so we guess based upon the existence
-    // of other bugs (this is not 100% accurate).
-    
-    return detectPutImageDataBug();
-  }
-
-  benri.env.on('setvar', function(pEvent) {
-    if (pEvent.varName === 'benri.impl.web.graphics.canvasSizeBug') {
-      bugs.canvasSizeBug = pEvent.varValue;
-    }
-  });
-
-}());
-/**
- * @author Yuta Imaya
- *
- * Copyright (C) 2012 Yuta Imaya.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-  /** @type {Object} */
-  var mBrowser = global.quickswf.browser = {};
-
-  /** @const @type {boolean} */
-  mBrowser.HaveTypedArray = (global.Uint8Array !== void 0);
-
-  /** @const @type {boolean} */
-  mBrowser.HaveCreateObjectURL =
-    ((global.URL && global.URL.createObjectURL) || (global.webkitURL && global.webkitURL.createObjectURL));
-
-  /** @const @type {boolean} */
-  mBrowser.HavePutImageDataAlphaBug = benri.impl.web.graphics.bugs.putImageDataAlphaBug;
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-benri.impl.web.graphics.shader = {};
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-benri.impl.web.graphics.shader.fragment = {};
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  benri.impl.web.graphics.shader.fragment.RadialGradientShader = {
-    pre: function(pShader, pSurface, pProgram) {
-      var tStopColors = pShader.getPositionColors();
-      var tColors = pProgram.colors;
-
-      for (var i = 0 , il = tStopColors.length; i < il; i++) {
-        tColors.push(tStopColors[i].clone());
-      }
-    },
-
-    style: function(pShader, pSurface, pProgram) {
-      var tContext = pSurface.context;
-      var tStartPoint = pShader.getStartPoint();
-      var tX = tStartPoint.x;
-      var tY = tStartPoint.y;
-      var tRadius = pShader.getRadius();
-      var tPositions = pShader.getPositions();
-      var tColors = pProgram.colors;
-      var tMatrix = pShader.getMatrix();
-      var tFillTypeText = pProgram.fillTypeText;
-      var tGradient;
-      var tWorldMatrix = pProgram.matrix;
-      var i, il;
-
-      pSurface.saveContext();
-      pSurface.setIdentityTransform();
-      tGradient = tContext.createRadialGradient(tX, tY, 0, tX, tY, tRadius);
-
-      for (i = 0, il = tPositions.length; i < il; i++) {
-        tGradient.addColorStop(tPositions[i], tColors[i].toCSSString());
-      }
-
-      tContext[tFillTypeText] = tGradient;
-      pSurface.setTransform(
-        tWorldMatrix.a,
-        tWorldMatrix.b,
-        tWorldMatrix.c,
-        tWorldMatrix.d,
-        tWorldMatrix.e,
-        tWorldMatrix.f
-      );
-      pSurface.transform(tMatrix.a, tMatrix.b, tMatrix.c, tMatrix.d, tMatrix.e, tMatrix.f);
-
-      return false;
-    },
-
-    post: function(pShader, pSurface, pProgram) {
-      pSurface.restoreContext();
-    }
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  benri.impl.web.graphics.shader.fragment.LinearGradientShader = {
-    pre: function(pShader, pSurface, pProgram) {
-      var tStopColors = pShader.getPositionColors();
-      var tColors = pProgram.colors;
-
-      for (var i = 0 , il = tStopColors.length; i < il; i++) {
-        tColors.push(tStopColors[i].clone());
-      }
-    },
-
-    style: function(pShader, pSurface, pProgram) {
-      var tContext = pSurface.context;
-      var tStartPoint = pShader.getStartPoint();
-      var tEndPoint = pShader.getEndPoint();
-      var tPositions = pShader.getPositions();
-      var tMatrix = pShader.getMatrix();
-      var tFillTypeText = pProgram.fillTypeText;
-      var tWorldMatrix = pProgram.matrix;
-      var tColors = pProgram.colors;
-      var tGradient;
-      var i, il;
-
-      pSurface.saveContext();
-      pSurface.setIdentityTransform();
-      tGradient = tContext.createLinearGradient(tStartPoint.x, tStartPoint.y, tEndPoint.x, tEndPoint.y);
-
-      for (i = 0, il = tPositions.length; i < il; i++) {
-        tGradient.addColorStop(tPositions[i], tColors[i].toCSSString());
-      }
-
-      tContext[tFillTypeText] = tGradient;
-      pSurface.setTransform(
-        tWorldMatrix.a,
-        tWorldMatrix.b,
-        tWorldMatrix.c,
-        tWorldMatrix.d,
-        tWorldMatrix.e,
-        tWorldMatrix.f
-      );
-      pSurface.transform(tMatrix.a, tMatrix.b, tMatrix.c, tMatrix.d, tMatrix.e, tMatrix.f);
-
-      return false;
-    },
-
-    post: function(pShader, pSurface, pProgram) {
-      pSurface.restoreContext();
-    }
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var mHasBitmapPatternGapIssue = benri.impl.web.graphics.bugs.repeatPatternBug;
-
-
-  benri.impl.web.graphics.shader.fragment.ImageShader = {
-    pre: function(pShader, pSurface, pProgram) {
-      var tImage = pShader.getImage();
-      var tSrcWidth = tImage.getWidth();
-      var tSrcHeight = tImage.getHeight();
-      var tTileMode = pShader.getTileMode();
-
-      pProgram.fillData = {
-        image: tImage._domImage,
-        matrix: pShader.getMatrix(),
-        tileMode: tTileMode,
-        width: tSrcWidth,
-        height: tSrcHeight,
-        srcX: 0,
-        srcY: 0,
-        srcWidth: tSrcWidth,
-        srcHeight: tSrcHeight
-      };
-    },
-
-    style: function(pShader, pSurface, pProgram) {
-      var tContext = pSurface.context;
-      var tFillData = pProgram.fillData;
-      var tSurfaceMatrix;
-      var tMatrix;
-      var tImage = tFillData.image;
-
-      pSurface.saveContext();
-
-      if (tFillData.tileMode === 'none') {
-        if (tFillData.drawnOnSurface) {
-          return true;
-        }
-
-        tSurfaceMatrix = pProgram.matrix;
-        tMatrix = pShader.getMatrix();
-
-        tContext.clip();
-
-        pSurface.setTransform(
-          tSurfaceMatrix.a,
-          tSurfaceMatrix.b,
-          tSurfaceMatrix.c,
-          tSurfaceMatrix.d,
-          tSurfaceMatrix.e,
-          tSurfaceMatrix.f
-        );
-        pSurface.transform(tMatrix.a, tMatrix.b, tMatrix.c, tMatrix.d, tMatrix.e, tMatrix.f);
-        tContext.drawImage(tImage, 0, 0, tFillData.srcWidth, tFillData.srcHeight, 0, 0, tFillData.width, tFillData.height);
-
-        return true;
-      } else {
-        tMatrix = pProgram.matrix.cloneAndAutoRelease().multiply(pShader.getMatrix());
-
-        if (mHasBitmapPatternGapIssue) {
-          tMatrix.setScaleX(Math.round(tImage.width * tMatrix.getScaleX()) / tImage.width);
-          tMatrix.setScaleY(Math.round(tImage.height * tMatrix.getScaleY()) / tImage.height);
-        }
-
-        pSurface.setTransform(
-          tMatrix.a,
-          tMatrix.b,
-          tMatrix.c,
-          tMatrix.d,
-          tMatrix.e,
-          tMatrix.f
-        );
-        tContext[pProgram.fillTypeText] = tContext.createPattern(tImage, 'repeat');
-      }
-
-      return false;
-    },
-
-    post: function(pShader, pSurface, pProgram) {
-      pSurface.restoreContext();
-    }
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  benri.impl.web.graphics.shader.fragment.ColorShader = {
-    pre: function(pShader, pSurface, pProgram) {
-      pProgram.colors.push(pShader.getColor().clone());
-    },
-
-    style: function(pShader, pSurface, pProgram) {
-      pSurface.context[pProgram.fillTypeText] = pProgram.colors[0].toCSSString();
-
-      return false;
-    },
-
-    post: function(pShader, pSurface, pProgram) {}
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  benri.impl.web.graphics.shader.fragment.AlphaShader = {
-    pre: function(pShader, pSurface, pProgram) {
-      var tContext = pSurface.context;
-      var tAlpha = pShader.getGlobalAlpha();
-      var tOldAlpha = pShader.oldAlpha = tContext.globalAlpha;
-
-      if (tOldAlpha !== tAlpha) {
-        tContext.globalAlpha = tAlpha < 0 ? 0 : tAlpha;
-      }
-    },
-
-    post: function(pShader, pSurface, pProgram) {
-      var tCurrentAlpha = pSurface.context.globalAlpha;
-      var tOldAlpha = pShader.oldAlpha;
-
-      if (tCurrentAlpha !== tOldAlpha) {
-        pSurface.context.globalAlpha = tOldAlpha;        
-      }
-    }
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-benri.impl.web.graphics.draw = {};
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var benri = global.benri;
-  var mem = benri.mem;
-
-  var mInstancePoolEnabled = true;
-  var mLRUPoolEnabled = true;
-
-  var mAntialias = benri.env.getVar('benri.graphics.surface.antialias') || false;
-
-  benri.env.on('setvar', function(pEvent) {
-    if (pEvent.varName === 'benri.graphics.surface.antialias') {
-      mAntialias = pEvent.varValue;
-    }
-  });
-
-
-  var TYPE_IMAGE = 0x1;
-  var TYPE_CANVAS = 0x2;
-  var TYPE_VIDEO = 0x3;
+  var mGetBlobClasses = benri.content.Blob.getClasses;
+  var MimeType = benri.content.MimeType;
 
   /**
    * @class
-   * @extends {benri.graphics.draw.AbstractImage}
-   */
-  var DOMImage = (function(pSuper) {
-
-    var document = global.document;
-    var ArrayBufferView = benri.io.ArrayBufferView;
-
-    /**
-     * @constructor
-     */
-    function DOMImage(pWidth, pHeight, pImage) {
-      var tImage = pImage;
-
-      if (!pWidth) {
-        pWidth = 1;
-      }
-
-      if (!pHeight) {
-        pHeight = 1;
-      }
-
-      if (!tImage) {
-        tImage = _createHTMLCanvas(pWidth, pHeight);
-      }
-
-      if (tImage instanceof global.HTMLImageElement) {
-        this._domType = TYPE_IMAGE;
-      } else if (tImage instanceof global.HTMLCanvasElement) {
-        this._domType = TYPE_CANVAS;
-      } else if (tImage instanceof global.HTMLVideoElement) {
-        this._domType = TYPE_VIDEO;
-      } else {
-        throw new Error('Invalid DOMImage');
-      }
-
-      pSuper.call(this, pWidth, pHeight);
-
-      this._domImage = tImage;
-
-      this.onDestroy(function () {
-        this.recycle && this.recycle();
-      });
-
-      this._preAllocatedImage = null;
-      this._preAllocatedType = -1;
-    }
-
-    DOMImage.fromImage = function(pImage) {
-      var tWidth = pImage.getWidth();
-      var tHeight = pImage.getHeight();
-      var tImage = new DOMImage(tWidth, tHeight);
-
-      tImage.setBytes(
-        pImage.getBytes(0, 0, tWidth, tHeight, tWidth),
-        0, 0, tWidth, tHeight, tWidth
-      );
-
-      return tImage;
-    };
-
-    DOMImage.prototype = Object.create(pSuper.prototype);
-    DOMImage.prototype.constructor = DOMImage;
-
-    DOMImage.prototype.getType = function() {
-      return this._domType;
-    };
-
-    DOMImage.prototype.getBytes = function(pX, pY, pWidth, pHeight, pStride) {
-      var tDOMImage = this._domImage;
-      var tImageData;
-      var tBytes;
-
-      if (!pX) {
-        pX = 0;
-      }
-
-      if (!pY) {
-        pY = 0;
-      }
-
-      if (!pWidth) {
-        pWidth = this.getWidth();
-      }
-
-      if (!pHeight) {
-        pHeight = this.getHeight();
-      }
-
-      if (this._domType === TYPE_CANVAS) {
-        tImageData = tDOMImage.getContext('2d').getImageData(pX, pY, pWidth, pHeight);
-        tBytes = tImageData.data;
-        tBytes._domImageData = tImageData;
-
-        return tBytes;
-      } else {
-        var tCanvas = _createHTMLCanvas(pWidth, pHeight);
-        _resetHTMLCanvas(tCanvas);
-        var tContext = tCanvas.getContext('2d');
-        tContext.drawImage(tDOMImage, 0, 0, pWidth, pHeight, 0, 0, pWidth, pHeight);
-        tImageData = tContext.getImageData(pX, pY, pWidth, pHeight);
-
-        //pool.put(tCanvas);
-
-        tBytes = tImageData.data;
-        tBytes._domImageData = tImageData;
-
-        return tBytes;
-      }
-    };
-
-    DOMImage.prototype.setBytes = function(pBytes, pX, pY, pWidth, pHeight, pStride) {
-      if (this._domType === TYPE_CANVAS) {
-        var tContext = this._domImage.getContext('2d');
-        var tImageData = pBytes._domImageData;
-
-        if (tImageData && tImageData.width === pWidth && tImageData.height === pHeight) {
-          tContext.putImageData(tImageData, pX, pY);
-        } else {
-          tImageData = tContext.getImageData(pX, pY, pWidth, pHeight);
-          var tRawData = tImageData.data;
-
-          if (tRawData instanceof ArrayBufferView) {
-            tRawData.set(pBytes);
-          } else {
-            for (var i = 0, il = pBytes.length; i < il; i++) {
-              tRawData[i] = pBytes[i];
-            }
-          }
-
-          tContext.putImageData(tImageData, pX, pY);
-        }
-      } else {
-        throw new Error('Can not set bytes of this DOMImage');
-      }
-    };
-
-    DOMImage.prototype.clone = function() {
-      var tWidth = this.getWidth();
-      var tHeight = this.getHeight();
-      var tNewImage = DOMImage.obtain(tWidth, tHeight);
-
-      tNewImage._domImage.getContext('2d').drawImage(this._domImage, 0, 0, tWidth, tHeight, 0, 0, tWidth, tHeight);
-
-      return tNewImage;
-    };
-
-    return DOMImage;
-  })(benri.graphics.draw.AbstractImage);
-
-  global.benri.impl.web.graphics.draw.DOMImage = DOMImage;
-
-
-  function _createHTMLCanvas(pWidth, pHeight) {
-    var tCanvas = document.createElement('canvas');
-    tCanvas.width = Math.ceil(pWidth);
-    tCanvas.height = Math.ceil(pHeight);
-    tCanvas.style.webkitTransform = 'translateZ(0)';
-    var tContext = tCanvas.getContext('2d');
-    if (tContext.webkitImageSmoothingEnabled !== mAntialias) {
-      tContext.webkitImageSmoothingEnabled = mAntialias;
-    }
-    return tCanvas;
-  };
-
-  function _resetHTMLCanvas(pCanvas) {
-    var tContext = pCanvas.getContext('2d');
-    tContext.setTransform(1, 0, 0, 1, 0, 0);
-    tContext.globalCompositeOperation = 'source-over';
-    tContext.globalAlpha = 1;
-    tContext.clearRect(0, 0, pCanvas.width + 1, pCanvas.height + 1);
-    return pCanvas;
-  };
-
-  if (mInstancePoolEnabled) {
-
-    var KEY_BASE = 1.38;
-    var LOG_KEY_BASE = Math.log(KEY_BASE);
-    var mTotalAllocNum = 0;
-    var mPoolTimeLimit = 100000;
-    var mInitialAllocNum = 1;
-
-    // TODO: Need to find out the universally applicable numbers.
-    var mAllocNums = [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ];
-
-    var mAllocSizes = new global.Array(mAllocNums.length);
-    for (var i = 0, il = mAllocSizes.length; i < il; i++) {
-      mAllocSizes[i] = Math.ceil(Math.pow(KEY_BASE, i));
-    }
-
-    var mRefill = function (pPool, pPoolIndex) {
-      var tPool = pPool.data;
-      if (!tPool) {
-        tPool = pPool.data = [];
-      }
-      var tWaterLevel = pPool.waterLevel;
-      if (!tWaterLevel) {
-        tWaterLevel = pPool.waterLevel = [];
-      }
-      var tCrudeSum = 0;
-      var tAlloc = function (pIndex, pAllocNum) {
-        var tSize = mAllocSizes[pIndex];
-        var tPoolLane = tPool[pIndex], tInstance, tInstanceData;
-
-        if (tPoolLane === void 0) {
-          tPoolLane = tPool[pIndex] = [];
-        }
-//if (pAllocNum - tPoolLane.length > 0) {
-//console.log('Alloc: index [' + pIndex + '] num=' + (pAllocNum - tPoolLane.length));
-//}
-        for (var i = tPoolLane.length; i < pAllocNum; i++) {
-          tInstance = new DOMImage(tSize, tSize);
-          tInstanceData = tInstance.__instanceData = {};
-          tInstanceData.lastRecycled = new Date();
-          tPoolLane.push(tInstance);
-          mTotalAllocNum++;
-          tCrudeSum += tSize;
-        }
-        // Set up a water level, an array to keep track of how many instances are used at a given time.
-        // waterLevel[i][0] : holds the number of the instances currently allocated from the i-th pool.
-        // waterLevel[i][1] : holds the peak number of the instances allocated from the i-th pool.
-        if (!tWaterLevel[pIndex]) {
-          tWaterLevel[pIndex] = [0, 0];
-        }
-      };
-
-
-      for (var i = 0, il = mAllocNums.length; i < il; i++) {
-        var tValue = mAllocNums[i];
-        if (tValue) {
-          tAlloc(i, tValue);
-        }
-      }
-
-      if (pPoolIndex !== void 0) {
-        var tLane = tPool[pPoolIndex];
-        if (!tLane || tLane.length === 0) {
-          if (mAllocSizes[pPoolIndex] === void 0) {
-            mAllocSizes[pPoolIndex] = Math.ceil(Math.pow(KEY_BASE, pPoolIndex));
-          }
-          tAlloc(pPoolIndex, mInitialAllocNum);
-          //if (mAllocNums[tPoolIndex] === void 0) {
-          //  mAllocNums[tPoolIndex] = mInitialAllocNum;
-          //}
-        }
-      }
-//if (mPool._statisticsReportCallback) {
-//  console.log('Refilled!!!');
-//  mPool._statisticsReportCallback(pPool);
-//}
-      return tCrudeSum;
-    };
-
-    var mObtain = function (pPool, pArgs) {
-      var tPool = pPool.data;
-      var tWaterLevel = pPool.waterLevel;
-      var tWidth = pArgs[0];
-      var tHeight = pArgs[1];
-      var tImage = pArgs[2];
-
-      // Never refilled.
-      if (!tPool) {
-        return null;
-      }
-
-      // Determine the pool index.
-      var tPoolIndex = Math.ceil(
-        Math.log(Math.max(tWidth, tHeight)) / LOG_KEY_BASE
-      );
-
-      // Make a room for the pool index.
-      var tPoolLane = tPool[tPoolIndex];
-      if (!tPoolLane) {
-        tPoolLane = tPool[tPoolIndex] = [];
-      }
-
-      // Allocate the instance from the pool.
-      tInstance = tPoolLane.pop();
-
-      // Pool gets empty.
-      if (!tInstance) {
-        mRefill(pPool, tPoolIndex);
-        tInstance = tPoolLane.pop();
-      }
-
-      if (!tInstance) {
-        return null;
-      }
-
-      // Initialize the instance
-      if (!tWidth) {
-        tWidth = 1;
-      }
-      if (!tHeight) {
-        tHeight = 1;
-      }
-      tInstance._width = tWidth;
-      tInstance._height = tHeight;
-
-      // Update the preallocated image if exists.
-      if (tImage) {
-        tInstance._preAllocatedImage = tInstance._domImage;
-        tInstance._preAllocatedImageType = tInstance._domType;
-        tInstance._domImage = tImage;
-        if (tImage instanceof global.HTMLImageElement) {
-          tInstance._domType = TYPE_IMAGE;
-        } else if (tImage instanceof global.HTMLCanvasElement) {
-          tInstance._domType = TYPE_CANVAS;
-        } else if (tImage instanceof global.HTMLVideoElement) {
-          tInstance._domType = TYPE_VIDEO;
-        } else {
-          throw new Error('Invalid DOMImage');
-        }
-      } else {
-        if (tInstance._domType === TYPE_CANVAS) {
-          _resetHTMLCanvas(tInstance._domImage);
-        }
-      }
-
-      // Update the water level.
-      var tItem = tWaterLevel[tPoolIndex];
-      if (!tItem) {
-        tItem = tWaterLevel[tPoolIndex] = [0, 0];
-      }
-      tItem[0]++; // Current number of the used instances.
-      tItem[1] = Math.max(tItem[1], tItem[0]); // Records the peak number.
-
-      // Attach the instance specific info.
-      var tInstanceData = tInstance.__instanceData;
-      tInstanceData.poolIndex = tPoolIndex;
-      tInstanceData.lastObtained = new Date();
-
-      return tInstance;
-    };
-
-    var mRecycle = function (pPool, pInstance) {
-      var tPool = pPool.data;
-
-      // Never refilled.
-      if (!tPool) {
-        return;
-      }
-
-      var tWaterLevel = pPool.waterLevel;
-      var tInstanceData = pInstance.__instanceData;
-
-      // Restore some properties.
-      mem.Keeper(pInstance);
-      pInstance.onDestroy(function () {
-        pInstance.recycle && pInstance.recycle();
-      });
-
-      // Update the preallocated image if exists.
-      if (pInstance._preAllocatedImage) {
-        pInstance._domImage = pInstace._preAllocatedImage;
-        pInstance._domImageType = pInstace._preAllocatedImageType;
-        delete pInstace._preAllocatedImage;
-        delete pInstace._preAllocatedImageType;
-      }
-
-      if (!tInstanceData) {
-        // Instances allocated outside the pool.
-        return;
-      }
-
-      // Update the water level.
-      if (tWaterLevel) {
-        tWaterLevel[tInstanceData.poolIndex][0]--;
-      }
-
-      // Put the instance back to the pool.
-      tPool[tInstanceData.poolIndex].push(pInstance);
-
-      // Attach the instance specific data.
-      tInstanceData.lastRecycled = new Date();
-    };
-
-    var mCleanup = function (pPool) {
-      var tPool = pPool.data;
-
-      // Never refilled.
-      if (!tPool) {
-        return 0;
-      }
-      var tThreshold = Date.now() - mPoolTimeLimit;
-      var tCrudeSum = 0;
-
-      for (var i = 0, il = tPool.length; i < il; i++) {
-        var tPoolLane = tPool[i];
-        if (!tPoolLane) {
-          mAllocNums[i] = 0;
-          continue;
-        }
-        for (var j = tPoolLane.length; j--;) {
-          var tInstance = tPoolLane[j];
-          var tInstanceData = tInstance.__instanceData;
-          if (!tInstanceData ||
-            tInstanceData.lastRecycled.getTime() < tThreshold) {
-            tPoolLane.splice(j, 1);
-            mTotalAllocNum--;
-            tCrudeSum += tInstance._width;
-          }
-        }
-        //mAllocNums[i] = tPoolLane.length;
-      }
-//if (mPool._statisticsReportCallback) {
-//  console.log('CleanUp!!!');
-//  mPool._statisticsReportCallback(pPool);
-//}
-      return tCrudeSum;
-    };
-
-    var mReport = function (pPool) {
-      var tPool = pPool.data;
-
-      // Never refilled.
-      if (!tPool) {
-        return;
-      }
-
-      var tWaterLevel = pPool.waterLevel;
-      var i, il, n;
-
-      // Copy the information about the unused instances.
-      var tUnusedInstanceNum = 0;
-      for (i = 0, il = tPool.length; i < il; i++) {
-        if (tPool[i]) {
-          tUnusedInstanceNum += tPool[i].length;
-        }
-      }
-
-      // Copy the information about the currently used instances.
-      var tPeakWaterLevel = 0, tPeakWaterLevelPerId = new Array(il);
-      for (i = 0; i < il; i++) {
-        if (tWaterLevel[i]) {
-          n = tPeakWaterLevelPerId[i] = tWaterLevel[i][1];
-          tPeakWaterLevel += n;
-        }
-      }
-
-      console.log(
-        JSON.stringify({
-          'type' : 'DOMImage',
-          'total number of objects in this pool' : mTotalAllocNum,
-          'currentlly used' : (mTotalAllocNum - tUnusedInstanceNum),
-          'currentlly unused' : tUnusedInstanceNum,
-          'peak' : tPeakWaterLevel,
-          'peak (per id)' : tPeakWaterLevelPerId
-        }, null, 2)
-      );
-    };
-
-    var mPool = new mem.InstancePool({
-      refill : mRefill,
-      obtain : mObtain,
-      recycle : mRecycle,
-      name : 'DOMImage',
-      supervisor : mem.getDefaultNativeSupervisor(),
-      tag : 'image',
-      cleanUpCallback : mCleanup,
-      statisticsReportCallback : mReport,
-      autoCleanUp : true,
-      lazyAlloc : true
-    });
-
-
-    // Wraps the pool's methods around DOMImage type.
-    DOMImage.obtain = function (pWidth, pHeight, pImage) {
-      return mPool.obtain([pWidth, pHeight, pImage]);
-    };
-
-    DOMImage.prototype.recycle = function () {
-      mPool.recycle(this);
-    };
-
-  } else {
-
-    DOMImage.obtain = function (pWidth, pHeight, pImage) {
-      return new DOMImage(pWidth, pHeight, pImage);
-    };
-
-    DOMImage.recycle = function () {
-      ;
-    };
-  }
-
-  if (mLRUPoolEnabled) {
-    var MAX_SIZE = 10;
-
-    var mIndexGenerator = function (pArgs) {
-      var tWidth = pArgs[0];
-      var tHeight = pArgs[1];
-
-      return tWidth + ',' + tHeight;
-    };
-
-    var mCreate = function (pArgs) {
-      var tWidth = pArgs[0];
-      var tHeight = pArgs[1];
-
-      return new DOMImage(tWidth, tHeight);
-    };
-
-    var mReset = function (pInstance) {
-      _resetHTMLCanvas(pInstance._domImage);
-    };
-
-    var mDestroy = function (pInstance) {
-      pInstance.destroy();
-    };
-
-    var mLRUPool = new mem.LRUPool({
-      maxLength : MAX_SIZE,
-      indexGenerator : mIndexGenerator,
-      create : mCreate,
-      reset : mReset,
-      destroy : mDestroy
-    });
-    
-
-    DOMImage.obtainFromLRUPool = function (pWidth, pHeight) {
-      return mLRUPool.obtain([pWidth, pHeight]);
-    };
-
-
-  } else {
-    DOMImage.obtainFromLRUPool = function (pWidth, pHeight) {
-      return new DOMImage(pWidth, pHeight);
-    };
-  }
-
-}(this));
-
-/**
- * @author Kuu Miyazaki
- *
- * Copyright (C) 2012 QuickSWF Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  var PersistentEventEmitter = global.benri.event.PersistentEventEmitter;
-  var mPolyFills = global.quickswf.polyfills;
-  var DOMImage = global.benri.impl.web.graphics.draw.DOMImage;
-
-  global.quickswf.utils.MediaLoader = MediaLoader;
-
-  /**
-   * A class for loading media data asynchronously.
    * @constructor
+   * @param {Object=} pPackage A package describing the manifest.
    */
-  function MediaLoader() {
+  function Manifest(pPackage) {
+    benri.event.PersistentEventEmitter(this);
 
-    // The data to wait.
-    // The data with the wait flag on (i.e. pOptions.wait=true) are stored here.
-    // The delay object returned by checkComplete() emits an event when this._wait gets empty.
-    this._wait = {};
+    this._repo = {};
+    this._entryLoadingCounter = 0;
 
-    // The data not to wait.
-    // The data with the wait flag off (i.e. pOptions.wait=false) are stored here.
-    this._noWait = {};
-
-    // The loaded data.
-    // The data is stored as follows:
-    // {"(type name e.g. text, image, etc.)" : [data1, data2, ...], ...}
-    this._loaded = {};
-
-    // The list of CueListener objects to be notified when the data is loaded.
-    // The data is stored as follows:
-    // {"(id)" : {listeners : [listener1, listener2, ...], remove : (boolean)}, ...}
-    this._listeners = {};
-
-    // The list of CueListener objects to be notified when all the data is loaded.
-    this._compListeners = [];
+    if (pPackage) {
+      this.addMultiple(pPackage);
+    }
   }
 
-  // A private method to update the internal state.
-  MediaLoader.prototype._update = function (pCommand, pEntry) {
+  var tProto = Manifest.prototype;
 
-    var tOptions = pEntry.options, tDelay,
-        i, il, tHash, tId = pEntry.id,
-        tListeners, tToNotifyList = [],
-        tMediaType = mGetMediaType(pEntry.type),
-        tSlot = this._loaded[tMediaType];
+  function finishLoadingEntry(pManifest) {
+    if (--pManifest._entryLoadingCounter <= 0) {
+      pManifest._entryLoadingCounter = 0; // Just in case...
 
-    if (pCommand === 'del') {
-      tHash = this._loaded;
-    } else {
-      if (tOptions.wait) {
-        tHash = this._wait;
-      } else {
-        tHash = this._noWait;
-      }
+      pManifest.emit('load'); // What to do with errors?
     }
-
-    if (pCommand === 'add') {
-      tDelay = new PersistentEventEmitter();
-      tHash[tId] = pEntry;
-      tListeners = this._listeners[tId];
-      if (tListeners === void 0) {
-        this._listeners[tId] = {listeners: [tDelay], remove: false};
-      } else {
-        tListeners.listeners.push(tDelay);
-      }
-    } else if (pCommand === 'move') {
-      delete tHash[tId];
-      tListeners = this._listeners[tId];
-      if (tListeners) {
-        tToNotifyList = tToNotifyList.concat(tListeners.listeners);
-        delete this._listeners[tId];
-      }
-      if (!tListeners || tListeners.remove === false) {
-        if (tSlot === void 0) {
-          tSlot = this._loaded[tMediaType] = {};
-        }
-        tSlot[tId] = pEntry;
-      }
-    } else if (pCommand === 'del') {
-      if (tSlot !== void 0) {
-        delete tSlot[tId];
-      }
-    }
-    for (i = 0, il = tToNotifyList.length; i < il; i++) {
-      if (pEntry.error) {
-        tToNotifyList[i].emit('fail', pEntry.data);
-      } else {
-        tToNotifyList[i].emit('load', pEntry.data);
-      }
-    }
-    if (pCommand === 'move'
-        && Object.getOwnPropertyNames(this._wait).length === 0) {
-      for (i = 0, il = this._compListeners.length; i < il; i++) {
-        this._compListeners[i].emit('complete', null);
-      }
-      this._compListeners = [];
-    }
-    return tDelay;
-  };
-
-  // A static function to extract the type name (e.g. image, text, etc.) from the entire MIME type.
-  var mGetMediaType = function (pMimeType) {
-    var tIdx;
-
-    if (!pMimeType) {
-      return null;
-    }
-
-    if ((tIdx = pMimeType.indexOf('/')) === -1) {
-      return pMimeType;
-    }
-
-    return pMimeType.slice(0, tIdx);
-  };
-
-  var mAudioContext;
-  if (global.webkitAudioContext) {
-    mAudioContext = new global.webkitAudioContext();
   }
 
-  var mHaveCreateObjectURL = global.quickswf.browser.HaveCreateObjectURL;
-
-  var mURL = global.URL || global.webkitURL;
-
   /**
-   * Takes a raw data. Loads/decodes the data asynchronously. Provides methods to access the loaded data.
-   * @param {string} pId The id for retrieving the loaded data.
-   * @param {Uint8Array or Blob} pData The raw data.
-   * @param {string} pType MIME type.
-   * @param {boolern} pWait If true, the system cannot go ahead without this data. (default=true)
-   * @param {Object} pOptions
-   *        The following options are supported:
-   *        - wait {boolean} : If true, the system cannot go ahead without this data. (default=true)
-   * @return {benri.event.PersistentEventEmitter} A delay object.
-   *
-   *    To process the loaded data, the client needs to set a callback function as follows:
-   *      benri.event.PersistentEventEmitter.on('load', callback);
-   *    To get notified of the failure, the client needs to set a callback function as follows:
-   *      benri.event.PersistentEventEmitter.on('fail', callback);
-   *    These callbacks take the following object as a parameter:
-   *      - {id: "(specified pId)", data: "(the loaded data or the error object)", type: "(specified pType)"}
+   * Add a new URL resource to this Manifest
+   * @param {string} pId  A unique ID to identify this resource by
+   * @param {string|benri.net.URL} pURL The URL to download from
+   * @param {string} pMimeType The mimetype of the resource
+   * @return {benri.content.Manifest} This Manifest
    */
-  MediaLoader.prototype.load = function (pId, pData, pType, pOptions) {
-
-    var tType = (pType || pData.type),
-        tMediaType, tElem, tLoadEvent,
-        tEntry = {
-          id: pId,
-          data: pData,
-          type: tType,
-          options: pOptions || {wait: true},
-          complete: false,
-          error: false
-        },
-        tSelf = this, tDelay;
-
-    if ((tMediaType = mGetMediaType(tType)) === null) {
-      throw new Error('Mime type is not specified.');
-    }
-
-    // Return if the data is already loaded or queried.
-    if ((tDelay = this._checkExistence(tMediaType, pId)) !== null) {
-      return tDelay;
-    }
-
-    if (tMediaType === 'image') {
-      tElem = new Image();
-      tLoadEvent = 'load';
-    } else if (tMediaType === 'audio') {
-      if (mAudioContext) {
-        // Web Audio API
-        return this._loadWebAudio(tEntry);
-      } else {
-        // HTML Audio Element
-        tElem = global.document.createElement('audio');
-        tLoadEvent = 'loadeddata';
-        tElem.addEventListener('stalled', function () {
-          tElem.load();
-        }, false);
-      }
-    } else if (tMediaType === 'video') {
-      tElem = global.document.createElement('video');
-      tLoadEvent = 'loadeddata';
-      tElem.addEventListener('stalled', function () {
-        tElem.load();
-      }, false);
-    } else if (tMediaType === 'text') {
-      return this._loadText(tEntry);
-    } else {
-      // We create an <embed> element for other types.
-      return this._loadEmbed(tEntry);
-    }
-
-    var tCallback = function() {
-      var src = this.src;
-
-      if (src[0] === 'b' && src[1] === 'l' && src[2] === 'o' && src[3] === 'b' && src[4] === ':') {
-        mURL.revokeObjectURL(src);
-      }
-
-      if (tMediaType === 'image') {
-        tEntry.data = new DOMImage(tElem.width, tElem.height, tElem);
-      } else {
-        tEntry.data = tElem;
-      }
-
-      tEntry.complete = true;
-      tSelf._update('move', tEntry);
-    };
-
-    if (tLoadEvent.substr(0, 2) === 'on') {
-      tElem[tLoadEvent] = tCallback;
-    } else {
-      tElem.addEventListener(tLoadEvent, tCallback, false);
-    }
-
-    tElem.addEventListener('error', function(e) {
-      var src = this.src;
-
-      if (src[0] === 'b' && src[1] === 'l' && src[2] === 'o' && src[3] === 'b' && src[4] === ':') {
-        mURL.revokeObjectURL(src);
-      }
-      console.error('Failure in loading media data: id=' + tEntry.id + ', type=' + tEntry.type);
-      tEntry.data = null;
-      tEntry.complete = true;
-      tEntry.error = true;
-      tSelf._update('move', tEntry);
-    }, false);
-
-    tElem.src = mGetMediaURL(pData, tType);
-
-    return this._update('add', tEntry);
-  };
-
-  // A private static function to get a Blob or Data URL.
-  var mGetMediaURL = function (pData, pType) {
-    var tBlob, tSrc;
-
-    if (pData instanceof Uint8Array) {
-      tBlob = mPolyFills.newBlob([pData], {type: pType});
-    } else {
-      tBlob = pData;
-    }
-
-    if (mHaveCreateObjectURL) {
-      tSrc = mURL.createObjectURL(tBlob);
-    } else {
-      // Hopefully this is the special object we made in newBlob()
-      tSrc = 'data:' + tBlob.type + ';base64,' + global.btoa(tBlob.data);
-    }
-    return tSrc;
-  };
-
-  // A private method to decode the compressed audio data.
-  MediaLoader.prototype._loadWebAudio = function (pEntry) {
-    var tSelf = this;
-
-    mAudioContext.decodeAudioData(
-        pEntry.data.buffer,
-        function (buffer) {
-            pEntry.data = buffer;
-            pEntry.complete = true;
-            tSelf._update('move', pEntry);
-          },
-        function (e) {
-            console.error('decodeAudioData failed:', e);
-            pEntry.complete = true;
-            pEntry.error = true;
-            tSelf._update('move', pEntry);
-          }
-      );
-
-    return this._update('add', pEntry);
-  };
-
-  // A private method to return an <embed> element.
-  MediaLoader.prototype._loadEmbed = function (pEntry) {
-
-    var tElem = global.document.createElement('embed'),
-        tData = pEntry.data, tDelay,
-        tType = pEntry.type;
-
-    tElem.src = mGetMediaURL(tData, tType);
-    tElem.type = tType;
-    pEntry.data = tElem;
-    pEntry.complete = true;
-    tDelay = this._update('add', pEntry);
-    this._update('move', pEntry);
-
-    return tDelay;
-  };
-
-  MediaLoader.prototype._checkExistence = function (pType, pId, pRemove, pListenIfNotExist) {
-    var tEntry, tDelay = new PersistentEventEmitter(), tListeners;
-
-    if (this._loaded[pType]) {
-      tEntry = this._loaded[pType][pId];
-    }
-
-    if (tEntry) {
-      // the data is already loaded.
-      if (pRemove) {
-        this._update('del', tEntry);
-      }
-      tDelay.emit('load', tEntry.data);
-      return tDelay;
-    }
-    tListeners = this._listeners[pId];
-    if (tListeners) {
-      // The data is already requested.
-      tListeners.listeners.push(tDelay);
-      if (pRemove) {
-        tListeners.remove = true;
-      }
-      return tDelay;
-    }
-    if (pListenIfNotExist) {
-      this._listeners[pId] = {listeners: [tDelay], remove: !!pRemove};
-      return tDelay;
-    }
-    return null;
-  };
-
-  /**
-   * Method to retrieve the loaded data.
-   * @param {string} pType The data type, e.g. "text", "image", etc.
-   * @param {string} pId The id for retrieving the loaded data.
-   * @param {boolean} pRemove (defaulst=false)
-   *    If true, the loaded data is removed and no longer is retrievable.
-   * @param {boolean} pAsync (defaulst=false)
-   *    If true, this method returns benri.event.PersistentEventEmitter object.
-   *    To process the loaded data, the client needs to set a callback function as follows:
-   *      benri.event.PersistentEventEmitter.on('load', callback);
-   *    To get notified of the failure, the client needs to set a callback function as follows:
-   *      benri.event.PersistentEventEmitter.on('fail', callback);
-   *    If pAync is false, this method immediately returns the loaded data or null, if the loading is not completed.
-   * @return {Any} The loaded data
-   */
-  MediaLoader.prototype.get = function (pType, pId, pRemove, pAsync) {
+  tProto.addURL = function(pId, pURL, pMimeType) {
+    var tRepo = this._repo;
+    var tMimeType = pMimeType instanceof MimeType ? pMimeType : new MimeType(pMimeType);
     var tEntry;
 
-    if (this._loaded[pType]) {
-      tEntry = this._loaded[pType][pId];
-    }
-
-    if (pAsync) {
-      return this._checkExistence(pType, pId, pRemove, true);
+    if (pId in tRepo) {
+      tEntry = tRepo[pId];
     } else {
-      // Sync
-      if (tEntry) {
-        if (pRemove) {
-          this._update('del', tEntry);
-        }
-        return tEntry.data;
-      } else {
-        return null;
-      }
+      tEntry = tRepo[pId] = new ManifestEntry(pId, this);
     }
+
+    tEntry.addURL(pURL, tMimeType);
+
+    return this;
   };
 
   /**
-   * Returns a delay object to notify when all the data is loaded. (only the data added with pWait true.)
-   * @return {benri.event.PersistentEventEmitter} A delay object.
-   *    To get notified when all the data is loaded, the client needs to set a callback function as follows:
-   *      benri.event.PersistentEventEmitter.on('complete', callback);
-   *    The callback takes null as a parameter.
+   * Add a new URL resource to this Manifest
+   * @param {string} pId  A unique ID to identify this resource by
+   * @param {benri.io.Buffer} pData The data of the resource
+   * @param {string|benri.content.MimeType} pMimeType The mimetype of the resource
+   * @return {benri.content.Manifest} This Manifest
    */
-  MediaLoader.prototype.checkComplete = function () {
-    var tDelay = new PersistentEventEmitter();
-    if (Object.getOwnPropertyNames(this._wait).length === 0) {
-      tDelay.emit('complete', null);
+  tProto.addBuffer = function(pId, pBuffer, pMimeType) {
+    var tRepo = this._repo;
+    var tMimeType = pMimeType instanceof MimeType ? pMimeType : new MimeType(pMimeType);
+    var tEntry;
+
+    if (pId in tRepo) {
+      tEntry = tRepo[pId];
     } else {
-      this._compListeners.push(tDelay);
+      tEntry = tRepo[pId] = new ManifestEntry(pId, this);
     }
-    return tDelay;
+
+    tEntry.addBuffer(pBuffer, tMimeType);
+
+    return this;
   };
 
-  /**
-   * Method to put an externaly loaded data into this._loaded
-   * @param {string} pId The id for retrieving the loaded data.
-   * @param {any} pData The externaly decoded or loaded data.
-   * @param {string} pType MIME type.
-   */
-  MediaLoader.prototype.put = function (pId, pData, pType) {
-    var tType = (pType || pData.type),
-        tEntry = {
-          id: pId,
-          data: pData,
-          type: tType,
-          options: {wait: true},
-          complete: true,
-          error: false
-        };
-    this._update('move', tEntry);
+  tProto.addMultiple = function(pPackage) {
+
+
+    return this;
   };
 
-}(this));
+  tProto.remove = function(pId) {
+    var tItem = this._repo[pId];
+    var tVariants;
+    var k;
+    var tToRemove;
+    var i, il;
 
-/**
- * @author Yuta Imaya
- *
- * Copyright (C) 2012 Yuta Imaya.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-  global.quickswf.Parser.prototype['20'] = defineBitsLossless;
-  global.quickswf.Parser.prototype['36'] = defineBitsLossless2;
+    if (tItem !== void 0) {
+      tVariants = tItem.variants;
+      tToRemove = [];
 
-  var mNewBlob = global.quickswf.polyfills.newBlob;
-  var mHaveTypedArray = global.quickswf.browser.HaveTypedArray;
-  var mHaveAndroidAlphaBug = global.quickswf.browser.HavePutImageDataAlphaBug;
-  var mHaveCreateObjectURL = global.quickswf.browser.HaveCreateObjectURL;
-  var mAdler32 = global.quickswf.utils.Adler32;
-  var mCRC32 = global.quickswf.utils.CRC32;
-  var DOMImage = global.benri.impl.web.graphics.draw.DOMImage;
-  var Uint8Array = global.benri.io.Uint8Array;
-
-  /** @const @type {number} */
-  var mBlockSize = 0xffff;
-
-  /**
-   * @this {quickswf.Parser}
-   * @param {number} pLength tag length.
-   */
-  function defineBitsLossless(pLength) {
-    /** @type {number} */
-    var tId = this.r.getUint16();
-    /** @type {Lossless} */
-    var tLossless = new Lossless(this, pLength, false);
-
-    tLossless.parse();
-
-    if (tLossless.format === LosslessFormat.COLOR_MAPPED && mHaveCreateObjectURL) {
-      tLossless.getImage(tId);
-    } else {
-      tLossless.getCanvas(tId);
-    }
-  }
-
-  /**
-   * @param {number} pLength tag length.
-   */
-  function defineBitsLossless2(pLength) {
-    /** @type {number} */
-    var tId = this.r.getUint16();
-    /** @type {Lossless} */
-    var tLossless = new Lossless(this, pLength, true);
-
-    tLossless.parse();
-
-    if (tLossless.format === LosslessFormat.COLOR_MAPPED && mHaveCreateObjectURL) {
-      tLossless.getImage(tId);
-    } else {
-      tLossless.getCanvas(tId);
-    }
-  }
-
-  /**
-   * @enum {number}
-   */
-  var LosslessFormat = {
-    COLOR_MAPPED: 3,
-    RGB15: 4,
-    RGB24: 5
-  };
-
-  /**
-   * @enum {number}
-   */
-  var PngColourType = {
-    GRAYSCALE: 0,
-    TRUECOLOR: 2,
-    INDEXED_COLOR: 3,
-    GRAYSCALE_WITH_ALPHA: 4,
-    TRUECOLOR_WITH_ALPHA: 6
-  };
-
-  /**
-   * lossless image parser.
-   * @param {quickswf.Parser} parser swf parser object.
-   * @param {number} pLength tag length.
-   * @param {boolean=} withAlpha alpha channel support flag.
-   * @constructor
-   */
-  function Lossless(parser, pLength, withAlpha) {
-    /** @type {SWF} */
-    this.swf = parser.swf;
-    /** @type {Breader} */
-    this.reader = parser.r;
-    /** @type {number} */
-    this.size = pLength - (2 + 1 + 2 + 2);
-    /** @type {number} */
-    this.width;
-    /** @type {number} */
-    this.height;
-    /** @type {!(Array.<number>|Uint8Array)} */
-    this.plain;
-    /** @type {LosslessFormat} */
-    this.format;
-    /** @type {PngColourType} */
-    this.colourType;
-    /** @type {!(Array.<number>|Uint8Array)} */
-    this.palette;
-    /** @type {!Uint8Array} */
-    this.png;
-    /** @type {number} */
-    this.pp = 0;
-    /** @type {number} */
-    this.withAlpha = withAlpha ? 1 : 0;
-
-    if (withAlpha) {
-      this.writeIDAT = this.writeIDATwithAlpha;
-    }
-  }
-
-  /**
-   * @return {number}
-   */
-  Lossless.prototype.calcBufferSize = function() {
-    /** @type {number} */
-    var size = 0;
-    /** @type {number} */
-    var pixelWidth;
-    /** @type {number} */
-    var imageSize;
-
-    // PNG Signature
-    size += 8;
-
-    // IHDR
-    size += /* IHDR data */ 13 + /* chunk */ 12;
-
-    // PLTE
-    if (this.colourType === PngColourType.INDEXED_COLOR) {
-      size += /* PLTE data */ this.palette.length + /* chunk */ 12;
-
-      // tRNS
-      if (this.withAlpha) {
-        size += /* tRNS data */ this.trns.length + /* chunk */ 12;
+      for (k in tVariants) {
+        tToRemove.push(k);
       }
 
-      pixelWidth = 1;
-    } else {
-      pixelWidth = this.withAlpha ? 4 : 3;
+      for (i = 0, il = tToRemove.length; i < il; i++) {
+        tItem.remove(tToRemove[i]);
+      }
+
+      this.resetEvent('entryLoad_' + tItem.id);
+      this.resetEvent('entryError_' + tItem.id);
     }
 
-    // IDAT
-    imageSize = (this.width * pixelWidth + /* filter */ 1) * this.height;
-    size += ( /* ZLIB non-compressed */
-      /* cmf    */ 1 +
-      /* flg    */ 1 +
-      /* data   */ imageSize +
-      /* header */ (
-      (/* bfinal, btype */ 1 +
-        /* len           */ 2 +
-        /* nlen          */ 2) *
-        /* number of blocks */ (1 + (imageSize / mBlockSize | 0))
-      ) +
-      /* adler  */ 4
-    ) + 12;
-
-    // IEND
-    size += /* chunk*/ 12;
-
-    return size;
+    return this;
   };
 
-  /**
-   * parse lossless image.
-   */
-  Lossless.prototype.parse = function() {
-    /** @type {Breader} */
-    var tReader = this.reader;
-    /** @type {LosslessFormat} */
-    var tFormat = this.format = tReader.getUint8();
-    /** @type {number} */
-    var tPaletteSize;
-    /** @type {!(Array.<number>|Uint8Array)} */
-    var tPalette;
-    /** @type {number} */
-    var tPp = 0;
-    /** @type {number} */
-    var tTp = 0;
-    /** @type {!(Array.<number>|Uint8Array)} */
-    var tTmpPalette;
-    /** @type {!(Array.<number>|Uint8Array)} */
-    var tTrns;
-    /** @type {number} */
-    var alpha;
-    /** @type {number} */
-    var bufferSize;
-    /** @type {number} */
-    var i;
+  tProto.onLoad = function(pCallback) {
+    this.on('load', pCallback);
+  };
 
-    this.width = tReader.getUint16();
-    this.height = tReader.getUint16();
+  tProto.ignoreLoad = function(pCallback) {
+    this.ignore('load', pCallback);
+  };
 
-    // indexed-color
-    if (tFormat === LosslessFormat.COLOR_MAPPED) {
-      this.colourType = PngColourType.INDEXED_COLOR;
+  tProto.onEntryLoad = function(pId, pCallback) {
+    this.on('entryLoad_' + pId, pCallback);
+  };
 
-      // palette
-      tPaletteSize = (tReader.getUint8() + 1);
-      if (this.withAlpha) {
-        tTrns = this.trns = new Uint8Array(tPaletteSize);
-      }
-      tPaletteSize *= (3 + this.withAlpha);
-      --this.size;
+  tProto.onEntryProgress = function(pId, pCallback) {
+    this.on('entryProgress_' + pId, pCallback);
+  };
 
-      // buffer size
-      bufferSize = tPaletteSize +
-        /* width with padding * height */((this.width + 3) & -4) * this.height;
-    // truecolor
-    } else {
-      this.colourType = (!this.withAlpha) ?
-        PngColourType.TRUECOLOR : PngColourType.TRUECOLOR_WITH_ALPHA;
+  tProto.onEntryError = function(pId, pCallback) {
+    this.on('entryError_' + pId, pCallback);
+  };
 
-      // buffer size
-      if (tFormat === LosslessFormat.RGB24) {
-        bufferSize = 4 * this.width * this.height;
-      } else if (tFormat === LosslessFormat.RGB15) {
-        bufferSize = 2 * this.width * this.height;
+  tProto.ignoreEntryLoad = function(pId, pCallback) {
+    this.ignore('entryLoad_' + pId, pCallback);
+  };
+
+  tProto.ignoreEntryProgress = function(pId, pCallback) {
+    this.ignore('entryProgress_' + pId, pCallback);
+  };
+
+  tProto.ignoreEntryError = function(pId, pCallback) {
+    this.ignore('entryError_' + pId, pCallback);
+  };
+
+  tProto.get = function(pId) {
+    var tItem = this._repo[pId];
+
+    if (tItem === void 0 || tItem.status !== STATUS_LOADED) {
+      return null;
+    }
+
+    return tItem.activeVariant.blob;
+  };
+
+  tProto.load = function() {
+    var tRepo = this._repo;
+    var k, v;
+    var tItem = void 0;
+
+    for (k in tRepo) {
+      tItem = tRepo[k];
+
+      if (tItem.status === STATUS_IDLE) {
+        this._entryLoadingCounter++;
+        tItem.load();
       }
     }
 
-    // compressed image data
-    this.plain = new Uint8Array((new benri.io.compression.Inflator('inflate'))
-      .inflate(
-        tReader.getByteArray(this.size),
-        {
-          bufferSize: bufferSize
-        }
-      ));
-
-    // palette
-    if (tFormat === LosslessFormat.COLOR_MAPPED) {
-      // RGB palette
-      if (!this.withAlpha) {
-        this.palette = (
-          this.plain.subarray(0, tPaletteSize)
-        );
-      // RGBA palette
-      } else {
-        tTmpPalette = (
-          this.plain.subarray(0, tPaletteSize)
-        );
-        tPalette = this.palette = new Uint8Array(tPaletteSize * 3 / 4);
-
-        if (mHaveAndroidAlphaBug) {
-          for (i = 0; tTp < tPaletteSize; i += 4) {
-            alpha = tTrns[tTp++] = tTmpPalette[i + 3];
-            tPalette[tPp++] = tTmpPalette[i    ]; // red
-            tPalette[tPp++] = tTmpPalette[i + 1]; // green
-            tPalette[tPp++] = tTmpPalette[i + 2]; // blue
-          }
-        } else {
-          for (i = 0; tTp < tPaletteSize; i += 4) {
-            alpha = tTrns[tTp++] = tTmpPalette[i + 3];
-            tPalette[tPp++] = tTmpPalette[i    ] * 255 / alpha | 0; // red
-            tPalette[tPp++] = tTmpPalette[i + 1] * 255 / alpha | 0; // green
-            tPalette[tPp++] = tTmpPalette[i + 2] * 255 / alpha | 0; // blue
-          }
-        }
-      }
-      this.plain = new Uint8Array(this.plain.buffer, tPaletteSize, this.plain.length - tPaletteSize);
+    if (tItem === void 0) {
+      // When there were no entries
+      this.emit('load');
     }
   };
 
-  /**
-   * create new Image element.
-   * @param {number} pId The ID of this image.
-   * @return {Object} Image information.
-   */
-  Lossless.prototype.getImage = function(pId) {
-    /** @type {!(Array.<number>|Uint8Array)} */
-    var tPng = this.getPNG();
-    /** @type {Blob} */
-    var tBlob = mNewBlob([tPng], {type: 'image/png'});
+  tProto.destroy = function() {
+    var tRepo = this._repo;
+    var tToRemove = [];
+    var k;
+    var i, il;
 
-    this.swf.mediaLoader.load(pId, tBlob);
-  };
-
-  /**
-   * create new Canvas element.
-   * @return {HTMLCanvasElement}
-   */
-  Lossless.prototype.getCanvas = function(pId) {
-    /** @type {HTMLCanvasElement} */
-    var tCanvas = document.createElement('canvas');
-    /** @type {CanvasRenderingContext2D} */
-    var tContext = tCanvas.getContext('2d');
-    /** @type {ImageData} */
-    var tImageData;
-    /** @type {!(CanvasPixelArray|Uint8ClampedArray)} */
-    var tPixelArray;
-    /** @type {LosslessFormat} */
-    var tFormat = this.format;
-    /** @type {number} */
-    var tWidthWithPadding;
-    /** @type {number} */
-    var tOp = 0;
-    /** @type {number} */
-    var tIp = 0;
-    /** @type {number} */
-    var tPlain = this.plain;
-    /** @type {number} */
-    var tLength;
-    /** @type {number} */
-    var tX;
-    /** @type {number} */
-    var tWidth = this.width;
-    /** @type {number} */
-    var tIndex;
-    /** @type {number} */
-    var tAlpha;
-    /** @type {number} */
-    var tReserved;
-    /** @type {!(Array.<number>|Uint8Array)} */
-    var tPalette = this.palette;
-    /** @type {!(Array.<number>|Uint8Array)} */
-    var tTrns = this.trns;
-
-    tCanvas.width = this.width;
-    tCanvas.height = this.height;
-
-    tImageData = tContext.getImageData(0, 0, this.width, this.height);
-    tPixelArray = tImageData.data;
-    tLength = tPixelArray.length;
-
-    // Colormapped
-    if (tFormat === LosslessFormat.COLOR_MAPPED) {
-      // set RGBA
-      tWidthWithPadding = (tWidth + 3) & -4;
-      while (tOp < tLength) {
-        // write color-map index
-        for (tX = 0; tX < tWidth; ++tX) {
-          tIndex = tPlain[tIp + tX] * 3;
-          tPixelArray[tOp++] = tPalette[tIndex    ];
-          tPixelArray[tOp++] = tPalette[tIndex + 1];
-          tPixelArray[tOp++] = tPalette[tIndex + 2];
-          tPixelArray[tOp++] = this.withAlpha ? tTrns[tIndex / 3] : 255; // TODO
-        }
-
-        // next
-        tIp += tWidthWithPadding;
-      }
-    // Direct
-    } else {
-      // set RGBA
-      if (tFormat === LosslessFormat.RGB24) {
-        if (this.withAlpha) {
-          if (mHaveAndroidAlphaBug) {
-            while (tOp < tLength) {
-              tAlpha = tPlain[tIp++];
-              tPixelArray[tOp++] = tPlain[tIp++];
-              tPixelArray[tOp++] = tPlain[tIp++];
-              tPixelArray[tOp++] = tPlain[tIp++];
-              tPixelArray[tOp++] = tAlpha;
-            }
-          } else {
-            while (tOp < tLength) {
-              tAlpha = tPlain[tIp++];
-              tPixelArray[tOp++] = tPlain[tIp++] * 255 / tAlpha | 0;
-              tPixelArray[tOp++] = tPlain[tIp++] * 255 / tAlpha | 0;
-              tPixelArray[tOp++] = tPlain[tIp++] * 255 / tAlpha | 0;
-              tPixelArray[tOp++] = tAlpha;
-            }
-          }
-        } else {
-          while (tOp < tLength) {
-            tIp++;
-            tPixelArray[tOp++] = tPlain[tIp++];
-            tPixelArray[tOp++] = tPlain[tIp++];
-            tPixelArray[tOp++] = tPlain[tIp++];
-            tPixelArray[tOp++] = 255;
-          }
-        }
-      } else if (tFormat === LosslessFormat.RGB15) {
-        while (tOp < tLength) {
-          tReserved = (tPlain[tIp++] << 8) | tPlain[tIp++];
-          tPixelArray[tOp++] = (tReserved >> 7) & 0xf8; // >> 10 << 3, 0x1f << 3
-          tPixelArray[tOp++] = (tReserved >> 2) & 0xf8; // >> 5  << 3, 0x1f << 3
-          tPixelArray[tOp++] = (tReserved << 3) & 0xf8; //       << 3, 0x1f << 3
-          tPixelArray[tOp++] = 255;
-        }
-      } else {
-        throw new Error('unknown format: ' + tFormat);
-      }
+    for (k in tRepo) {
+      tToRemove.push(k);
     }
 
-    tContext.putImageData(tImageData, 0, 0);
-
-    this.swf.mediaLoader.put(pId, new DOMImage(tCanvas.width, tCanvas.height, tCanvas), 'image/bitmap');
-  };
-
-  /**
-   * create PNG buffer.
-   * @return {!(Array.<number>|Uint8Array)} png bytearray.
-   */
-  Lossless.prototype.getPNG = function() {
-    /** @type {number} */
-    var tBufferSize = this.calcBufferSize();
-
-    /** @type {!(Array.<number>|Uint8Array)} */
-    this.png = (
-      new Uint8Array(tBufferSize)
-    );
-
-    this.writeSignature();
-    this.writeIHDR();
-    if (this.format === LosslessFormat.COLOR_MAPPED) {
-      this.writePLTE();
-      if (this.withAlpha) {
-        this.writeTRNS();
-      }
-    }
-    this.writeIDAT();
-    this.writeIEND();
-    this.finish();
-
-    return this.png;
-  };
-
-  /**
-   * truncate output buffer.
-   * @return {!(Array.<number>|Uint8Array)} png bytearray.
-   */
-  Lossless.prototype.finish = function() {
-    this.png = this.png.subarray(0, this.pp);
-    return this.png;
-  };
-
-  /**
-   * write png signature.
-   */
-  Lossless.prototype.writeSignature = function() {
-    /** @const @type {Array.<number>} */
-    var signature = [137, 80, 78, 71, 13, 10, 26, 10];
-
-    this.png.set(signature, this.pp);
-
-    this.pp += 8;
-  };
-
-  /**
-   * @param {!(Array.<number>|Uint8Array)} dst
-   * @param {!(Array.<number>|Uint8Array)} src
-   * @param {number=} opt_pos
-   */
-  Lossless.prototype.set = function(dst, src, opt_pos) {
-    /** @type {number} */
-    var i;
-    /** @type {number} */
-    var il;
-
-    if (typeof opt_pos !== 'number') {
-      opt_pos = 0;
-    }
-
-    for (i = 0, il = src.length; i < il; ++i) {
-      dst[opt_pos + i] = src[i];
+    for (i = 0, il = tToRemove; i < il; i++) {
+      this.remove(tToRemove[i]);
     }
   };
 
-  /**
-   * write png chunk.
-   * @param {string} pType chunk type.
-   * @param {!(Array.<number>|Uint8Array)} pData chunk data.
-   */
-  Lossless.prototype.writeChunk = function(pType, pData) {
-    /** @type {number} */
-    var tDataLength = pData.length;
-    /** @type {Array.<number>} */
-    var tTypeArray = [
-      pType.charCodeAt(0) & 0xff, pType.charCodeAt(1) & 0xff,
-      pType.charCodeAt(2) & 0xff, pType.charCodeAt(3) & 0xff
-    ];
-    /** @type {number} */
-    var tCrc32;
-
-    var tPng = this.png;
-    var tPp = this.pp;
-
-    // length
-    tPng[tPp++] = (tDataLength >> 24) & 0xff;
-    tPng[tPp++] = (tDataLength >> 16) & 0xff;
-    tPng[tPp++] = (tDataLength >>  8) & 0xff;
-    tPng[tPp++] = (tDataLength      ) & 0xff;
-
-    // type
-    tPng[tPp++] = tTypeArray[0];
-    tPng[tPp++] = tTypeArray[1];
-    tPng[tPp++] = tTypeArray[2];
-    tPng[tPp++] = tTypeArray[3];
-
-    // data
-    tPng.set(pData, tPp);
-    tPp += tDataLength;
-
-    // crc32
-    tCrc32 = mCRC32.update(pData, mCRC32.calc(tTypeArray));
-    tPng[tPp++] = (tCrc32 >> 24) & 0xff;
-    tPng[tPp++] = (tCrc32 >> 16) & 0xff;
-    tPng[tPp++] = (tCrc32 >>  8) & 0xff;
-    tPng[tPp++] = (tCrc32      ) & 0xff;
-
-    this.pp = tPp;
-  };
-
-  /**
-   * write PNG IHDR chunk.
-   */
-  Lossless.prototype.writeIHDR = function() {
-    /** @type {number} */
-    var tWidth = this.width;
-    /** @type {number} */
-    var tHeight = this.height;
-    /** @type {PngColourType} */
-    var tColourType = this.colourType;
-
-    this.writeChunk('IHDR', [
-      /* width       */
-      (tWidth  >> 24) & 0xff, (tWidth  >> 16) & 0xff,
-      (tWidth  >>  8) & 0xff, (tWidth       ) & 0xff,
-      /* height      */
-      (tHeight >> 24) & 0xff, (tHeight >> 16) & 0xff,
-      (tHeight >>  8) & 0xff, (tHeight      ) & 0xff,
-      /* bit depth   */ 8,
-      /* colour type */ tColourType,
-      /* compression */ 0,
-      /* filter      */ 0,
-      /* interlace   */ 0
-    ]);
-  };
-
-  /**
-   * write PNG PLTE chunk.
-   */
-  Lossless.prototype.writePLTE = function() {
-    this.writeChunk('PLTE', this.palette);
-  };
-
-  /**
-   * write PNG tRNS chunk.
-   */
-  Lossless.prototype.writeTRNS = function() {
-    this.writeChunk('tRNS', this.trns);
-  };
-
-  /**
-   * wrtie PNG IDAT chunk.
-   */
-  Lossless.prototype.writeIDAT = function() {
-    /** @type {number} */
-    var tSize;
-    /** @type {number} */
-    var tLength;
-    /** @type {!(Array.<number>|Uint8Array)} */
-    var tImage;
-    /** @type {number} */
-    var tOp = 0;
-    /** @type {number} */
-    var tIp = 0;
-    /** @type {number} */
-    var tRed;
-    /** @type {number} */
-    var tGreen;
-    /** @type {number} */
-    var tBlue;
-    /** @type {number} */
-    var tReserved;
-    /** @type {number} */
-    var tX = 0;
-    /** @type {number} */
-    var tWidthWithPadding;
-
-    var tPlain = this.plain;
-    var tWidth = this.width;
-    var tHeight = this.height;
-    var tFormat = this.format;
-
-    // calculate buffer size
-    switch (this.colourType) {
-      case PngColourType.INDEXED_COLOR:
-        tLength = tWidth;
-        break;
-      case PngColourType.TRUECOLOR:
-        tLength = tWidth * 3;
-        break;
-      default:
-        console.warn('invalid png colour type');
-    }
-    tSize = tLength * tHeight + tHeight;
-
-    // create png idat data
-    tImage = new Uint8Array(tSize);
-    // indexed-color png
-    if (tFormat === LosslessFormat.COLOR_MAPPED) {
-      tWidthWithPadding = (tWidth + 3) & -4;
-      while (tOp < tSize) {
-        // scanline filter
-        tImage[tOp++] = 0;
-
-        // write color-map index
-        tImage.set(tPlain.subarray(tIp, tIp + tWidth), tOp);
-        tOp += tWidth;
-
-        // next
-        tIp += tWidthWithPadding;
-      }
-    // truecolor png
-    } else {
-      while (tOp < tSize) {
-        // scanline filter
-        if (tX++ % tWidth === 0) {
-          tImage[tOp++] = 0;
-        }
-
-        // read RGB
-        if (tFormat === LosslessFormat.RGB24) {
-          tReserved = tPlain[tIp++];
-          tRed      = tPlain[tIp++];
-          tGreen    = tPlain[tIp++];
-          tBlue     = tPlain[tIp++];
-        } else if (tFormat === LosslessFormat.RGB15) {
-          tReserved = (tPlain[tIp++] << 8) | tPlain[tIp++];
-          tRed   = (tReserved >> 7) & 0xf8; // >> 10 << 3, 0x1f << 3
-          tGreen = (tReserved >> 2) & 0xf8; // >> 5  << 3, 0x1f << 3
-          tBlue  = (tReserved << 3) & 0xf8; //       << 3, 0x1f << 3
-        }
-
-        // write RGB
-        tImage[tOp++] = tRed;
-        tImage[tOp++] = tGreen;
-        tImage[tOp++] = tBlue;
-      }
-    }
-
-    this.writeChunk('IDAT', this.fakeZlib(tImage));
-  };
-
-  /**
-   * wrtie PNG IDAT chunk (with alpha channel).
-   */
-  Lossless.prototype.writeIDATwithAlpha = function() {
-    /** @type {number} */
-    var tSize;
-    /** @type {number} */
-    var tLength;
-    /** @type {!(Array.<number>|Uint8Array)} */
-    var tImage;
-    /** @type {number} */
-    var tOp = 0;
-    /** @type {number} */
-    var tIp = 0;
-    /** @type {number} */
-    var tRed;
-    /** @type {number} */
-    var tGreen;
-    /** @type {number} */
-    var tBlue;
-    /** @type {number} */
-    var tAlpha;
-    /** @type {number} */
-    var tX = 0;
-    /** @type {number} */
-    var tWidthWithPadding;
-
-    var tPlain = this.plain;
-    var tWidth = this.width;
-    var tHeight = this.height;
-    var tFormat = this.format;
-
-    // calculate buffer size
-    switch (this.colourType) {
-      case PngColourType.INDEXED_COLOR:
-        tLength = tWidth;
-        break;
-      case PngColourType.TRUECOLOR_WITH_ALPHA:
-        tLength = tWidth * 4;
-        break;
-      default:
-        console.warn('invalid png colour type');
-    }
-    tSize = (tLength + 1) * tHeight;
-
-    // create png idat data
-    tImage = new Uint8Array(tSize);
-    // indexed-color png
-    if (tFormat === LosslessFormat.COLOR_MAPPED) {
-      tWidthWithPadding = (tWidth + 3) & -4;
-      while (tOp < tSize) {
-        // scanline filter
-        tImage[tOp++] = 0;
-
-        // write color-map index
-        tImage.set(tPlain.subarray(tIp, tIp + tWidth), tOp);
-        tOp += tWidth;
-
-        // next
-        tIp += tWidthWithPadding;
-      }
-    // truecolor png
-    } else {
-      while (tOp < tSize) {
-        // scanline filter
-        if (tX++ % tWidth === 0) {
-          tImage[tOp++] = 0;
-        }
-
-        // read RGB
-        tAlpha = tPlain[tIp++];
-        tRed   = tPlain[tIp++] * 255 / tAlpha | 0;
-        tGreen = tPlain[tIp++] * 255 / tAlpha | 0;
-        tBlue  = tPlain[tIp++] * 255 / tAlpha | 0;
-
-        // write RGB
-        tImage[tOp++] = tRed;
-        tImage[tOp++] = tGreen;
-        tImage[tOp++] = tBlue;
-        tImage[tOp++] = tAlpha;
-      }
-    }
-
-    this.writeChunk('IDAT', this.fakeZlib(tImage));
-  };
-
-  /**
-   * wrtie PNG IEND chunk.
-   */
-  Lossless.prototype.writeIEND = function() {
-    this.writeChunk('IEND', []);
-  };
-
-  /**
-   * create non-compressed zlib buffer.
-   * @param {!(Array.<number>|Uint8Array)} pData plain data.
-   * @return {!(Array.<number>|Uint8Array)}
-   */
-  Lossless.prototype.fakeZlib = function(pData) {
-    /** @type {number} */
-    var tBfinal;
-    /** @type {number} */
-    var tBtype = 0; // 非圧縮
-    /** @type {number} */
-    var tLen;
-    /** @type {number} */
-    var tNlen;
-    /** @type {!(Array.<number>|Uint8Array)} */
-    var tBlock;
-    /** @type {number} */
-    var tAdler32;
-    /** @type {number} */
-    var tIp = 0;
-    /** @type {number} */
-    var tOp = 0;
-    /** @type {number} */
-    var tSize = (
-      /* cmf    */ 1 +
-      /* flg    */ 1 +
-      /* data   */ pData.length +
-      /* header */ (
-        (/* bfinal, btype */ 1 +
-         /* len           */ 2 +
-         /* nlen          */ 2) *
-         /* number of blocks */ (1 + (pData.length / mBlockSize | 0))
-      ) +
-      /* adler  */ 4
-    );
-    /** @type {Uint8Array} */
-    var tOutput = new Uint8Array(tSize);
-
-    // zlib header
-    tOutput[tOp++] = 0x78; // CINFO: 7, CMF: 8
-    tOutput[tOp++] = 0x01; // FCHECK: 1, FDICT, FLEVEL: 0
-
-    // zlib body
-    do {
-      tBlock = pData.subarray(tIp, tIp += mBlockSize);
-      tBfinal = (tBlock.length < mBlockSize || tIp + tBlock.length === pData.length) ? 1 : 0;
-
-      // block header
-      tOutput[tOp++] = tBfinal;
-
-      // len
-      tLen = tBlock.length;
-      tOutput[tOp++] = (tLen      ) & 0xff;
-      tOutput[tOp++] = (tLen >>> 8) & 0xff;
-
-      // nlen
-      tNlen = 0xffff - tLen;
-      tOutput[tOp++] = (tNlen      ) & 0xff;
-      tOutput[tOp++] = (tNlen >>> 8) & 0xff;
-
-      // data
-      tOutput.set(tBlock, tOp);
-      tOp += tBlock.length;
-    } while (!tBfinal);
-
-    // adler-32
-    tAdler32 = mAdler32(pData);
-    tOutput[tOp++] = (tAdler32 >> 24) & 0xff;
-    tOutput[tOp++] = (tAdler32 >> 16) & 0xff;
-    tOutput[tOp++] = (tAdler32 >>  8) & 0xff;
-    tOutput[tOp++] = (tAdler32      ) & 0xff;
-
-    return tOutput;
-  };
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2012 Jason Parrott.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-(function(global) {
-
-  global.quickswf.Parser.prototype['6'] = defineBits;
-  global.quickswf.Parser.prototype['8'] = defineJpegTable;
-  global.quickswf.Parser.prototype['21'] = defineBitsJpeg2;
-  global.quickswf.Parser.prototype['35'] = defineBitsJpeg3;
-
-  var mNewBlob = global.quickswf.polyfills.newBlob;
-  var DOMImage = global.benri.impl.web.graphics.draw.DOMImage;
-
-  var Uint8Array = benri.io.Uint8Array;
-
-  function defineBits(pLength) {
-    var tId = this.r.getUint16();
-    var tData = getJPEG(this, pLength - 2);
-    this.swf.mediaLoader.load(tId, tData);
-  }
-
-  function defineBitsJpeg2(pLength) {
-    var tId = this.r.getUint16(), tBlob;
-    if (this.r.getString(4, 'ascii') === '\x89PNG') { // PNG file
-      this.r.seek(-4);
-      tBlob = mNewBlob([this.r.getByteArray(pLength - 2)], {type: 'image/png'});
-      this.swf.mediaLoader.load(tId, tBlob);
-    } else { // JPEG file
-      this.r.seek(-4);
-      tBlob = getJPEG(this, pLength - 2);
-      this.swf.mediaLoader.load(tId, tBlob);
-    }
-  }
-
-  function defineBitsJpeg3(pLength) {
-    var tId = this.r.getUint16();
-    var tAlphaOffset = this.r.getUint32();
-    var tBlob, tDelay, tSelf = this;
-    var tAlphaData;
-
-    if (this.r.getString(4, 'ascii') === '\x89PNG') { // PNG file
-      this.r.seek(-4);
-      throw new Error('PNG in Bits3!');
-      tBlob = mNewBlob([this.r.extract(this.r.tell(), tAlphaOffset)], {type: 'image/png'});
-      this.r.seek(pLength - 2);
-      this.swf.mediaLoader.load(tId, tBlob);
-    } else {
-      this.r.seek(-4);
-      // JPEG file
-      tBlob = getJPEG(this, tAlphaOffset);
-      // alpha table
-      tAlphaData = new Uint8Array((new benri.io.compression.Inflator('inflate'))
-        .inflate(this.r.getByteArray(pLength - 6 - tAlphaOffset)));
-
-      tDelay = this.swf.mediaLoader.load(tId, tBlob);
-      tDelay.on('load', function (pImage) {
-        // replace
-        var tWidth = pImage.getWidth();
-        var tHeight = pImage.getHeight();
-        var tDOMImage = new DOMImage(tWidth, tHeight, null, false);
-        var tPixelArray;
-        var tIndex, tLength;
-        var tAlpha, tInverseAlpha;
-
-        tDOMImage.setBytes(pImage.getBytes(), 0, 0, tWidth, tHeight);
-
-        tPixelArray = tDOMImage.getBytes();
-
-        for (tIndex = 0, tLength = tAlphaData.length; tIndex < tLength; ++tIndex) {
-          tAlpha = tAlphaData[tIndex];
-          tInverseAlpha = 255 / tAlpha;
-
-          tPixelArray[tIndex * 4] *= tInverseAlpha;
-          tPixelArray[tIndex * 4 + 1] *= tInverseAlpha;
-          tPixelArray[tIndex * 4 + 2] *= tInverseAlpha;
-          tPixelArray[tIndex * 4 + 3] = tAlpha;
-        }
-
-        tDOMImage.setBytes(tPixelArray, 0, 0, tWidth, tHeight);
-
-        // Replace the image data.
-        tSelf.swf.mediaLoader.get('image', tId, true);
-        tSelf.swf.mediaLoader.put(tId, tDOMImage, 'image');
-      });
-    }
-  }
-
-  function getJPEG(pParser, pLength) {
-    var tReader = pParser.r;
-    var tLastByte = tReader.tell() + pLength;
-
-    var tSOS = null;
-    var tAPP0 = new Uint8Array([0xFF, 0xE0, 0x0, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x0, 0x01, 0x01, 0x01, 0x0, 0x48, 0x0, 0x48, 0x0, 0x0]);
-    var tSOF0 = null;
-    var tSOF2 = null;
-    var tDQT = null;
-    var tDHT = null;
-    var tDRI = null;
-
-    while (tReader.tell() < tLastByte) {
-      if (tReader.getUint8() !== 0xFF) {
-        console.error('Could not read JPEG.');
-        return null;
-      }
-
-      var tTag = tReader.getUint8();
-
-      if (tTag === 0xD8 || tTag === 0xD9) { // SOI and EOI
-        //ignore
-        continue;
-      } else if (tTag === 0xDA) { // SOS. No length
-        tReader.seek(-2);
-        tSOS = tReader.extract(tReader.tell(), tLastByte);
-        tReader.seek(tLastByte - tReader.tell());
-      } else {
-        var tTagLength = tReader.getUBits(16) + 2;
-        tReader.align();
-
-        tReader.seek(-4);
-
-        switch (tTag) {
-          case 0xE0: // APP0
-            tAPP0 = tReader.getByteArray(tTagLength);
-            break;
-          case 0xDB: // DQT
-            if (tDQT === null) {
-              tDQT = tReader.getByteArray(tTagLength);
-            } else {
-              var tNewDQT = new Uint8Array(tDQT.length + tTagLength);
-              tNewDQT.set(tDQT);
-              tNewDQT.set(tReader.getByteArray(tTagLength), tDQT.length);
-              tDQT = tNewDQT;
-            }
-            break;
-          case 0xC4: // DHT
-            if (tDHT === null) {
-              tDHT = tReader.getByteArray(tTagLength);
-            } else {
-              var tNewDHT = new Uint8Array(tDHT.length + tTagLength);
-              tNewDHT.set(tDHT);
-              tNewDHT.set(tReader.getByteArray(tTagLength), tDHT.length);
-              tDHT = tNewDHT;
-            }
-            break;
-          case 0xC0: // SOF0
-            tSOF0 = tReader.getByteArray(tTagLength);
-            break;
-          case 0xC2: // SOF2
-            tSOF2 = tReader.getByteArray(tTagLength);
-            break;
-          case 0xDD: // DRI
-            tDRI = tReader.getByteArray(tTagLength);
-            break;
-          default:
-            tReader.seek(tTagLength);
-            break;
-        }
-      }
-    }
-
-    if (tDQT === null) tDQT = pParser.swf.jpegTableDQT;
-    if (tDHT === null) tDHT = pParser.swf.jpegTableDHT;
-    var tSOF = tSOF0 !== null ? tSOF0 : tSOF2;
-    var tData = mNewBlob(
-      [
-        new Uint8Array([0xFF, 0xD8]),
-        tAPP0,
-        tSOF,
-        tDQT,
-        tDHT,
-        tDRI,
-        tSOS
-      ],
-      {
-        type: 'image/jpeg'
-      }
-    );
-
-    return tData;
-  }
-
-  function defineJpegTable(pLength) {
-    var tReader = this.r;
-    var tDQT = null;
-    var tDHT = null;
-    var tLastByte = tReader.tell() + pLength;
-
-    while (tReader.tell() < tLastByte) {
-      if (tReader.getUint8() !== 0xFF) {
-        console.error('Could not read JPEG Table');
-        return;
-      }
-
-      var tTag = tReader.getUint8();
-      if (tTag === 0xD8 || tTag === 0xD9) {
-        continue;
-      }
-
-      var tLength = tReader.getUBits(16);
-      tReader.align();
-
-      tReader.seek(-3);
-
-      switch (tTag) {
-        case 0xDB: // DQT
-          if (tDQT === null) {
-            tDQT = tReader.getByteArray(tLength + 2);
-          } else {
-            var tNewDQT = new Uint8Array(tDQT.length + tLength + 2);
-            tNewDQT.set(tDQT);
-            tNewDQT.set(tReader.getByteArray(tLength + 2), tDQT.length);
-            tDQT = tNewDQT;
-          }
-          break;
-        case 0xC4: // DHT
-          if (tDHT === null) {
-            tDHT = tReader.getByteArray(tLength + 2);
-          } else {
-            var tNewDHT = new Uint8Array(tDHT.length + tLength + 2);
-            tNewDHT.set(tDHT);
-            tNewDHT.set(tReader.getByteArray(tLength + 2), tDHT.length);
-            tDHT = tNewDHT;
-          }
-          break;
-        default:
-          console.warn('Unknown JPEG Table chunk.');
-          break;
-      }
-
-      tReader.seek(-1);
-    }
-
-    this.swf.jpegTableDQT = tDQT;
-    this.swf.jpegTableDHT = tDHT;
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var Records = benri.graphics.Records;
-  var DOMImage = benri.impl.web.graphics.draw.DOMImage;
-  var Color = benri.graphics.draw.Color;
-
-  var mHaveMultiplyMode;
-
-  benri.impl.web.graphics.shader.fragment.ColorTransformShader = {
-    pre: function(pShader, pSurface, pProgram) {
-      var tFillType = pProgram.fillType;
-
-      /*if (pShader.getGlobalAlpha().alphaOnly) {
-        return;
-      }*/
-
-      if (!pShader.checkColorTransformAccessed()) {
-        pShader.updateFlags();
-      }
-
-
-      var tHasAlpha = pShader.hasAlpha;
-      var tHasColors = pShader.hasColors;
-
-      if (!tHasAlpha && !tHasColors) {
-        // Nothing to do.
-        return;
-      }
-
-      var tContext = pSurface.context;
-
-      if (tHasAlpha && !tHasColors && pShader.alphaAdd === 0) {
-        // We can just do alpha here.
-        pShader.previousAlpha = tContext.globalAlpha;
-        tContext.globalAlpha = pShader.alphaMultiplier;
-        // Is this part still necessary since we have AlphaShader?
-        return;
-      }
-
-      var tFillData = pProgram.fillData;
-      var tColors = pProgram.colors;
-      var i;
-      var il = tColors.length;
-      var tIsTargetFresh = pSurface.isTargetFresh();
-
-      if (il === 0) {
-        // We need to pixel process this.
-        if (tFillType === Records.RAW) {
-          // Set up a composite canvas.
-          pSurface.pushCompositeCanvas(tFillData.width, tFillData.height, true);
-        } else {
-          var tImageData = tFillData.image;
-          var tMatrix = tFillData.matrix;
-          var tSrcWidth = tFillData.srcWidth;
-          var tSrcHeight = tFillData.srcHeight;
-          var tSurfaceMatrix = pProgram.matrix;
-          var tIsNoneTileMode = tFillData.tileMode === 'none';
-
-          if (!tIsTargetFresh || !tIsNoneTileMode) {
-            var tTargetWidth;
-            var tTargetHeight;
-            var tFinalScale = Math.max(
-              Math.abs(tSurfaceMatrix.getScaleX() * tMatrix.getScaleX()),
-              Math.abs(tSurfaceMatrix.getScaleY() * tMatrix.getScaleY())
-            );
-
-            if (tFinalScale >= 1 || !tIsNoneTileMode) {
-              tTargetWidth = tSrcWidth;
-              tTargetHeight = tSrcHeight;
-            } else {
-              tTargetWidth = tSrcWidth * tFinalScale;
-              tTargetHeight = tSrcHeight * tFinalScale;
-
-              if (tTargetWidth < 1) {
-                tTargetHeight = tTargetHeight / tTargetWidth;
-                tTargetWidth = 1;
-              }
-              if (tTargetHeight < 1) {
-                tTargetWidth = tTargetWidth / tTargetHeight;
-                tTargetHeight = 1;
-              }
-            }
-
-            tFillData.width = tTargetWidth;
-            tFillData.height = tTargetHeight;
-
-            pSurface.pushCompositeCanvas(tTargetWidth, tTargetHeight, tIsNoneTileMode);
-
-            pSurface.context.drawImage(tImageData, 0, 0, tSrcWidth, tSrcHeight, 0, 0, tTargetWidth, tTargetHeight);
-
-            transformPixels(tImageData, pShader, pSurface, pProgram);
-
-            var tImage = pSurface.takeCompositeCanvas();
-
-            tFillData.image = tImage._domImage;
-            tFillData.srcWidth = tTargetWidth;
-            tFillData.srcHeight = tTargetHeight;
-            tFillData.width = tSrcWidth;
-            tFillData.height = tSrcHeight;
-
-            pShader.toDestroyImage = tImage;
-          } else {
-            tContext = pSurface.context;
-            pSurface.saveContext();
-            tContext.clip();
-
-            pSurface.setTransform(
-              tSurfaceMatrix.a,
-              tSurfaceMatrix.b,
-              tSurfaceMatrix.c,
-              tSurfaceMatrix.d,
-              tSurfaceMatrix.e,
-              tSurfaceMatrix.f
-            );
-            pSurface.transform(tMatrix.a, tMatrix.b, tMatrix.c, tMatrix.d, tMatrix.e, tMatrix.f);
-
-            tContext.drawImage(tImageData, 0, 0, tSrcWidth, tSrcHeight, 0, 0, tSrcWidth, tSrcHeight);
-
-            transformPixels(tImageData, pShader, pSurface, pProgram);
-            pSurface.restoreContext();
-
-            pShader.transformFinished = true;
-
-            pSurface.setTargetFresh(false);
-            
-            tFillData.drawnOnSurface = true;
-          }
-
-        }
-
-        return;
-      }
-
-      var tColor;
-      var tRGBA;
-
-      var tAlphaAdd = pShader.alphaAdd;
-      var tAlphaMultiplier = pShader.alphaMultiplier;
-      var tRedAdd = pShader.redAdd;
-      var tRedMultiplier = pShader.redMultiplier;
-      var tGreenAdd = pShader.greenAdd;
-      var tGreenMultiplier = pShader.greenMultiplier;
-      var tBlueAdd = pShader.blueAdd;
-      var tBlueMultiplier = pShader.blueMultiplier;
-
-      for (i = 0, il = tColors.length; i < il; i++) {
-        tColor = tColors[i];
-        tRGBA = tColor.getRGBA();
-
-        tRGBA[0] = Math.min(255, Math.max(0, (tRGBA[0] * tRedMultiplier + tRedAdd) | 0));
-        tRGBA[1] = Math.min(255, Math.max(0, (tRGBA[1] * tGreenMultiplier + tGreenAdd) | 0));
-        tRGBA[2] = Math.min(255, Math.max(0, (tRGBA[2] * tBlueMultiplier + tBlueAdd) | 0));
-        tRGBA[3] = Math.min(255, Math.max(0, (tRGBA[3] * tAlphaMultiplier + tAlphaAdd) | 0));
-
-        tColors[i] = new Color(tRGBA[0], tRGBA[1], tRGBA[2], tRGBA[3]);
-      }
-    },
-
-    post: function(pShader, pSurface, pProgram) {
-      var tFillType = pProgram.fillType;
-      var tAlphaMultiplier = pShader.alphaMultiplier;
-      var tHasAlpha = pShader.hasAlpha;
-      var tHasColors = pShader.hasColors;
-      var tContext;
-      var tPreviousAlpha;
-
-      if (!tHasAlpha && !tHasColors) {
-        // Nothing to do.
-        return;
-      }
-
-      if (tHasAlpha && !tHasColors && pShader.alphaAdd === 0) {
-        // We can just do alpha here.
-        tContext = pSurface.context;
-        tPreviousAlpha = pShader.previousAlpha;
-
-        if (tContext.globalAlpha !== tPreviousAlpha) {
-          tContext.globalAlpha = tPreviousAlpha;
-        }
-        
-        return;
-      }
-
-      if (pShader.transformFinished) {
-        pShader.transformFinished = false;
-
-        return;
-      }
-
-
-      if (pShader.toDestroyImage) {
-        // We've already done stuff in pre.
-        pShader.toDestroyImage.destroy();
-        pShader.toDestroyImage = null;
-
-        return;
-      }
-
-      var tColors = pProgram.colors;
-
-      if (tColors.length > 0) {
-        // Already did transforms to vectors!
-        return;
-      }
-
-      //transformPixels(pProgram.fillData.image, pShader, pSurface, pProgram);
-
-      if (tFillType === Records.RAW) {
-        pSurface.popCompositeCanvas(tAlphaMultiplier, 'source-over');
-      }
-    }
-  };
-
-  function transformPixels(pImage, pShader, pSurface, pProgram) {
-    // Process by pixel.
-    var tFillData = pProgram.fillData;
-    var tTargetContext = pSurface.context;
-    var tWidth = tFillData.width;
-    var tHeight = tFillData.height;
-    var tSrcWidth = tFillData.srcWidth;
-    var tSrcHeight = tFillData.srcHeight;
-    var tTargetX = tFillData.x || 0;
-    var tTargetY = tFillData.y || 0;
-
-    var tAlphaAdd = pShader.alphaAdd;
-    var tAlphaMultiplier = pShader.alphaMultiplier;
-    var tRedAdd = pShader.redAdd;
-    var tRedMultiplier = pShader.redMultiplier;
-    var tGreenAdd = pShader.greenAdd;
-    var tGreenMultiplier = pShader.greenMultiplier;
-    var tBlueAdd = pShader.blueAdd;
-    var tBlueMultiplier = pShader.blueMultiplier;
-
-    var tHasAdds = pShader.hasAdds;
-
-    var tHasRed = pShader.hasRed;
-    var tHasGreen = pShader.hasGreen;
-    var tHasBlue = pShader.hasBlue;
-
-    var tHavePositiveAdds = tRedAdd >= 0 && tGreenAdd >= 0 && tBlueAdd >= 0;
-    var tHaveMultipliers = tRedMultiplier * tGreenMultiplier * tBlueMultiplier !== 1;
-    var tHavePositiveMultipliers = tRedMultiplier >= 0 && tGreenMultiplier >= 0 && tBlueMultiplier >= 0;
-    var tHaveSameMultipliers = tHaveMultipliers && tRedMultiplier === tGreenMultiplier && tRedMultiplier === tBlueMultiplier;
-
-    var tAllPixelsImageData = null;
-    var tAllPixels = null;
-
-
-    function doSetAll() {
-      var tContext = tTargetContext;
-      var tPreviousGlobalAlpha = tContext.globalAlpha;
-      tContext.globalAlpha = 1;
-
-      //pSurface.pushCompositeCanvas(tWidth, tHeight);
-
-      //tContext = pSurface.context;
-      
-      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
-
-      tContext.globalCompositeOperation = 'source-atop';
-      tContext.fillStyle = 'rgba(' + tRedAdd + ',' + tGreenAdd + ',' + tBlueAdd + ',1)';
-      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
-      tContext.globalCompositeOperation = tPreviousCompositeOperation;
-
-      //pSurface.popCompositeCanvas(1, 'source-atop');
-
-      tContext.globalAlpha = tPreviousGlobalAlpha;
-
-      return false;
-    }
-
-    function doDarkenAllLighten() {
-      var tContext = tTargetContext;
-      var tMult = 1 - tRedMultiplier;
-      var tPreviousGlobalAlpha = tContext.globalAlpha;
-      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
-
-      tContext.globalAlpha = 1;
-      tContext.globalCompositeOperation = 'source-atop';
-      tContext.fillStyle = 'rgba(0,0,0,' + tMult + ')';
-      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = 'lighter';
-      tContext.fillStyle = 'rgba(' + tRedAdd + ',' + tGreenAdd + ',' + tBlueAdd + ',1)';
-      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = 'destination-in';
-      tContext.drawImage(pImage, 0, 0, tSrcWidth, tSrcHeight, tTargetX, tTargetY, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = tPreviousCompositeOperation;
-      tContext.globalAlpha = tPreviousGlobalAlpha;
-
-      return false;
-    }
-
-    function doDarkenAll() {
-      var tContext = tTargetContext;
-      var tMult = 1 - tRedMultiplier;
-      var tPreviousGlobalAlpha = tContext.globalAlpha;
-      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
-
-      tContext.globalAlpha = 1;
-      tContext.globalCompositeOperation = 'source-atop';
-      tContext.fillStyle = 'rgba(0,0,0,' + tMult + ')';
-      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = tPreviousCompositeOperation;
-      tContext.globalAlpha = tPreviousGlobalAlpha;
-
-      return false;
-    }
-
-    function canMultiply() {
-      if (mHaveMultiplyMode !== void 0) {
-        return mHaveMultiplyMode;
-      }
-
-      var tContext = tTargetContext;
-      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
-
-      tContext.globalCompositeOperation = 'multiply';
-
-      if (tContext.globalCompositeOperation === 'multiply') {
-        tContext.globalCompositeOperation = tPreviousCompositeOperation;
-
-        return (mHaveMultiplyMode = true);
-      }
-
-      return (mHaveMultiplyMode = false);
-    }
-
-    function doDarken() {
-      var tContext = tTargetContext;
-      var tMult = 1 - tRedMultiplier;
-      var tPreviousGlobalAlpha = tContext.globalAlpha;
-      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
-
-      tContext.globalAlpha = 1;
-      tContext.globalCompositeOperation = 'multiply';
-      tContext.fillStyle = 'rgba(' + ((tRedMultiplier * 255) | 0)  + ',' + ((tGreenMultiplier * 255) | 0)  + ',' + ((tBlueMultiplier * 255) | 0)  + ',1)';
-      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = 'destination-in';
-      tContext.drawImage(pImage, 0, 0, tSrcWidth, tSrcHeight, tTargetX, tTargetY, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = tPreviousCompositeOperation;
-      tContext.globalAlpha = tPreviousGlobalAlpha;
-
-      return false;
-    }
-
-    function doDarkenLighten() {
-      var tContext = tTargetContext;
-      var tPreviousGlobalAlpha = tContext.globalAlpha;
-      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
-
-      tContext.globalAlpha = 1;
-      tContext.globalCompositeOperation = 'multiply';
-      tContext.fillStyle = 'rgba(' + ((tRedMultiplier * 255) | 0)  + ',' + ((tGreenMultiplier * 255) | 0)  + ',' + ((tBlueMultiplier * 255) | 0)  + ',1)';
-      tContext.fillRect(0, 0, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = 'lighter';
-      tContext.fillStyle = 'rgba(' + tRedAdd + ',' + tGreenAdd + ',' + tBlueAdd + ',1)';
-      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = 'destination-in';
-      tContext.drawImage(pImage, 0, 0, tSrcWidth, tSrcHeight, tTargetX, tTargetY, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = tPreviousCompositeOperation;
-      tContext.globalAlpha = tPreviousGlobalAlpha;
-
-      return false;
-    }
-
-    function doLightenAll() {
-      var tContext = tTargetContext;
-      var tPreviousGlobalAlpha = tContext.globalAlpha;
-      var tPreviousCompositeOperation = tContext.globalCompositeOperation;
-
-      tContext.globalAlpha = 1;
-      tContext.globalCompositeOperation = 'lighter';
-
-      // This is not perfect when alpha is involved.
-      // Due to alpha premultiplication we have lots colours and can not
-      // reproduce them. Need to find a work around this even though the result
-      // is quite similar.
-      tContext.fillStyle = 'rgba(' + tRedAdd + ',' + tGreenAdd + ',' + tBlueAdd + ',1)';
-      tContext.fillRect(tTargetX, tTargetY, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = 'destination-in';
-      tContext.drawImage(pImage, 0, 0, tSrcWidth, tSrcHeight, tTargetX, tTargetY, tWidth, tHeight);
-
-      tContext.globalCompositeOperation = tPreviousCompositeOperation;
-      tContext.globalAlpha = tPreviousGlobalAlpha;
-
-      return false;
-    }
-
-    function doAll() {
-      tAllPixelsImageData = tTargetContext.getImageData(tTargetX, tTargetY, tWidth, tHeight);
-      var tPixels = tAllPixels = tAllPixelsImageData.data;
-      var tRM = tRedMultiplier;
-      var tRA = tRedAdd;
-      var tGM = tGreenMultiplier;
-      var tGA = tGreenAdd;
-      var tBM = tBlueMultiplier;
-      var tBA = tBlueAdd;
-      var tAM = tAlphaMultiplier;
-      var tAA = tAlphaAdd;
-      var tAlphaPixel;
-      var tAlphaRatio;
-      var tAlphaInverter
-
-      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
-        for (var i = 0, il = tPixels.length; i < il; i += 4) {
-          tAlphaPixel = tPixels[i + 3];
-
-          if (tAlphaPixel === 0) continue;
-
-          if (tAlphaPixel === 255) {
-            tPixels[i] = (tPixels[i] * tRM + tRA) | 0;
-            tPixels[i + 1] = (tPixels[i + 1] * tGM + tGA) | 0;
-            tPixels[i + 2] = (tPixels[i + 2] * tBM + tBA) | 0;
-            tPixels[i + 3] = (tAlphaPixel * tAM + tAA) | 0;
-          } else {
-            tAlphaRatio = tAlphaPixel / 255;
-            tAlphaInverter = 1 + (1 - tAlphaRatio);
-
-            tPixels[i] = (tPixels[i] * tAlphaInverter * tRM * tAlphaRatio + tRA * tAlphaRatio) | 0;
-            tPixels[i + 1] = (tPixels[i + 1] * tAlphaInverter * tGM * tAlphaRatio + tGA * tAlphaRatio) | 0;
-            tPixels[i + 2] = (tPixels[i + 2] * tAlphaInverter * tBM * tAlphaRatio + tBA * tAlphaRatio) | 0;
-            tPixels[i + 3] = (tAlphaPixel * tAM + tAA) | 0;
-          }
-        }
-      } else {
-        for (var i = 0, il = tPixels.length; i < il; i += 4) {
-          tAlphaPixel = tPixels[i + 3];
-
-          if (tAlphaPixel === 0) continue;
-
-          tPixels[i] = (tPixels[i] * tRM + tRA) | 0;
-          tPixels[i + 1] = (tPixels[i + 1] * tGM + tGA) | 0;
-          tPixels[i + 2] = (tPixels[i + 2] * tBM + tBA) | 0;
-          tPixels[i + 3] = (tAlphaPixel * tAM + tAA) | 0;
-        }
-      }
-    }
-
-    function doThree() {
-      tAllPixelsImageData = tTargetContext.getImageData(tTargetX, tTargetY, tWidth, tHeight);
-      var tPixels = tAllPixels = tAllPixelsImageData.data;
-      var tRM = tRedMultiplier;
-      var tRA = tRedAdd;
-      var tGM = tGreenMultiplier;
-      var tGA = tGreenAdd;
-      var tBM = tBlueMultiplier;
-      var tBA = tBlueAdd;
-
-      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
-        for (var i = 0, il = tPixels.length; i < il; i += 4) {
-          tAlphaPixel = tPixels[i + 3];
-
-          if (tAlphaPixel === 0) continue;
-
-          if (tAlphaPixel === 255) {
-            tPixels[i] = (tPixels[i] * tRM + tRA) | 0;
-            tPixels[i + 1] = (tPixels[i + 1] * tGM + tGA) | 0;
-            tPixels[i + 2] = (tPixels[i + 2] * tBM + tBA) | 0;
-          } else {
-            tAlphaRatio = tAlphaPixel / 255;
-            tAlphaInverter = 1 + (1 - tAlphaRatio);
-            
-            tPixels[i] = (tPixels[i] * tAlphaInverter * tRM * tAlphaRatio + tRA * tAlphaRatio) | 0;
-            tPixels[i + 1] = (tPixels[i + 1] * tAlphaInverter * tGM * tAlphaRatio + tGA * tAlphaRatio) | 0;
-            tPixels[i + 2] = (tPixels[i + 2] * tAlphaInverter * tBM * tAlphaRatio + tBA * tAlphaRatio) | 0;
-          }
-        }
-      } else {
-        for (var i = 0, il = tPixels.length; i < il; i += 4) {
-          if (tPixels[i + 3] === 0) continue;
-
-          tPixels[i] = (tPixels[i] * tRM + tRA) | 0;
-          tPixels[i + 1] = (tPixels[i + 1] * tGM + tGA) | 0;
-          tPixels[i + 2] = (tPixels[i + 2] * tBM + tBA) | 0;
-        }
-      }
-    }
-
-    function doOneIndex(pIndex, pMultiplier, pAdd) {
-      tAllPixelsImageData = tTargetContext.getImageData(tTargetX, tTargetY, tWidth, tHeight);
-      var tPixels = tAllPixels = tAllPixelsImageData.data;
-      var tAlphaIndex = 3 - pIndex;
-
-      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
-        for (var i = 0, il = tPixels.length; i < il; i += 4) {
-          tAlphaPixel = tPixels[i + tAlphaIndex];
-
-          if (tAlphaPixel === 0) continue;
-
-          if (tAlphaPixel === 255) {
-            tPixels[i] = (tPixels[i] * pMultiplier + pAdd) | 0;
-          } else {
-            tAlphaRatio = tAlphaPixel / 255;
-            tAlphaInverter = 1 + (1 - tAlphaRatio);
-            
-            tPixels[i] = (tPixels[i] * tAlphaInverter * pMultiplier * tAlphaRatio + pAdd * tAlphaRatio) | 0;
-          }
-        }
-      } else {
-        for (var i = pIndex, il = tPixels.length; i < il; i += 4) {
-          if (tPixels[i + tAlphaIndex] === 0) continue;
-
-          tPixels[i] = (tPixels[i] * pMultiplier + pAdd) | 0;
-        }
-      }
-    }
-
-    function doTwoIndex(pIndex, pMultiplier, pAdd, pIndex2, pMultiplier2, pAdd2) {
-      tAllPixelsImageData = tTargetContext.getImageData(tTargetX, tTargetY, tWidth, tHeight);
-      var tPixels = tAllPixels = tAllPixelsImageData.data;
-      var tAlphaIndex = 3 - pIndex;
-      pIndex2 = pIndex2 - pIndex;
-
-      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
-        for (var i = 0, il = tPixels.length; i < il; i += 4) {
-          tAlphaPixel = tPixels[i + tAlphaIndex];
-
-          if (tAlphaPixel === 0) continue;
-
-          if (tAlphaPixel === 255) {
-            tPixels[i] = (tPixels[i] * pMultiplier + pAdd) | 0;
-            tPixels[i + pIndex2] = (tPixels[i + pIndex2] * pMultiplier2 + pAdd2) | 0;
-          } else {
-            tAlphaRatio = tAlphaPixel / 255;
-            tAlphaInverter = 1 + (1 - tAlphaRatio);
-            
-            tPixels[i] = (tPixels[i] * tAlphaInverter * pMultiplier * tAlphaRatio + pAdd * tAlphaRatio) | 0;
-            tPixels[i + pIndex2] = (tPixels[i + pIndex2] * tAlphaInverter * pMultiplier2 * tAlphaRatio + pAdd2 * tAlphaRatio) | 0;
-          }
-        }
-      } else {
-        for (var i = pIndex, il = tPixels.length; i < il; i += 4) {
-          if (tPixels[i + tAlphaIndex] === 0) continue;
-
-          tPixels[i] = (tPixels[i] * pMultiplier + pAdd) | 0;
-          tPixels[i + pIndex2] = (tPixels[i + pIndex2] * pMultiplier2 + pAdd2) | 0;
-        }
-      }
-    }
-
-    if (tAlphaAdd !== 0) {
-      doAll();
-      tTargetContext.putImageData(tAllPixelsImageData, tTargetX, tTargetY);
-    } else {
-      var tSetBytes = true;
-
-      if (tHavePositiveMultipliers && (tRedMultiplier + tGreenMultiplier + tBlueMultiplier === 0)) {
-        tSetBytes = doSetAll();
-      } else if (tHavePositiveMultipliers && tHaveSameMultipliers && !tHasAdds) {
-        tSetBytes = doDarkenAll();
-      } else if (tHavePositiveMultipliers && tHasAdds && tHavePositiveAdds && tHaveSameMultipliers) {
-        tSetBytes = doDarkenAllLighten();
-      } else if (tHasAdds && tHavePositiveAdds && !tHaveMultipliers) {
-        tSetBytes = doLightenAll();
-      } else if (canMultiply() && tHavePositiveMultipliers && (!tHasAdds || (tHasAdds && tHavePositiveAdds))) {
-        if (!tHasAdds) {
-          tSetBytes = doDarken();
-        } else {
-          tSetBytes = doDarkenLighten();
-        }
-      } else if (tHasRed && tHasGreen && tHasBlue) {
-        doThree();
-      } else if (tHasRed && tHasGreen) {
-        doTwoIndex(0, tRedMultiplier, tRedAdd, 1, tGreenMultiplier, tGreenAdd);
-      } else if (tHasRed && tHasBlue) {
-        doTwoIndex(0, tRedMultiplier, tRedAdd, 2, tBlueMultiplier, tBlueAdd);
-      } else if (tHasGreen && tHasBlue) {
-        doTwoIndex(1, tGreenMultiplier, tGreenAdd, 2, tBlueMultiplier, tBlueAdd);
-      } else if (tHasRed) {
-        doOneIndex(0, tRedMultiplier, tRedAdd);
-      } else if (tHasGreen) {
-        doOneIndex(1, tGreenMultiplier, tGreenAdd);
-      } else if (tHasBlue) {
-        doOneIndex(2, tBlueMultiplier, tBlueAdd);
-      }
-
-      if (tSetBytes) {
-        tTargetContext.putImageData(tAllPixelsImageData, tTargetX, tTargetY);
-      }
-    }
-  }
-
-}(this));
-
-/**
- * @author Kuu Miyazaki
- *
- * Copyright (C) 2013 BenriJS.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  if (global.HTMLCanvasElement) {
-    var DOMImage = benri.impl.web.graphics.draw.DOMImage;
-
-    benri.impl.add('graphics.draw.image', function(pData) {
-      pData.add(DOMImage, ['canvas', 'dom', 'html']);
-    });
-  }
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  if (!global.HTMLCanvasElement) {
-    return;
-  }
-
-  /**
-   * @class
-   * @extends {benri.graphics.Surface}
-   */
-  var Canvas2DSurface = (function(pSuper) {
-    var DOMImage = benri.impl.web.graphics.draw.DOMImage;
-    var Matrix2D = benri.geometry.Matrix2D;
-    var Records = benri.graphics.Records;
-    var Shader = benri.graphics.shader.Shader;
-    var Texture = benri.graphics.render.Texture;
-    var flag = benri.graphics.Surface.flag;
-
-    var mFragmentShaders = benri.impl.web.graphics.shader.fragment;
+  var VARIANT_TYPE_URL = 1;
+  var VARIANT_TYPE_BUFFER = 2;
+
+  var STATUS_IDLE = 0;
+  var STATUS_LOADING = 1;
+  var STATUS_LOADED = 2;
+  var STATUS_ERROR = 3;
+
+  function ManifestEntry(pId, pManifest) {
+    /**
+     * The unique ID of this entry
+     * @type {string}
+     */
+    this.id = pId;
+
+    this.manifest = pManifest;
 
     /**
-     * @constructor
+     * Map of MIME types to variants.
+     * @type {Object}
      */
-    function Canvas2DSurface(pWidth, pHeight, pHints) {
-      pSuper.call(this, pWidth, pHeight, pHints);
+    this.variants = {};
 
-      var tFlags = this._flags = [];
+    this.activeVariant = null;
 
-      tFlags[flag.ANTIALIAS] = false;
-      this._fragments = tFlags[flag.FRAGMENTS] = true;
-      this._stencilTest = tFlags[flag.STENCIL_TEST] = false;
+    this.status = STATUS_IDLE;
 
-      this.textures = [];
-
-      var tTarget = this.canvasTarget = createCanvasTarget(this, pWidth, pHeight, this.hints.recycle, null);
-      this.canvas = tTarget.canvas;
-      this.context = tTarget.context;
-
-      /**
-       * An array of currently existing targets.
-       * @private
-       * @type {Target}
-       */
-      this._targets = [tTarget];
-
-      this._targetStatus = [{
-        identityTransform: true
-      }];
-
-      this._targetStatusStack = [[]];
-      
-      this._activeTarget = 0;
-
-      this._compositeCanvasStack = [];
-
-      this.colors = null;
-    }
-  
-    var tProto = Canvas2DSurface.prototype = Object.create(pSuper.prototype);
-    tProto.constructor = Canvas2DSurface;
-
-    tProto.updateUniforms = function(pProgram) {
-      var tMatrix = pProgram.matrix;
-
-      this.setTransform(
-        tMatrix.a,
-        tMatrix.b,
-        tMatrix.c,
-        tMatrix.d,
-        tMatrix.e,
-        tMatrix.f
-      );
-    };
-
-    tProto.saveContext = function () {
-      var tId = this._activeTarget;
-      var tCurrentStatus = this._targetStatus[tId];
-
-      this._targetStatusStack[tId].push({
-        identityTransform: tCurrentStatus.identityTransform
-      });
-
-      this.context.save();
-    };
-
-    tProto.restoreContext = function () {
-      var tId = this._activeTarget;
-
-      this._targetStatus[tId] = this._targetStatusStack[tId].pop();
-      
-      this.context.restore();
-    };
-
-    tProto.setIdentityTransform = function () {
-      var tId = this._activeTarget;
-      var tStatus = this._targetStatus[tId];
-
-      if (tStatus.identityTransform) {
-        return;
-      }
-
-      this.context.setTransform(1, 0, 0, 1, 0, 0);
-      tStatus.identityTransform = true;
-    };
-
-    tProto.setTransform = function (pA, pB, pC, pD, pE, pF) {
-      this.context.setTransform(pA, pB, pC, pD, pE, pF);
-
-      this._targetStatus[this._activeTarget].identityTransform = false;
-    };
-
-    tProto.transform = function (pA, pB, pC, pD, pE, pF) {
-      this.context.transform(pA, pB, pC, pD, pE, pF);
-
-      this._targetStatus[this._activeTarget].identityTransform = false;
-    };
-
-    tProto.getImageDOMElement = function(pImage) {
-      var tConstructor = pImage.constructor;
-
-      if (tConstructor === Texture) {
-        return this.textures[pImage.id].image._domImage;
-      } else if (tConstructor === DOMImage) {
-        return pImage._domImage;
-      } else {
-        return DOMImage.fromImage(pImage)._domImage;
-      }
-    };
-
-    tProto.enable = function(pFlag) {
-      this._flags[pFlag] = true;
-
-      if (pFlag === flag.STENCIL_TEST) {
-        this._stencilTest = true;
-      } else if (pFlag === flag.FRAGMENTS) {
-        this._fragments = true;
-      } else if (pFlag === flag.STENCIL_SAVE) {
-        this.saveContext();
-      }
-    };
-
-    tProto.disable = function(pFlag) {
-      this._flags[pFlag] = false;
-
-      if (pFlag === flag.STENCIL_TEST) {
-        this._stencilTest = false;
-      } else if (pFlag === flag.FRAGMENTS) {
-        this._fragments = false;
-      } else if (pFlag === flag.STENCIL_SAVE) {
-        this.restoreContext();
-      }
-    };
-
-    tProto.isEnabled = function(pFlag) {
-      return this._flags[pFlag] || false;
-    };
- 
-    tProto.image = function(pImage, pWidth, pHeight, pSrcRect, pProgram) {
-      this.render(
-        null,
-        Records.RAW,
-        {
-          image: this.getImageDOMElement(pImage),
-          width: pWidth,
-          height: pHeight,
-          srcX: pSrcRect.origin.x,
-          srcY: pSrcRect.origin.y,
-          srcWidth: pSrcRect.getWidth(),
-          srcHeight: pSrcRect.getHeight()
-        },
-        pProgram
-      );
-    };
-
-    tProto.fastImage = function(pImage, pProgram) {
-      var tWidth = pImage.getWidth();
-      var tHeight = pImage.getHeight();
-
-      this.render(
-        null,
-        Records.RAW,
-        {
-          image: this.getImageDOMElement(pImage),
-          width: tWidth,
-          height: tHeight,
-          srcX: 0,
-          srcY: 0,
-          srcWidth: tWidth,
-          srcHeight: tHeight
-        },
-        pProgram
-      );
-    };
-
-    tProto.text = function(pText, pStyle, pProgram) {
-      this.updateUniforms(pProgram);
-
-      pProgram.fillType = Records.TEXT;
-      pProgram.fillTypeText = 'fillStyle';
-      pProgram.fillData = null;
-      pProgram.colors = [pStyle.color];
-
-      var tFont = pStyle.font;
-      var tContext = this.context;
-      var tLeading = tFont.leading * pStyle.fontHeight / 1024;
-      var tStringList, tString = pText + '';
-      var tFontString = (tFont.italic ? 'italic ' : '') + (tFont.bold ? 'bold ' : '') + pStyle.fontHeight + 'px ' + tFont.name;
-      var tYPos = 0, tWidth = pStyle.maxWidth;
-      var tXPos = pStyle.leftMargin + (pStyle.align === 'left' ? 0 : (pStyle.align === 'center' ? tWidth / 2 : tWidth));
-      var i, il;
-
-      // CnvasRenderingContext2D.fillText() forcibly converts all the spaces into ASCII spaces.
-      // However, the space characters are sometimes used for making visual space.
-      // So, here we do such the conversion more precise way so that we can preserve the original layout.
-      tContext.font = tFontString;
-
-      var tSpaceWidth = tContext.measureText('\u0020').width;
-      var tIdeographicSpaceWidth = tContext.measureText('\u3000').width;
-      var tSpaceMultRate = (tSpaceWidth && tIdeographicSpaceWidth ? tIdeographicSpaceWidth / tSpaceWidth : 4);
-
-      // This function takes an arbitrary number of the ideographic spaces (U+3000,)
-      // and returns how many ASCII spaces (U+0020) are needed for filling the same on-screen area
-      // that the ideographic spaces would have ocupied.
-      var howManySpaces = function (pString) {
-        return Math.round(pString.length * tSpaceMultRate);
-      };
-
-      tString = tString.replace(/\u3000+/g, function (pMatched) {
-        // Generating sucessive SPACE characters.
-        return Array(howManySpaces(pMatched) + 1).join('\u0020');
-      });
-
-      // Fold the text.
-      var tCharCode, tStringTarget = '';
-      tStringList = [];
-
-      for (i = 0, il = tString.length; i < il; i++) {
-        tCharCode = tString.charCodeAt(i);
-
-        // We take account of line breaks even when TextStyle.multiline is true.
-        if (tCharCode === 10 || tCharCode === 13) {
-          tStringList.push(tStringTarget);
-          tStringTarget = '';
-          continue;
-        }
-
-        tStringTarget += tString[i];
-
-        if (i === il - 1
-          || (pStyle.multiline
-              && tContext.measureText(tStringTarget + tString[i + 1]).width > tWidth)) {
-          tStringList.push(tStringTarget);
-          tStringTarget = '';
-        }
-      }
-
-      var tShaders = pProgram.getShaders(Shader.TYPE_FRAGMENT);
-      var tShader;
-      var tShaderImpl;
-      var i;
-      var tShadersLength = tShaders.length;
-
-      for (i = 0; i < tShadersLength; i++) {
-        tShader = tShaders[i];
-        mFragmentShaders[tShader.name].pre(tShader, this, pProgram);
-      }
-
-      for (i = 0; i < tShadersLength; i++) {
-        tShader = tShaders[i];
-        tShaderImpl = mFragmentShaders[tShader.name];
-
-        if (tShaderImpl.style) {
-          tShaderImpl.style(tShader, this, pProgram);
-        }
-      }
-
-      tContext.textBaseline = 'top';
-      tContext.textAlign = pStyle.align;
-
-      for (i = 0, il = tStringList.length; i < il; i++) {
-        tString = tStringList[i];
-        tContext.fillText(tString, tXPos, tYPos);
-        tYPos += (tLeading + pStyle.fontHeight);
-      }
-
-      this.setTargetFresh(false);
-
-      for (i = 0; i < tShadersLength; i++) {
-        tShader = tShaders[i];
-        mFragmentShaders[tShader.name].post(tShader, this, pProgram);
-      }
-
-      this.setIdentityTransform();
-    };
-
-    tProto.clearColor = function(pColor) {
-      var tWidth = this.width;
-      var tHeight = this.height;
-      var tContext = this.context;
-      var tAlpha = pColor.getRGBA()[3];
-
-      this.saveContext();
-      this.setIdentityTransform();
-
-      if (tAlpha !== 0xFF) {
-        // Only clear if we are clearing transparent
-        // for performance.
-        // Also, we have an amazing hack here to support
-        // Samsung Galaxy S devices as well as a couple
-        // other devices. If you do not scale this,
-        // the first pixel of the next fill will override
-        // all other drawing operations and only that one
-        // pixel will show over the canvas... yeah...
-        // The +1 is for some random devices bugging out if
-        // you clear the buffer at exact dimensions.
-        
-        tContext.scale(1, 1);
-        tContext.clearRect(0, 0, tWidth + 1, tHeight + 1);
-        this.setTargetFresh(true);
-      }
-
-      if (tAlpha !== 0) {
-        tContext.fillStyle = pColor.toCSSString();
-        tContext.fillRect(0, 0, tWidth, tHeight);
-        this.setTargetFresh(false);
-      }
-
-      this.restoreContext();
-    };
-
-    function sizzorTestLocationVerticies(pVerticies, pOffsetX, pOffsetY, pWidth, pHeight) {
-      var tVertex;
-      var tX, tY;
-
-      var tMinX = 2147483647;
-      var tMinY = 2147483647;
-      var tMaxX = -2147483648;
-      var tMaxY = -2147483648;
-
-      for (var i = 0, il = pVerticies.length; i < il; i++) {
-        tVertex = pVerticies[i];
-        tX = tVertex[0];
-        tY = tVertex[1];
-
-        // Chances are this first two if statements
-        // will return true right away so we do them
-        // first.
-        if (tX > pOffsetX && tX < pWidth && tY > pOffsetY && tY < pHeight) {
-          return true;
-        }
-
-        if (tX < tMinX) {
-          tMinX = tX;
-        }
-
-        if (tX > tMaxX) {
-          tMaxX = tX;
-        }
-
-        if (tY < tMinY) {
-          tMinY = tY;
-        }
-
-        if (tY > tMaxY) {
-          tMaxY = tY;
-        }
-      }
-
-      if (
-          tMaxX <= 0 || tMinX >= pWidth ||
-          tMaxY <= 0 || tMinY >= pHeight
-        ) {
-        return false;
-      }
-
-      return true;
-    }
-
-    function sizzorTestPolygonVerticies(pVerticies, pOffsetX, pOffsetY, pWidth, pHeight) {
-      var tX, tY;
-
-      var tMinX = 2147483647;
-      var tMinY = 2147483647;
-      var tMaxX = -2147483648;
-      var tMaxY = -2147483648;
-
-      for (var i = 0, il = pVerticies.length; i < il; i += 2) {
-        tX = pVerticies[i];
-        tY = pVerticies[i + 1];
-
-        // Chances are this first two if statements
-        // will return true right away so we do them
-        // first.
-        if (tX > pOffsetX && tX < pWidth && tY > pOffsetY && tY < pHeight) {
-          return true;
-        }
-
-        if (tX < tMinX) {
-          tMinX = tX;
-        }
-
-        if (tX > tMaxX) {
-          tMaxX = tX;
-        }
-
-        if (tY < tMinY) {
-          tMinY = tY;
-        }
-
-        if (tY > tMaxY) {
-          tMaxY = tY;
-        }
-      }
-
-      if (
-          tMaxX <= 0 || tMinX >= pWidth ||
-          tMaxY <= 0 || tMinY >= pHeight
-        ) {
-        return false;
-      }
-
-      return true;
-    }
-
-    var mRawSizzorPolygon = new benri.geometry.Polygon([
-      0, 0,
-      0, 0,
-      0, 0,
-      0, 0
-    ]);
-
-    tProto.render = function(pVerticies, pFillType, pFillData, pProgram) {
-      var tFragments = this._fragments;
-
-      if (pVerticies) {
-        this.setIdentityTransform();
-
-        var tFinalLocationData = this.specifyVerticies(
-          pVerticies,
-          pProgram
-        );
-
-        if (
-            !this._stencilTest &&
-            sizzorTestLocationVerticies(
-              tFinalLocationData,
-              0,
-              0,
-              this.canvas.width,
-              this.canvas.height
-            ) === false
-          ) {
-          // Don't render stuff we can't see.
-          return;
-        }
-
-        var tVertexBuffer = pVerticies.buffer;
-
-        // tessellate the verticies making primitives.
-        this.tessellate(
-          pVerticies.type,
-          tFinalLocationData, // A new array of vertex locations
-          tVertexBuffer.locationSize,
-          tVertexBuffer.attributes,
-          pProgram
-        );
-      } else {
-        if (!tFragments && this._stencilTest) {
-          if (pFillType === Records.RAW) {
-            this.updateUniforms(pProgram);
-            this.context.rect(0, 0, pFillData.width, pFillData.height);
-          } else {
-            this.setIdentityTransform();
-            this.context.rect(0, 0, this.getCurrentWidth(), this.getCurrentHeight());
-          }
-          this.setTargetFresh(false);
-        } else {
-          if (pFillType === Records.RAW) {
-            var tSizzorVerticies = mRawSizzorPolygon.verticies;
-            tSizzorVerticies[0] = tSizzorVerticies[1] = tSizzorVerticies[3] = tSizzorVerticies[6] = 0;
-            tSizzorVerticies[2] = tSizzorVerticies[4] = pFillData.width;
-            tSizzorVerticies[5] = tSizzorVerticies[7] = pFillData.height;
-
-            mRawSizzorPolygon.transform(pProgram.matrix);
-
-            if (sizzorTestPolygonVerticies(tSizzorVerticies, 0, 0, this.canvas.width, this.canvas.height) === false) {
-              // Don't render things we can't see.
-              return;
-            }
-          }
-
-          this.updateUniforms(pProgram);
-        }
-      }
-
-      if (tFragments) {
-        // Rasterize
-        this.rasterize(
-          pFillType,
-          pFillData,
-          pProgram
-        );
-      } else if (this._stencilTest) {
-        this.context.clip();
-      }
-    };
-
-    tProto.resetTargetStatus = function (pId) {
-      var tId = pId || this._activeTarget;
-
-      this._targetStatus[tId] = {
-        identityTransform: true
-      };
-
-      this._targetStatusStack[tId] = [];
-    };
-
-    tProto.createTarget = function(pWidth, pHeight, pAttachments) {
-      var tTargets = this._targets;
-
-      for (var i = 0;; i++) {
-        if (tTargets[i] === void 0) {
-          tTargets[i] = createCanvasTarget(this, pWidth, pHeight, true, pAttachments);
-          this.resetTargetStatus(i);
-
-          return i;
-        }
-      }
-    };
-
-    tProto.destroyTarget = function(pId) {
-      if (this._targets[pId] !== void 0) {
-        this._targets[pId].release();
-        this._targets[pId] = void 0;
-      }
-    };
-
-    tProto.setTarget = function(pId) {
-      var tTarget = this._targets[pId];
-
-      if (tTarget !== void 0) {
-        this._activeTarget = pId;
-        this.context = tTarget.context;
-        this.canvas = tTarget.canvas;
-      }
-    };
-
-    tProto.getTarget = function() {
-      return this._activeTarget;
-    };
-
-    tProto.target = function(pId, pProgram) {
-      var tTarget = this._targets[pId];
-
-      if (tTarget !== void 0) {
-        this.render(
-          null,
-          Records.RAW,
-          {
-            image: tTarget.canvas,
-            width: tTarget.width,
-            height: tTarget.height,
-            srcX: 0,
-            srcY: 0,
-            srcWidth: tTarget.width,
-            srcHeight: tTarget.height
-          },
-          pProgram
-        );
-
-        this.setTargetFresh(false);
-      }
-    };
-
-    tProto.attachToTarget = function(pId, pAttachments) {
-      var tTarget = this._targets[pId];
-      var tFragment0;
-
-      if (tTarget === void 0) {
-        return;
-      }
-
-      if (pAttachments.fragments) {
-        var tCanvas, tContext;
-        tFragment0 = pAttachments.fragments[0];
-
-        if (tFragment0 !== void 0) {
-          if (tTarget.attachments.fragments[0]) {
-            if (tTarget.key !== null) {
-              tTarget.image.release(tTarget.key);
-              tTarget.key = null;
-            }
-
-            tTarget.image = null;
-          }
-
-          tTarget.attachments.fragments[0] = tFragment0;
-
-          if (tFragment0 !== null) {
-            var tImage = tTarget.image = tFragments[0];
-
-            if (tImage) {
-              var tCanvas = tTarget.canvas = pSurface.getImageDOMElement(tImage);
-              var tContext = tTarget.context = tCanvas.getContext('2d');
-
-              tTarget.key = tImage.keep();
-              tContext.setTransform(1, 0, 0, 1, 0, 0);
-              tContext.clearRect(0, 0, tTarget.width + 1, tTarget.height + 1);
-              this.saveContext();
-
-              this.setTargetFresh(true);
-            } else {
-              tTarget.canvas = null;
-              tTarget.context = null;
-            }
-          }
-        }
-
-        if (this._activeTarget === pId) {
-          this.canvas = tCanvas;
-          this.context = tContext;
-        }
-      }
-    };
-
-    tProto.getTargetAttachments = function(pId) {
-      var tTarget = this._targets[pId];
-
-      if (tTarget !== void 0) {
-        return tTarget.attachments;
-      }
-
-      return null;
-    };
-
-    tProto.getTargetWidth = function(pId) {
-      if (this._targets[pId] !== void 0) {
-        return this._targets[pId].width;
-      }
-    };
-
-    tProto.getTargetHeight = function(pId) {
-      if (this._targets[pId] !== void 0) {
-        return this._targets[pId].height;
-      }
-    };
-
-    tProto.registerTexture = function(pTexture) {
-      var tTextures = this.textures;
-
-      for (var i = 0; ; i++) {
-        if (tTextures[i] === void 0) {
-          pTexture.id = i;
-          tTextures[i] = null;
-          return;
-        }
-      }
-    };
-
-    tProto.setTextureImage = function(pTexture, pImage) {
-      var tDestroy = false;
-      if (pImage === null) {
-        pImage = DOMImage.obtain(pTexture.getWidth(), pTexture.getHeight());
-        tDestroy = true;
-      } else {
-        if (pImage.constructor !== DOMImage) {
-          pImage = DOMImage.fromImage(pImage);
-          tDestroy = true;
-        }
-      }
-
-      this.textures[pTexture.id] = {
-        image: pImage,
-        key: pImage.keep()
-      };
-
-      if (tDestroy) {
-        pImage.destroy();
-      }
-    };
-
-    tProto.setTextureBytes = function(pTexture, pBytes, pX, pY, pWidth, pHeight, pStride) {
-      this.textures[pTexture.id].image.setBytes(pBytes, pX, pY, pWidth, pHeight, pStride);
-    };
-
-    tProto.getTextureBytes = function(pTexture, pX, pY, pWidth, pHeight, pStride) {
-      return this.textures[pTexture.id].image.getBytes(pX, pY, pWidth, pHeight, pStride);
-    };
-
-    tProto.destroyTexture = function(pTexture) {
-      var tId = pTexture.id;
-
-      if (tId === -1) {
-        return;
-      }
-
-      var tImageData = this.textures[tId];
-      tImageData.image.release(tImageData.key);
-
-      this.textures[tId] = void 0;
-    };
-
-    tProto.getImage = function(pId) {
-      var tTarget = this._targets[pId];
-
-      if (tTarget !== void 0) {
-        return tTarget.image;
-      }
-
-      return null;
-    };
-
-    tProto.destroy = function() {
-      var i, il;
-      var tTargets = this._targets;
-
-      this.context = null;
-      this.canvas = null;
-      this.canvasTarget = null;
-
-      for (i = 0, il = tTargets.length; i < il; i++) {
-        if (tTargets[i] !== void 0) {
-          tTargets[i].release();
-        }
-      }
-
-      var tTextures = this.textures;
-
-      for (i = 0, il = tTextures.length; i < il; i++) {
-        tTextures[i].image.release(tTextures[i].key);
-      }
-
-      this._targets = null;
-      this._textures = null;
-    };
-
-    function reflowHackFlush() {
-      var tCanvas = this._targets[0].canvas;
-
-      // A hack for devices that have a bug
-      // where their real size is 'forgotten'
-      // and the whole canvas is not updated
-      // properly. This forces the browser to
-      // reflow and repaint the canvas.
-
-      if (tCanvas.width > 256 || tCanvas.height > 256) {
-        // This bug only happens with canvases
-        // less than 256x256
-        return;
-      }
-
-      var tComputedStyle = getComputedStyle(tCanvas);
-
-      if (tComputedStyle !== null) {
-        var tPosition = tComputedStyle.position;
-
-        if (tPosition === 'static') {
-          tCanvas.style.position = 'relative';
-        } else if (tPosition === 'relative') {
-          tCanvas.style.position = 'static';
-        } else if (tPosition === 'absolute') {
-          tCanvas.style.position = 'float';
-        } else if (tPosition === 'float') {
-          tCanvas.style.position = 'absolute';
-        } else {
-          tCanvas.style.position = 'static';
-        }
-
-        tCanvas.clientLeft;
-        tCanvas.style.position = tPosition;
-      }
-    }
-
-    if (benri.impl.web.graphics.bugs.canvasSizeBug) {
-      tProto.flush = reflowHackFlush;
-    }
-
-    benri.env.on('setvar', function(pEvent) {
-      if (pEvent.varName === 'benri.impl.web.graphics.canvasSizeBug') {
-        if (pEvent.varValue === true) {
-          tProto.flush = reflowHackFlush;
-        } else {
-          tProto.flush = function() {};
-        }
-      }
-    });
-
-    tProto.specifyVerticies = function(pVerticies, pProgram) {
-      var tVertexShaders = pProgram.getShaders(Shader.TYPE_VERTEX);
-      var tVertexShadersLength = tVertexShaders.length;
-      var tVertexBuffer = pVerticies.buffer;
-      var i;
-      var tVertexLocations;
-      var tVertexAttributes;
-
-      tVertexBuffer.seek(0);
-
-      tVertexLocations = tVertexBuffer.locations;
-      tVertexAttributes = tVertexBuffer.attributes;
-
-      if (tVertexShadersLength !== 0) {
-        // For each vertex we do lots of stuff.
-        // First off, the vertex shader.
-
-        for (i = 0; i < tVertexShadersLength; i++) {
-          tVertexLocations = tVertexShaders[i].execute(tVertexLocations, tVertexAttributes);
-        }
-
-        return tVertexLocations;
-      } 
-
-      return tVertexLocations;
-    };
-
-    tProto.tessellate = function(pType, pVertexLocations, pLocationSize, pAttributes, pProgram) {
-      var tContext = this.context;
-      var i, il;
-
-      tContext.beginPath();
-
-      if (pType === Records.PATH) {
-        var tVectorOps = pAttributes.vectorOp;
-        var tVectorOpsData = tVectorOps.data;
-        var tVectorOp;
-        var tVertexLocation;
-        var tAnchor;
-
-        for (i = 0, il = pVertexLocations.length; i < il; i++) {
-          tVertexLocation = pVertexLocations[i];
-          tVectorOp = tVectorOpsData[i][0];
-
-          if (tVectorOp === 0x2) {
-            // anchor
-            tContext.lineTo(tVertexLocation[0] | 0, tVertexLocation[1] | 0);
-          } else if (tVectorOp === 0x3) {
-            // control
-            tAnchor = pVertexLocations[i + 1];
-
-            tContext.quadraticCurveTo(
-              tVertexLocation[0] | 0,
-              tVertexLocation[1] | 0,
-              tAnchor[0] | 0,
-              tAnchor[1] | 0
-            );
-
-            i++;
-          } else if (tVectorOp === 0x1) {
-            // move
-            tContext.moveTo(tVertexLocation[0] | 0, tVertexLocation[1] | 0);
-          }
-        }
-      } else {
-        // TODO: handle this later.
-      }
-    };
-
-    tProto.pushCompositeCanvas = function(pWidth, pHeight, pRecycle) {
-      var tCompositeImage;
-
-      if (pRecycle) {
-        tCompositeImage = DOMImage.obtain(pWidth, pHeight);
-      } else {
-        tCompositeImage = DOMImage.obtainFromLRUPool(pWidth, pHeight);
-      }
-
-      this._compositeCanvasStack.push({
-        image: tCompositeImage,
-        context: this.context,
-        width: pWidth,
-        height: pHeight
-      });
-
-      this.context = tCompositeImage._domImage.getContext('2d');
-    };
-
-    tProto.takeCompositeCanvas = function() {
-      var tComposite = this._compositeCanvasStack.pop();
-      var tCompositeImage = tComposite.image;
-      this.context = tComposite.context;
-
-      return tCompositeImage;
-    };
-
-    tProto.popCompositeCanvas = function(pAlphaMultiplier, pGlobalCompositeOperation) {
-      var tComposite = this._compositeCanvasStack.pop();
-
-      var tCompositeImage = tComposite.image;
-      var tWidth = tComposite.width;
-      var tHeight = tComposite.height;
-      var tContext = this.context = tComposite.context;
-      var tPreviousAlpha;
-
-      if (pAlphaMultiplier !== 1) {
-        tPreviousAlpha = tContext.globalAlpha;
-        tContext.globalAlpha = pAlphaMultiplier;
-      }
-
-      var tPreviousGlobalCompositeOperation = tContext.globalCompositeOperation;
-      tContext.globalCompositeOperation = pGlobalCompositeOperation;
-
-      tContext.drawImage(tCompositeImage._domImage, 0, 0, tWidth, tHeight, 0, 0, tWidth, tHeight);
-      this.setIdentityTransform();
-
-      tContext.globalCompositeOperation = tPreviousGlobalCompositeOperation;
-
-      if (pAlphaMultiplier !== 1) {
-        tContext.globalAlpha = tPreviousAlpha;
-      }
-
-      tCompositeImage.destroy();
-    };
-
-    tProto.getCurrentWidth = function() {
-      var tCompositeCanvasStack = this._compositeCanvasStack;
-      var tLength = tCompositeCanvasStack.length
-
-      if (tLength > 0) {
-        return tCompositeCanvasStack[tLength - 1].width;
-      }
-
-      return this.getTargetWidth(this.getTarget());
-    };
-
-    tProto.getCurrentHeight = function() {
-      var tCompositeCanvasStack = this._compositeCanvasStack;
-      var tLength = tCompositeCanvasStack.length;
-
-      if (tLength > 0) {
-        return tCompositeCanvasStack[tLength - 1].height;
-      }
-
-      return this.getTargetHeight(this.getTarget());
-    };
-
-    tProto.rasterize = function(pFillType, pFillData, pProgram) {
-      var tContext = this.context;
-      var tOriginalContext = tContext;
-      var tShaders = pProgram.getShaders(Shader.TYPE_FRAGMENT);
-      var tShader;
-      var tShaderImpl;
-      var i;
-      var il = tShaders.length;
-      var tSkipFill = false;
-
-      pProgram.fillType = pFillType;
-      pProgram.fillTypeText = pFillType === Records.FILL ? 'fillStyle' : 'strokeStyle';
-      pProgram.fillData = pFillData;
-      pProgram.colors = [];
-
-      if (pFillType === Records.STROKE) {
-        tContext.lineWidth = pFillData.width * pProgram.matrix.getScaleX();
-        tContext.lineCap = pFillData.cap;
-        tContext.lineJoin = pFillData.join;
-      }
-
-      for (i = 0; i < il; i++) {
-        tShader = tShaders[i];
-        mFragmentShaders[tShader.name].pre(tShader, this, pProgram);
-      }
-
-      for (i = 0; i < il; i++) {
-        tShader = tShaders[i];
-        tShaderImpl = mFragmentShaders[tShader.name];
-
-        if (tShaderImpl.style) {
-          tSkipFill = tShaderImpl.style(tShader, this, pProgram);
-        }
-      }
-
-      if (tSkipFill === false) {
-        if (pFillType === Records.RAW) {
-          tContext.drawImage(
-            pFillData.image,
-            pFillData.srcX,
-            pFillData.srcY,
-            pFillData.srcWidth,
-            pFillData.srcHeight,
-            0,
-            0,
-            pFillData.width,
-            pFillData.height
-          );
-        } else if (pFillType === Records.FILL) {
-          tContext.fill();
-        } else if (pFillType === Records.STROKE) {
-          tContext.stroke();
-        }
-      }
-
-      this.setTargetFresh(false);
-
-      for (i = 0; i < il; i++) {
-        tShader = tShaders[i];
-        mFragmentShaders[tShader.name].post(tShader, this, pProgram);
-      }
-
-      this.context = tOriginalContext;
-    };
-
-    tProto.isTargetFresh = function() {
-      return this._targets[this._activeTarget].isFresh;
-    };
-
-    tProto.setTargetFresh = function(pIsFresh) {
-      this._targets[this._activeTarget].isFresh = pIsFresh;
-    };
-
-    function CanvasTarget(pSurface, pAttachments, pWidth, pHeight, pKeep) {
-      // TODO: We are breaking the rules for now.
-      // Only fragments[0] is supported/handled right now.
-
-      var tFragments = pAttachments.fragments.slice(0);
-      var tCanvas, tContext;
-      var tImage = this.image = tFragments[0];
-
-      if (tImage) {
-        tCanvas = this.canvas = pSurface.getImageDOMElement(tImage);
-        tContext = this.context = tCanvas.getContext('2d');
-
-        // For iOS 7 bug where the page lang
-        // attribute is set to something other than
-        // en, fonts change randomly.
-        tCanvas.setAttribute('lang', 'en');
-
-        this.context.save();
-      } else {
-        tCanvas = this.canvas = null;
-        tContext = this.context = null;
-      }
-
-      this.attachments = {
-        fragments: tFragments
-      };
-
-      this.width = pWidth;
-      this.height = pHeight;
-
-      if (pKeep) {
-        this.key = tImage.keep();
-      } else {
-        this.key = null;
-      }      
-      
-      this.isFresh = true;
-    }
-
-    CanvasTarget.prototype.release = function() {
-      if (this.context !== null) {
-        this.context.restore();
-      }
-
-      if (this.key !== null) {
-        this.image.release(this.key);
-        this.key = null;
-      } else {
-        this.image.destroy();
-      }
-
-      this.image = this.attachments = this.canvas = this.context = null;
-    };
-
-    CanvasTarget.prototype.clear = function() {
-      this.context.clearRect(0, 0, this.width + 1, this.height + 1);
-    };
-
-    CanvasTarget.prototype.drawTo = function(pContext) {
-      pContext.drawImage(this.canvas, 0, 0, this.width, this.height, 0, 0, this.width, this.height);
-    };
-
-    function createCanvasTarget(pSurface, pWidth, pHeight, pRecycle, pAttachments) {
-      if (pWidth === -1) {
-        pWidth = pSurface.canvasTarget.width;
-      }
-
-      if (pHeight === -1) {
-        pHeight = pSurface.canvasTarget.height;
-      }
-
-      if (pAttachments && pAttachments.fragments) {
-        return new CanvasTarget(pSurface, pAttachments, pWidth, pHeight, true);
-      } else {
-        return new CanvasTarget(pSurface, {
-          fragments: [pRecycle ? DOMImage.obtain(pWidth, pHeight) : new DOMImage(pWidth, pHeight)]
-        }, pWidth, pHeight, false);
-      }
-    };
-
-    return Canvas2DSurface;
-  }(benri.graphics.Surface));
-
-  benri.impl.add('graphics.surface', function(pData) {
-    pData.add(Canvas2DSurface, ['2d', 'canvas', 'dom', 'vector']);
-  });
-
-  benri.impl.web.graphics.Canvas2DSurface = Canvas2DSurface;
-
-}(this));
-
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-benri.concurrent = {};
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var benri = global.benri;
-
-  var PersistentEventEmitter = benri.event.PersistentEventEmitter;
-
-  benri.concurrent.Delay = Delay;
-
-  function Delay() {
-    PersistentEventEmitter(this);
-
-    this.isResolved = false;
-    this.value = void 0;
+    this.addURL = entryAddURL;
+    this.addBuffer = entryAddBuffer;
+    this.remove = entryRemove;
+    this.load = entryLoad;
   }
 
-  var tProto = Delay.prototype;
+  function entryAddURL(pURL, pMimeType) {
+    var tVariants = this.variants;
+    var tMimeString = pMimeType.toString();
 
-  tProto.resolve = function(pValue) {
-    if (this.isResolved) {
-      return;
+    if (tMimeString in tVariants) {
+      this.remove(tMimeString);
     }
 
-    this.isResolved = true;
-
-    this.value = pValue;
-
-    this.resetEvent('progress');
-
-    this.emit('resolve', pValue);
-  };
-
-  tProto.fail = function(pReason) {
-    this.resetEvent('progress');
-
-    this.emit('fail', pReason);
-  };
-
-  tProto.progress = function(pCurrent, pTotal, pData) {
-    this.emit('progress', {
-      current: pCurrent,
-      total: pTotal,
-      data: pData
-    });
-  };
-
-  tProto.as = function(pCallback) {
-    this.on('progress', pCallback);
-
-    return this;
-  };
-
-  tProto.then = function(pCallback) {
-    this.onFor('resolve', pCallback, 1);
-
-    return this;
-  };
-
-  tProto.or = function(pCallback) {
-    this.onFor('fail', pCallback, 1);
-
-    return this;
-  };
-
-}(this));
-/**
- * @author Jason Parrott
- *
- * Copyright (C) 2013 BenriJS Project.
- * This code is licensed under the zlib license. See LICENSE for details.
- */
-
-(function(global) {
-
-  var benri = global.benri;
-  var net = benri.net;
-  var impl = benri.impl;
-  var Delay = benri.concurrent.Delay;
-  var URL = net.URL;
-
-  net.Request = Request;
-
-  var RequestImpl;
-
-  function Request(pURL, pMethod, pRaw) {
-    if (RequestImpl === void 0) {
-      RequestImpl = impl.get('net.Request').best.clazz;
-    }
-
-    if (!(pURL instanceof URL)) {
-      pURL = new URL(pURL);
-    }
-
-    this.url = pURL;
-    this.method = (pMethod || 'GET').toUpperCase();
-    this._headers = [];
-    this.timeout = 0;
-    this._sending = false;
-    this.isRaw = pRaw || false;
-
-    this._impl = new RequestImpl(this);
+    tVariants[tMimeString] = {
+      variantType: VARIANT_TYPE_URL,
+      type: pMimeType,
+      url: pURL,
+      buffer: null,
+      blob: null,
+      blobClass: null
+    };
   }
 
-  var tProto = Request.prototype;
+  function entryAddBuffer(pBuffer, pMimeType) {
+    var tVariants = this.variants;
+    var tMimeString = pMimeType.toString();
 
-  tProto.setHeader = function(pName, pValue) {
-    if (this._sending) {
-      throw new Error('Invalid state');
+    if (tMimeString in tVariants) {
+      this.remove(tMimeString);
     }
 
-    this._headers[pName] = pValue;
-  };
+    tVariants[tMimeString] = {
+      variantType: VARIANT_TYPE_BUFFER,
+      type: pMimeType,
+      url: null,
+      buffer: pBuffer,
+      blob: null,
+      blobClass: null
+    };
+  }
 
-  tProto.getHeader = function(pName) {
-    return this._headers[pName] || null;
-  };
+  function entryRemove(pMimeType) {
+    var tVariant = this.variants[pMimeType];
 
-  tProto.getAllHeaders = function() {
-    var tHeaders = this._headers;
-    var tResult = {};
+    if (tVariant) {
+      this.manifest.emitOnce('remove', tVariant);
 
-    for (var k in tHeaders) {
-      tResult[k] = tHeaders[k];
+      delete this.variants[pMimeType];
+    }
+  }
+
+  function entryLoad() {
+    this.status = STATUS_LOADING;
+
+    var tVariants = this.variants;
+    var tVariant, k;
+    var tClasses;
+    var tBestClass, tBestVariant;
+    var tBestScore = -1;
+    var tThenCB = createEntryBlobThenCallback(this);
+    var tAsCB = createEntryBlobThenCallback(this);
+    var tCatchCB = createEntryBlobThenCallback(this);
+
+    for (k in tVariants) {
+      tVariant = tVariants[k];
+      tClasses = mGetBlobClasses(tVariant.type);
+
+      if (tClasses.bestScore >= tBestScore) {
+        tBestVariant = tVariant;
+        tBestClass = tClasses.best;
+        tBestScore = tClasses.bestScore;
+      }
     }
 
-    return tResult;
-  };
+    tBestVariant.blobClass = tBestClass;
+    this.activeVariant = tBestVariant;
 
-  tProto.send = function(pData) {
-    if (this._sending) {
-      throw new Error('Invalid state');
+    if (tBestVariant.variantType === VARIANT_TYPE_BUFFER) {
+      tBestClass.fromBuffer(tBestVariant.buffer, tBestVariant.type)
+      .then(tThenCB)
+      .as(tAsCB)
+      .catch(tCatchCB);
+    } else {
+      (new benri.net.Request(tBestVariant.url, 'GET', true)).send()
+      .then(function (pResponse) {
+        tBestClass.fromBuffer(pResponse.body, tBestVariant.type)
+        .then(tThenCB)
+        .as(tAsCB)
+        .catch(tCatchCB);
+      }).catch(tCatchCB);
     }
+  }
 
-    var tDelay = new Delay();
+  function createEntryBlobThenCallback(pEntry) {
+    return function(pBlob) {
+      var tId = pEntry.id;
+      var tManifest = pEntry.manifest;
 
-    this._sending = true;
+      pEntry.activeVariant.blob = pBlob;
+      pEntry.status = STATUS_LOADED;
 
-    var tImpl = this._impl;
-
-    tImpl.on('progress', function(pEvent) {
-      tDelay.progress(pEvent.current, pEvent.total);
-    });
-
-    tImpl.on('error', function(pEvent) {
-      tDelay.fail({
-        type: pEvent.type,
-        status: pEvent.status,
-        message: pEvent.message
+      tManifest.emit('entryLoad_' + tId, {
+        id: tId,
+        blob: pBlob,
+        type: pEntry.activeVariant.type
       });
-    });
 
-    tImpl.on('load', function(pEvent) {
-      tDelay.resolve(pEvent.response);
-    });
-
-    tImpl.send(pData);
-
-    return tDelay;
-  };
-
-  tProto.abort = function() {
-    if (this._sending) {
-      this._sending = false;
-      this._impl.abort();
+      finishLoadingEntry(tManifest);
     }
-  };
+  }
 
-}(this));
+  function createEntryBlobAsCallback(pEntry) {
+    return function(pBlob) {
+      var tId = pEntry.id;
+
+      pEntry.activeVariant.blob = pBlob;
+
+      pEntry.manifest.emitOnce('entryProgress_' + tId, {
+        id: tId,
+        blob: pBlob,
+        type: pEntry.activeVariant.type
+      });
+    }
+  }
+
+  function createEntryBlobCatchCallback(pEntry) {
+    return function(pReason) {
+      var tId = pEntry.id;
+      var tManifest = pEntry.manifest;
+
+      pEntry.status = STATUS_ERROR;
+
+      tManifest.emit('entryError_' + tId, {
+        id: tId,
+        type: pEntry.activeVariant.type,
+        reason: pReason
+      });
+
+      finishLoadingEntry(tManifest);
+    }
+  }
+
+}());
+
 /**
  * @author Jason Parrott
  *
@@ -29189,7 +29176,7 @@ return;
     return;
   }
   var WebGLSurface = (function(pSuper) {
-    var DOMImage = benri.impl.web.graphics.draw.DOMImage;
+    var DOMImage = benri.impl.web.graphics.DOMImage;
     var Texture = benri.graphics.render.Texture;
     var Matrix2D = benri.geometry.Matrix2D;
     var flag = benri.graphics.Surface.flag;
@@ -29198,7 +29185,7 @@ return;
       pSuper.call(this, pWidth, pHeight, pHints);
       
       var tImage = this.image = new DOMImage(pWidth, pHeight, document.createElement('canvas'));
-      var tCanvas = this.canvas = tImage._domImage;
+      var tCanvas = this.canvas = tImage.domImage;
       tCanvas.width = pWidth;
       tCanvas.height = pHeight;
       var tContext = this.context = tCanvas.getContext(mCanvasContextName);
@@ -29512,7 +29499,7 @@ return;
           pImage = DOMImage.fromImage(pImage);
         }
 
-        var tDOMImage = pImage._domImage;
+        var tDOMImage = pImage.domImage;
 
         tContext.texImage2D(
           tContext.TEXTURE_2D, // target
@@ -29665,7 +29652,7 @@ return;
   })(benri.graphics.Surface);
 
   benri.impl.add('graphics.surface', function(pData) {
-    pData.add(WebGLSurface, ['3d', 'canvas', 'dom', 'webgl']);
+    pData.add(WebGLSurface, 9);
   });
 
   benri.impl.web.graphics.WebGLSurface = WebGLSurface;

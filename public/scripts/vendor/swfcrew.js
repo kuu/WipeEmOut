@@ -13753,6 +13753,13 @@ benri.impl.web.mem = {};
     function HTMLAudioRenderer(pAudioData) {
       pSuper.call(this, pAudioData);
       this.options = null;
+      var tElem = this.element = this.audio.data;
+      var tSelf = this;
+      tElem.addEventListener('ended', function () {
+        tSelf.playbackState = STATE_READY;
+        tSelf.emit('ended');
+      }, false);
+
     }
 
     HTMLAudioRenderer.prototype = Object.create(pSuper.prototype);
@@ -13766,7 +13773,7 @@ benri.impl.web.mem = {};
    */
   HTMLAudioRenderer.prototype.play = function(pOptions) {
     var tOptions = this.options = pOptions || {},
-        tElem = this.audio.data;
+        tElem = this.element;
 
     if (this.playbackState === STATE_PAUSED) {
       this.resume();
@@ -13780,6 +13787,7 @@ benri.impl.web.mem = {};
       tElem.play();
       this.playbackState = STATE_PLAYING;
     }
+    this.emit('started');
   };
 
   /**
@@ -13787,56 +13795,60 @@ benri.impl.web.mem = {};
    */
   HTMLAudioRenderer.prototype.stop = function() {
     var tOptions = this.options || {},
-        tElem = this.audio.data;
+        tElem = this.element;
 
     tElem.pause();
     tElem.currentTime = tOptions.startTime || 0;
     this.options = null;
     this.playbackState = STATE_READY;
+    this.emit('stopped');
   };
 
   /**
    * @override
    */
   HTMLAudioRenderer.prototype.pause = function() {
-    this.audio.data.pause();
+    this.element.pause();
     this.playbackState = STATE_PAUSED;
+    this.emit('stopped');
   };
 
   /**
    * @override
    */
   HTMLAudioRenderer.prototype.resume = function() {
-    this.audio.data.play();
+    this.element.play();
     this.playbackState = STATE_PLAYING;
+    this.emit('started');
   };
 
   /**
    * @override
    */
   HTMLAudioRenderer.prototype.seekTo = function(pTime) {
-    this.audio.data.fastSeek(pTime / 1000);
+    this.element.fastSeek(pTime / 1000);
+    this.emit('seeked');
   };
 
   /**
    * @override
    */
   HTMLAudioRenderer.prototype.getPlaybackTime = function() {
-    return this.audio.data.currentTime * 1000;
+    return this.element.currentTime * 1000;
   };
 
   /**
    * @override
    */
   HTMLAudioRenderer.prototype.getVolume = function() {
-    return this.audio.data.volume;
+    return this.element.volume;
   };
 
   /**
    * @override
    */
   HTMLAudioRenderer.prototype.setVolume = function(pVolume) {
-    this.audio.data.volume = pVolume;
+    this.element.volume = pVolume;
   };
 
   benri.impl.add('media.audio.AudioRenderer', function(pEvent) {
@@ -16771,6 +16783,7 @@ benri.impl.add('io.buffer', function(pEvent) {
     var tId;
     var tObject;
     var tDisplayListType;
+    var tParams, tOptions;
 
     for (i = 0, il = tDictionary.length; i < il; i++) {
       tObject = tDictionary[i];
@@ -16786,9 +16799,17 @@ benri.impl.add('io.buffer', function(pEvent) {
 
     tHandlers['DefineSprite'].call(this, pSWF.rootSprite);
 
+    // URL params
     if (this.url) {
       this.url.query.setEncoding(pSWF.encoding);
-      this.options.rootVars = this.url.query.toJSON();
+      tParams = this.url.query.toJSON();
+      tOptions = this.options.rootVars;
+      if (!tOptions) {
+        tOptions = this.options.rootVars = {};
+      }
+      for (var k in tParams) {
+        tOptions[k] = tParams[k];
+      }
     }
 
     this.emit('loadcomplete', pSWF);
@@ -23074,6 +23095,8 @@ quickswf.logger.debug('+++ MP3');
       revokeObjectURL(tURL);
       tDelay.reject(e);
     }, false);
+
+    tAudio.load();
 
     return tDelay;
   };

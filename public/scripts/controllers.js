@@ -28,15 +28,16 @@ controllers.controller('SettingsCtrl', ['$scope', 'Settings', function ($scope, 
 }]);
 
 controllers.controller('GameCtrl', [
-  '$scope', 'Swipe', 'BGM', '$rootScope', '$location', 
-  function ($scope, Swipe, BGM, $rootScope, $location) {
+  '$scope', 'Swipe', 'BGM', function ($scope, Swipe, BGM) {
 
   var swipe = Swipe,
       bgm = BGM,
-      needTerm = false;
+      needTerm = false,
+      player = null;
 
   $scope.init = function(swf) {
 
+    player = swf;
     swipe.onLeft = function () {
       swf.SetVariable('direction', 'left');
     };
@@ -51,10 +52,35 @@ controllers.controller('GameCtrl', [
     needTerm = true;
   };
 
-  $scope.$on('$locationChangeStart', function (event, next, current) {
+  $scope.$on('$locationChangeStart', function () {
     if (needTerm) {
       swipe.disable();
       bgm.stop();
+      needTerm = false;
+      player.pause();
+      player = null;
+    }
+  });
+}]);
+
+controllers.controller('AutoPlayCtrl', [
+  '$scope', 'BGM', function ($scope, BGM) {
+
+  var bgm = BGM,
+      needTerm = false;
+
+  $scope.options = {
+    rootVars: {'autoplay': true}
+  };
+  $scope.init = function() {
+    bgm.play();
+    needTerm = true;
+  };
+
+  $scope.$on('$locationChangeStart', function () {
+    if (needTerm) {
+      bgm.stop();
+      needTerm = false;
     }
   });
 }]);

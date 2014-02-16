@@ -37,6 +37,9 @@ angular.module('app', [
         },
         */
         templateUrl:'templates/game.tpl.html'
+      }).when('/auto', {
+        controller: 'AutoPlayCtrl',
+        templateUrl:'templates/game.tpl.html'
       }).otherwise({
         redirectTo:'/'
       });

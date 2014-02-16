@@ -72,6 +72,7 @@ services.factory('Swipe', function () {
       document.addEventListener('touchend', endTouch, false);
       document.addEventListener('mouseup', endTouch, false);
       document.addEventListener('touchmove', moveTouch, false);
+      document.addEventListener('mousemove', moveTouch, false);
     },
     disable: function () {
       document.removeEventListener('touchstart', startTouch, false);
@@ -79,14 +80,17 @@ services.factory('Swipe', function () {
       document.removeEventListener('touchend', endTouch, false);
       document.removeEventListener('mouseup', endTouch, false);
       document.removeEventListener('touchmove', moveTouch, false);
+      document.removeEventListener('mousemove', moveTouch, false);
+      self.onLeft = null;
+      self.onRight = null;
+      self.onTap = null;
     }
   };
   return self;
 });
 
 services.factory('BGM', function () {
-  var audio = new Audio(),
-      state = 'ready';
+  var audio, state = 'ready';
 
   var self = {
     play: function () {
@@ -96,6 +100,7 @@ services.factory('BGM', function () {
         audio.play();
         state = 'playing';
       } else if (state === 'ready') {
+        audio = new Audio(),
         audio.src = "assets/bgm.mp3";
         audio.addEventListener('canplay', function () {
           audio.currentTime = 5.5;
@@ -103,6 +108,10 @@ services.factory('BGM', function () {
           audio.loop = true;
           audio.play();
           state = 'playing';
+        }, false);
+        document.addEventListener('touchstart', function loadAudio() {
+          document.removeEventListener('touchstart', loadAudio, false);
+          audio.load();
         }, false);
       }
     },
@@ -114,7 +123,8 @@ services.factory('BGM', function () {
     },
     stop: function () {
       self.pause();
-      audio.currentTime = 5.5;
+      state = 'ready';
+      audio = null;
     }
   };
   return self;

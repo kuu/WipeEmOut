@@ -536,7 +536,7 @@ var theatre = {
     }
 
     if ('canvasSizeBug' in tOptions) {
-      benri.env.setVar('benri.impl.web.graphics.canvasSizeBug', tOptions.canvasSizeBug);
+      degree.env.setVar('degree.impl.web.graphics.canvasSizeBug', tOptions.canvasSizeBug);
     }
 
     /**
@@ -910,7 +910,7 @@ var theatre = {
       tRawEntry = pData[i];
       tRawRect = tRawEntry.rect;
       tRawKey = tRawEntry.key;
-      tRect = global.benri.geometry.Rect.obtain(
+      tRect = global.degree.geometry.Rect.obtain(
         tRawRect[0] / global.devicePixelRatio,
         tRawRect[1] / global.devicePixelRatio,
         tRawRect[2] / global.devicePixelRatio,
@@ -2620,11 +2620,11 @@ theatre.crews.bounds = {};
   };
 }(this));
 
-var benri = {
+var degree = {
   embed: function(pObject) {
-    for (var k in benri) {
-      if (benri.hasOwnProperty(k)) {
-        pObject[k] = benri[k];
+    for (var k in degree) {
+      if (degree.hasOwnProperty(k)) {
+        pObject[k] = degree[k];
       }
     }
   }
@@ -2639,7 +2639,7 @@ var benri = {
 (function(global) {
 
   var theatre = global.theatre;
-  var benri = global.benri;
+  var degree = global.degree;
 
   /**
    * @class
@@ -2649,7 +2649,7 @@ var benri = {
     function AudioManagerProp() {
       pSuper.call(this);
       this.type = 'audio';
-      this.context = new benri.media.audio.AudioContext();
+      this.context = new degree.media.audio.AudioContext();
     }
 
     AudioManagerProp.prototype = Object.create(pSuper.prototype);
@@ -2665,19 +2665,19 @@ var benri = {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.util = {};
+degree.util = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.util.log = {
+degree.util.log = {
   /*
     We use the severity levels as described here
     http://tools.ietf.org/html/rfc5424
@@ -2694,13 +2694,13 @@ benri.util.log = {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  var log = benri.util.log;
+  var log = degree.util.log;
   
   log.Adapter = Adapter;
 
@@ -2718,7 +2718,7 @@ benri.util.log = {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -2726,7 +2726,7 @@ benri.util.log = {
 
   /**
     * @class
-    * @extends {benri.util.log.Adapter}
+    * @extends {degree.util.log.Adapter}
     */
     var ConsoleAdapter = (function(pSuper) {
      /**
@@ -2736,7 +2736,7 @@ benri.util.log = {
       function ConsoleAdapter(pOptions) {
         pSuper.call(this, pOptions);
 
-        this.impl = new (benri.impl.get('log.console').best)();
+        this.impl = new (degree.impl.get('log.console').best)();
       }
 
       var tProto = ConsoleAdapter.prototype = Object.create(pSuper.prototype);
@@ -2747,19 +2747,19 @@ benri.util.log = {
       };
 
       return ConsoleAdapter;
-    })(benri.util.log.Adapter); 
+    })(degree.util.log.Adapter); 
 
-    benri.util.log.ConsoleAdapter = ConsoleAdapter;
+    degree.util.log.ConsoleAdapter = ConsoleAdapter;
 
   }());
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS.
+ * Copyright (C) 2013 degreeJS.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.util.deepCopy = function deepCopy(pSrc, pAutoRelease) {
+degree.util.deepCopy = function deepCopy(pSrc, pAutoRelease) {
   if (pSrc === null) {
     return pSrc;
   }
@@ -2800,7 +2800,7 @@ benri.util.deepCopy = function deepCopy(pSrc, pAutoRelease) {
 
 (function() {
 
-  benri.util.IndexMap = function IndexMap(pInitialSize) {
+  degree.util.IndexMap = function IndexMap(pInitialSize) {
     this.nextIndex = 0;
     this.size = pInitialSize;
 
@@ -2846,7 +2846,7 @@ benri.util.deepCopy = function deepCopy(pSrc, pAutoRelease) {
 
 
 
-  var LinkedNode = benri.util.LinkedNode = function LinkedNode(pData, pPrev) {
+  var LinkedNode = degree.util.LinkedNode = function LinkedNode(pData, pPrev) {
     this.data = pData;
     this.next = null;
     this.prev = pPrev;
@@ -2885,23 +2885,23 @@ benri.util.deepCopy = function deepCopy(pSrc, pAutoRelease) {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.text = {};
-benri.net = {};
+degree.text = {};
+degree.net = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var net = benri.net;
+  var degree = global.degree;
+  var net = degree.net;
 
   net.Response = Response;
 
@@ -2911,7 +2911,7 @@ benri.net = {};
    * @param {number} pStatus The HTTP status code
    * @param {string=''} pStatusText The HTTP status phrase
    * @param {string=''} pHeaders The HTTP headers in raw format
-   * @param {benri.content.Blob=} pBody A Blob representing the body
+   * @param {degree.content.Blob=} pBody A Blob representing the body
    *  of this response. If the response was of type text, the text
    *  must be properly decoded in to a valid JavaScript string.
    */
@@ -2946,22 +2946,22 @@ benri.net = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.mem = {};
+degree.mem = {};
 /**
  * @author Guangyao LIU
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  benri.mem.LRUPool = LRUPool;
-  var QueueNode = benri.util.LinkedNode;
+  degree.mem.LRUPool = LRUPool;
+  var QueueNode = degree.util.LinkedNode;
 
   function LRUPool(pOptions) {
     
@@ -3123,13 +3123,13 @@ benri.mem = {};
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  benri.mem.InstancePool = InstancePool;
+  degree.mem.InstancePool = InstancePool;
 
   /**
    * A class that serves as a memory pool of a given type of instance.
@@ -3170,7 +3170,7 @@ benri.mem = {};
    *        The name of the type of the instance.
    *        This will be used in statistics report.
    *
-   *      supervisor {benri.mem.MemorySupervisor} - optional
+   *      supervisor {degree.mem.MemorySupervisor} - optional
    *        A memory supervisor that oversees the memory usage of this pool.
    *        A pool is not supervised by default.
    *
@@ -3249,7 +3249,7 @@ benri.mem = {};
 
     /**
      * Supervisor that oversees this pool.
-     * @type {benri.mem.MemorySupervisor}
+     * @type {degree.mem.MemorySupervisor}
      */
     this._supervisor = pOptions.supervisor || null;
 
@@ -3396,7 +3396,7 @@ benri.mem = {};
   InstancePool.prototype.recycle = function(pInstance) {
 
     // Make sure that the instance is not referenced from anywhere.
-    if (benri.mem.Keeper.isKeeper(pInstance)) {
+    if (degree.mem.Keeper.isKeeper(pInstance)) {
       if (pInstance._keepKeys.length > 0) {
         console.warn('InstancePool(' + this._name + ').recycle : Potential memory leak. :', pInstance);
       }
@@ -3484,10 +3484,10 @@ benri.mem = {};
    *      override {object}
    *        Overrides the options that passed to InstancePool's constructor.
    *
-   * @return {benri.mem.InstancePool} An instance pool.
+   * @return {degree.mem.InstancePool} An instance pool.
    *
    */
-  benri.mem.createDefaultInstancePool = function (pCtor, pOptions) {
+  degree.mem.createDefaultInstancePool = function (pCtor, pOptions) {
     var pOptions = pOptions || {};
     var mAllocNum = pOptions.allocNum || 100;
     var mUnitSize = pOptions.unitSize || 1;
@@ -3591,7 +3591,7 @@ console.log('Alloc: num=' + (mAllocNum - tPool.length));
       tOptions[k] = tOverride[k];
     }
 
-    return new benri.mem.InstancePool(tOptions);
+    return new degree.mem.InstancePool(tOptions);
   };
 
 }(this));
@@ -3599,13 +3599,13 @@ console.log('Alloc: num=' + (mAllocNum - tPool.length));
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  benri.mem.AutoReleasePool = AutoReleasePool;
+  degree.mem.AutoReleasePool = AutoReleasePool;
 
   /**
    * A class that keeps references to multiple objects to defer the cost of their releases.
@@ -3731,30 +3731,30 @@ console.log('Alloc: num=' + (mAllocNum - tPool.length));
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.media = {};
+degree.media = {};
 
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.media.video = {};
+degree.media.video = {};
 
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 (function(global) {
 
-  global.benri.media.MediaContext = MediaContext;
+  global.degree.media.MediaContext = MediaContext;
 
   /**
    * A class that represents the context for playback of audio and video.
@@ -3768,7 +3768,7 @@ benri.media.video = {};
    * Adds media renderer to this context.
    *
    * @param {string} pId A unique identifier.
-   * @param {benri.media.MediaRenderer} pRenderer A media renderer object.
+   * @param {degree.media.MediaRenderer} pRenderer A media renderer object.
    */
   MediaContext.prototype.add = function (pId, pRenderer) {
     this.table[pId] = pRenderer;
@@ -3787,7 +3787,7 @@ benri.media.video = {};
    * Returns media renderer.
    *
    * @param {string} pId A unique identifier.
-   * @return {benri.media.MediaRenderer} pRenderer A media renderer object.
+   * @return {degree.media.MediaRenderer} pRenderer A media renderer object.
    */
   MediaContext.prototype.get = function (pId) {
     return this.table[pId];
@@ -3811,21 +3811,21 @@ benri.media.video = {};
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.media.audio = {};
+degree.media.audio = {};
 
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 (function(global) {
 
-  global.benri.media.audio.AudioListener = AudioListener;
+  global.degree.media.audio.AudioListener = AudioListener;
 
   /**
    * A class representing the position and orientation of the person listening to the audio scene.
@@ -3863,13 +3863,13 @@ benri.media.audio = {};
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 (function(global) {
 
 
-  var benri = global.benri;
+  var degree = global.degree;
 
   var AudioContext = (function(pSuper) {
 
@@ -3887,9 +3887,9 @@ benri.media.audio = {};
 
     return AudioContext;
 
-  }(benri.media.MediaContext));
+  }(degree.media.MediaContext));
 
-  benri.media.audio.AudioContext = AudioContext;
+  degree.media.audio.AudioContext = AudioContext;
 
   /**
    * @override
@@ -3944,7 +3944,7 @@ benri.media.audio = {};
   /**
    * Returns AudioListener object that represents the position and orientation of the person listening to the audio scene.
    *
-   * @return {benri.media.audio.AudioListener} The listener object for use of 3D spatial sound.
+   * @return {degree.media.audio.AudioListener} The listener object for use of 3D spatial sound.
    */
   AudioContext.prototype.getListener = function () {
     //TODO
@@ -3986,45 +3986,45 @@ benri.media.audio = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS.
+ * Copyright (C) 2013 degreeJS.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.io = {};
+degree.io = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Proejct.
+ * Copyright (C) 2013 degreeJS Proejct.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.io.compression = {};
+degree.io.compression = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.graphics = {};
+degree.graphics = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.graphics.shader = {};
+degree.graphics.shader = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  global.benri.graphics.shader.Shader = Shader;
+  global.degree.graphics.shader.Shader = Shader;
 
   var mShaderIdCounter = 0;
 
@@ -4061,7 +4061,7 @@ benri.graphics.shader = {};
   /*
    * Creates and returns a copy of this instace.
    * All shader needs to override clone method.
-   * @return {benri.graphics.shader.Shader} Copy of this instance.
+   * @return {degree.graphics.shader.Shader} Copy of this instance.
    */
   Shader.prototype.clone = function() {
     return new this.constructor(this.type, this.program);
@@ -4167,17 +4167,17 @@ benri.graphics.shader = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.graphics.shader.vertex = {};
+degree.graphics.shader.vertex = {};
 
 (function(global) {
 
-  var Shader = benri.graphics.shader.Shader;
+  var Shader = degree.graphics.shader.Shader;
 
-  benri.graphics.shader.vertex.create = function(pName, pSources, pUniforms, pExecute) {
+  degree.graphics.shader.vertex.create = function(pName, pSources, pUniforms, pExecute) {
     var tShader = Shader.create(Shader.TYPE_VERTEX, pName, pSources, pUniforms);
 
     tShader.prototype.execute = pExecute;
@@ -4193,7 +4193,7 @@ benri.graphics.shader.vertex = {};
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-theatre.crews.swf.render.ShapeVertexShader = benri.graphics.shader.vertex.create(
+theatre.crews.swf.render.ShapeVertexShader = degree.graphics.shader.vertex.create(
   'ShapeVertexShader',
   [
     '$',
@@ -4217,11 +4217,11 @@ theatre.crews.swf.render.ShapeVertexShader = benri.graphics.shader.vertex.create
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 SWFCrew Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-theatre.crews.swf.render.MorphShapeVertexShader = benri.graphics.shader.vertex.create(
+theatre.crews.swf.render.MorphShapeVertexShader = degree.graphics.shader.vertex.create(
   'MorphShapeVertexShader',
   [
     '$',
@@ -4269,17 +4269,17 @@ theatre.crews.swf.render.MorphShapeVertexShader = benri.graphics.shader.vertex.c
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.graphics.shader.fragment = {};
+degree.graphics.shader.fragment = {};
 
 (function() {
 
-  var Shader = benri.graphics.shader.Shader;
+  var Shader = degree.graphics.shader.Shader;
 
-  benri.graphics.shader.fragment.create = function(pName, pSources, pUniforms) {
+  degree.graphics.shader.fragment.create = function(pName, pSources, pUniforms) {
     return Shader.create(Shader.TYPE_FRAGMENT, pName, pSources, pUniforms);
   };
 
@@ -4287,7 +4287,7 @@ benri.graphics.shader.fragment = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -4297,7 +4297,7 @@ benri.graphics.shader.fragment = {};
    * A shader that will transform all colours being drawn.
    * @class
    */
-  var ColorTransformShader = benri.graphics.shader.fragment.ColorTransformShader = benri.graphics.shader.fragment.create(
+  var ColorTransformShader = degree.graphics.shader.fragment.ColorTransformShader = degree.graphics.shader.fragment.create(
     'ColorTransformShader', // name
     [
       '!uTransforms:mf[8]',
@@ -4364,7 +4364,7 @@ benri.graphics.shader.fragment = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -4372,7 +4372,7 @@ benri.graphics.shader.fragment = {};
  * A shader that simply adds alpha to what is being drawn.
  * @class
  */
-benri.graphics.shader.fragment.AlphaShader = benri.graphics.shader.fragment.create(
+degree.graphics.shader.fragment.AlphaShader = degree.graphics.shader.fragment.create(
   'AlphaShader', // name
   '', // sources
   {
@@ -4383,24 +4383,24 @@ benri.graphics.shader.fragment.AlphaShader = benri.graphics.shader.fragment.crea
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.graphics.render = {
+degree.graphics.render = {
   platform: {}
 };
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  benri.graphics.render.Renderable = Renderable;
+  degree.graphics.render.Renderable = Renderable;
 
   /**
    * A simple object for helping managing rendering
@@ -4413,7 +4413,7 @@ benri.graphics.render = {
 
   /**
    * Renders this Renderable in the given RenderContext.
-   * @param  {benri.graphics.render.RenderContext} pRenderContext The RenderContext to render in.
+   * @param  {degree.graphics.render.RenderContext} pRenderContext The RenderContext to render in.
    */
   Renderable.prototype.render = function(pRenderContext) {
 
@@ -4424,16 +4424,16 @@ benri.graphics.render = {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.graphics.draw = {};
+degree.graphics.draw = {};
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -4441,7 +4441,7 @@ benri.graphics.draw = {};
  * A shader that simply colours what is being drawn.
  * @class
  */
-benri.graphics.shader.fragment.ColorShader = benri.graphics.shader.fragment.create(
+degree.graphics.shader.fragment.ColorShader = degree.graphics.shader.fragment.create(
   'ColorShader', // name
   [
     '!uColor:v4',
@@ -4451,18 +4451,18 @@ benri.graphics.shader.fragment.ColorShader = benri.graphics.shader.fragment.crea
     '}'
   ].join('\n'), // sources
   {
-    color: benri.graphics.draw.Color
+    color: degree.graphics.draw.Color
   } // uniforms
 );
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
+degree.graphics.draw.TextVertexShader = degree.graphics.shader.vertex.create(
   'TextVertexShader',
   [
     
@@ -4485,7 +4485,7 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -4531,14 +4531,14 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
     return tCopy;
   };
 
-  global.benri.graphics.draw.StrokeStyle = StrokeStyle;
+  global.degree.graphics.draw.StrokeStyle = StrokeStyle;
 
 }(this));
 
 /**
  * @author Guangyao Liu
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -4641,20 +4641,20 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
     }
   };
 
-  global.benri.graphics.draw.GradientStyle = GradientStyle;
+  global.degree.graphics.draw.GradientStyle = GradientStyle;
 
 }(this));
 
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  global.benri.graphics.draw.Glyph = Glyph;
+  global.degree.graphics.draw.Glyph = Glyph;
 
   /**
    * A class holding glyph data.
@@ -4683,13 +4683,13 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  global.benri.graphics.draw.Font = Font;
+  global.degree.graphics.draw.Font = Font;
 
   /**
    * A class holding font info.
@@ -4758,7 +4758,7 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
   /**
    * Sets the glyph data for a character.
    * @param {number} pCharCode Character code.
-   * @param {benri.graphics.draw.Glyph} pGlyph The glyph data.
+   * @param {degree.graphics.draw.Glyph} pGlyph The glyph data.
    */
   Font.prototype.setGlyph = function(pCharCode, pGlyph) {
     this._glyph[pCharCode + ''] = pGlyph;
@@ -4767,7 +4767,7 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
   /**
    * Retrieve the glyph data for a character.
    * @param {number} pCharCode The character code.
-   * @return {benri.graphics.draw.Glyph} The glyph data.
+   * @return {degree.graphics.draw.Glyph} The glyph data.
    */
   Font.prototype.getGlyph = function(pCharCode) {
     return this._glyph[pCharCode + ''];
@@ -4778,13 +4778,13 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS.
+ * Copyright (C) 2013 degreeJS.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  global.benri.graphics.draw.ComponentColor = ComponentColor;
+  global.degree.graphics.draw.ComponentColor = ComponentColor;
 
   /**
    * @constructor
@@ -4849,7 +4849,7 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
 
   /**
    * Gets the copy of this object.
-   * @return {benri.graphics.draw.ComponentColor} The copy object.
+   * @return {degree.graphics.draw.ComponentColor} The copy object.
    */
   ComponentColor.prototype.clone = function() {
     this.toCSSString();
@@ -4864,7 +4864,7 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -4958,7 +4958,7 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
 
     /**
      * Gets the copy of this object.
-     * @return {benri.graphics.draw.Color} The copy object.
+     * @return {degree.graphics.draw.Color} The copy object.
      */
     Color.prototype.clone = function() {
       var tRGBA = this.getRGBA();
@@ -4968,7 +4968,7 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
     return Color;
   })(Number);
 
-  global.benri.graphics.draw.Color = Color;
+  global.degree.graphics.draw.Color = Color;
 
 }(this));
 
@@ -4981,7 +4981,7 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
 (function(global) {
 
   var mActions = theatre.crews.swf.actions;
-  var Color = benri.graphics.draw.Color;
+  var Color = degree.graphics.draw.Color;
 
   theatre.crews.swf.actionsMap.background = mActions.PREPARE_BACKGROUND = 0x100;
 
@@ -5003,18 +5003,18 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-    var Color = benri.graphics.draw.Color;
+    var Color = degree.graphics.draw.Color;
 
     function TextStyle(pFont) {
     /**
     * Font
-    * @type {benri.graphics.draw.Font}
+    * @type {degree.graphics.draw.Font}
     */
     this.font = pFont;
 
@@ -5095,65 +5095,65 @@ benri.graphics.draw.TextVertexShader = benri.graphics.shader.vertex.create(
         return tCopy;
     };
 
-    global.benri.graphics.draw.TextStyle = TextStyle;
+    global.degree.graphics.draw.TextStyle = TextStyle;
 
 }(this));
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.geometry = {};
+degree.geometry = {};
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 /**
  * @class
  */
-benri.graphics.shader.fragment.RadialGradientShader = benri.graphics.shader.fragment.create(
+degree.graphics.shader.fragment.RadialGradientShader = degree.graphics.shader.fragment.create(
   'RadialGradientShader', // name
   [
 
   ].join('\n'), // sources
   {
-    gradientStyle: benri.graphics.draw.GradientStyle,
-    matrix: benri.geometry.Matrix2D
+    gradientStyle: degree.graphics.draw.GradientStyle,
+    matrix: degree.geometry.Matrix2D
   } // uniforms
 );
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 /**
  * @class
  */
-benri.graphics.shader.fragment.LinearGradientShader = benri.graphics.shader.fragment.create(
+degree.graphics.shader.fragment.LinearGradientShader = degree.graphics.shader.fragment.create(
   'LinearGradientShader', // name
   [
 
   ].join('\n'), // sources
   {
-    gradientStyle: benri.graphics.draw.GradientStyle,
-    matrix: benri.geometry.Matrix2D
+    gradientStyle: degree.graphics.draw.GradientStyle,
+    matrix: degree.geometry.Matrix2D
   } // uniforms
 );
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -5162,27 +5162,27 @@ benri.graphics.shader.fragment.LinearGradientShader = benri.graphics.shader.frag
  * as a pattern over a shape when drawing.
  * @class
  */
-benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.create(
+degree.graphics.shader.fragment.ImageShader = degree.graphics.shader.fragment.create(
   'ImageShader', // name
   [
 
   ].join('\n'), // sources
   {
     tileMode: String,
-    image: benri.graphics.Image,
-    matrix: benri.geometry.Matrix2D
+    image: degree.graphics.Image,
+    matrix: degree.geometry.Matrix2D
   } // uniforms
 );
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var geometry = benri.geometry;
+  var geometry = degree.geometry;
 
   function VertexBuffer(pLocationSize) {
     this.locations = [];
@@ -5453,13 +5453,13 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  global.benri.geometry.Point = Point;
+  global.degree.geometry.Point = Point;
 
   /**
    * A class that holds an x and y position.
@@ -5475,7 +5475,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Transform this Point by the given matrix.
-   * @param  {benri.geometry.Matrix2D} pMatrix The matrix to transform by.
+   * @param  {degree.geometry.Matrix2D} pMatrix The matrix to transform by.
    */
   Point.prototype.transform = function(pMatrix) {
     var tNewPoint = pMatrix.getPoint(this.x, this.y);
@@ -5487,7 +5487,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Get a clone of this Point.
-   * @return {benri.geometry.Point} The clone.
+   * @return {degree.geometry.Point} The clone.
    */
   Point.prototype.clone = function() {
     return new Point(this.x, this.y);
@@ -5498,7 +5498,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
    * from the list of arguments.
    * The arguments must be in the format
    *   x0, y0, x1, y1, x2, y2, etc...
-   * @return {Array.<benri.geometry.Point>}
+   * @return {Array.<degree.geometry.Point>}
    */
   Point.array = function() {
     var tArguments = arguments;
@@ -5521,17 +5521,17 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var Point = benri.geometry.Point;
-  var VertexBuffer = benri.geometry.VertexBuffer;
+  var degree = global.degree;
+  var Point = degree.geometry.Point;
+  var VertexBuffer = degree.geometry.VertexBuffer;
 
-  benri.geometry.Path = Path;
+  degree.geometry.Path = Path;
 
   /**
    * @class
@@ -5562,7 +5562,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Get a clone of this Path.
-   * @return {benri.geometry.Path} The clone.
+   * @return {degree.geometry.Path} The clone.
    */
   Path.prototype.clone = function() {
     var tNewPath = new Path(0, 0);
@@ -5573,7 +5573,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Gets the bounds of this Path.
-   * @return {benri.geometry.Rect} The bounds.
+   * @return {degree.geometry.Rect} The bounds.
    */
   Path.prototype.getBoundingRect = function() {
     return this.buffer.getBoundingRect();
@@ -5584,7 +5584,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
    * joining to the current point.
    * @param  {number} pX The X location.
    * @param  {number} pY The Y location.
-   * @return {benri.geometry.Path} This.
+   * @return {degree.geometry.Path} This.
    */
   Path.prototype.moveTo = Path.prototype.m = function(pX, pY) {
     this.buffer.write(
@@ -5602,7 +5602,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
    * to the current point.
    * @param  {number} pX The X location.
    * @param  {number} pY The Y location.
-   * @return {benri.geometry.Path} This.
+   * @return {degree.geometry.Path} This.
    */
   Path.prototype.lineTo = Path.prototype.l = function(pX, pY) {
     this.buffer.write(
@@ -5622,7 +5622,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
    * @param {number} pControlY The controlY location.
    * @param  {number} pX The X location.
    * @param  {number} pY The Y location.
-   * @return {benri.geometry.Path} This.
+   * @return {degree.geometry.Path} This.
    */
   Path.prototype.quadraticCurveTo = Path.prototype.qc = function(pControlX, pControlY, pX, pY) {
     var tBuffer = this.buffer;
@@ -5656,18 +5656,18 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var geometry = global.benri.geometry;
+  var geometry = global.degree.geometry;
   var Path = geometry.Path;
 
   /**
    * A closed shape made up of multiple verticies.
-   * @param {Array.<benri.geometry.Point>} pVerticies The list of verticices that make up this Polygon.
+   * @param {Array.<degree.geometry.Point>} pVerticies The list of verticices that make up this Polygon.
    */
   function Polygon(pVerticies) {
     this.verticies = pVerticies.slice(0);
@@ -5675,7 +5675,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Get a clone of this Polygon.
-   * @return {benri.geometry.Polygon} The clone.
+   * @return {degree.geometry.Polygon} The clone.
    */
   Polygon.prototype.clone = function() {
     return new Polygon(this.verticies);
@@ -5683,7 +5683,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Converts this polygon to an array.
-   * @return {Array.<benri.geometry.Point>} The data.
+   * @return {Array.<degree.geometry.Point>} The data.
    */
   Polygon.prototype.getArray = function() {
     return this.verticies.slice(0);
@@ -5691,7 +5691,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Get a representation of this Polygon as a Path.
-   * @return {benri.geometry.Path} The path.
+   * @return {degree.geometry.Path} The path.
    */
   Polygon.prototype.getPath = function() {
     var tVerticies = this.verticies;
@@ -5708,8 +5708,8 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Transforms this Polygon via the given Matrix
-   * @param  {benri.geometry.Matrix2D} pMatrix The Matrix to transform with
-   * @return {benri.geometry.Polygon} This Polygon.
+   * @param  {degree.geometry.Matrix2D} pMatrix The Matrix to transform with
+   * @return {degree.geometry.Polygon} This Polygon.
    */
   Polygon.prototype.transform = function(pMatrix) {
     var tVerticies = this.verticies;
@@ -5755,7 +5755,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Check whether this Polygon has the same verticies as the given Polygon.
-   * @param {benri.geometry.Polygon} pPolygon
+   * @param {degree.geometry.Polygon} pPolygon
    * @return {boolean} True if the Polygons have the same verticies.
    */
   Polygon.prototype.equals = function(pPolygon) {
@@ -5778,7 +5778,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Checks to see if the give point lays inside of this Polygon.
-   * @param  {benri.geometry.Point}  pPoint The Point to check
+   * @param  {degree.geometry.Point}  pPoint The Point to check
    * @return {boolean} True if the point is inside, false otherwise
    */
   Polygon.prototype.isPointInside = function(pX, pY) {
@@ -5813,14 +5813,14 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var mem = global.benri.mem;
-  var geometry = global.benri.geometry;
+  var mem = global.degree.mem;
+  var geometry = global.degree.geometry;
   var Polygon = geometry.Polygon;
 
   var mInstancePoolEnabled = true;
@@ -5828,7 +5828,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
   /**
    * A class that holds information about a rectangle
    * @class
-   * @extends {benri.geometry.Polygon}
+   * @extends {degree.geometry.Polygon}
    */
   var Rect = geometry.Rect = (function(pSuper) {
     /**
@@ -5867,7 +5867,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
       /**
        * The origin (top left) of this Rect.
-       * @type {benri.geometry.Point}
+       * @type {degree.geometry.Point}
        */
       this.originX = tVerticies[0];
       this.originY = tVerticies[1];
@@ -5928,7 +5928,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
     /**
      * Gets a normal Polygon that has the same verticies
      * as this Rect.
-     * @return {benri.geometry.Polygon}
+     * @return {degree.geometry.Polygon}
      */
     Rect.prototype.getPolygon = function() {
       return pSuper.prototype.clone.call(this);
@@ -5936,7 +5936,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
     /**
      * Get a clone of this Rect.
-     * @return {benri.geometry.Rect} The clone.
+     * @return {degree.geometry.Rect} The clone.
      */
     Rect.prototype.clone = function() {
       return Rect.obtain(this.originX, this.originY, this.getWidth(), this.getHeight());
@@ -5951,7 +5951,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
      * Instead, it will calculate the bounding Rect for
      * the transformed Rect and set that bounding Rect's
      * verticies as the verticies for this Rect.
-     * @return {benri.geometry.Rect} This Rect.
+     * @return {degree.geometry.Rect} This Rect.
      */
     Rect.prototype.transform = function(pMatrix) {
       pSuper.prototype.transform.call(this, pMatrix);
@@ -5981,13 +5981,13 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
     };
 
     return Rect;
-  })(benri.geometry.Polygon);
+  })(degree.geometry.Polygon);
 
 
   /**
    * Merge this rect with the given rect and return the new rect.
-   * @param {benri.geometry.Rect} pRect
-   * @return {benri.geometry.Rect} The merged rect.
+   * @param {degree.geometry.Rect} pRect
+   * @return {degree.geometry.Rect} The merged rect.
    */
   Rect.prototype.merge = function(pRect) {
     var tPointAX, tPointAY, tPointBX, tPointBY,
@@ -6090,7 +6090,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
    * @extends {theatre.Prop}
    */
   var ButtonBoundsProp = (function(pSuper) {
-    var Rect = benri.geometry.Rect;
+    var Rect = degree.geometry.Rect;
 
     /**
      * @constructor
@@ -6125,19 +6125,19 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var mem = benri.mem;
-  var Point = benri.geometry.Point;
+  var degree = global.degree;
+  var mem = degree.mem;
+  var Point = degree.geometry.Point;
 
   var mInstancePoolEnabled = true;
 
-  benri.geometry.Matrix2D = Matrix2D;
+  degree.geometry.Matrix2D = Matrix2D;
 
   function Transforms() {
     this.scaleX = 1;
@@ -6236,7 +6236,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Checks to see if this matrix is the same as another
-   * @param  {benri.geometry.Matrix2D} pMatrix The matrix to check against.
+   * @param  {degree.geometry.Matrix2D} pMatrix The matrix to check against.
    * @return {boolean} True of the are the same, false otherwise.
    */
   Matrix2D.prototype.equals = function(pMatrix) {
@@ -6352,7 +6352,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Multiply this matrix by another
-   * @param  {benri.geometry.Matrix2D} pThat The matrix to multiply by.
+   * @param  {degree.geometry.Matrix2D} pThat The matrix to multiply by.
    */
   Matrix2D.prototype.multiply = function(pThat) {
 
@@ -6682,7 +6682,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
    * is transformed according to this matrix.
    * @param  {number} pX The X value
    * @param  {number} pY The Y value
-   * @return {benri.geometry.Point} The resulting Point.
+   * @return {degree.geometry.Point} The resulting Point.
    */
   Matrix2D.prototype.getPoint = function(pX, pY) {
     return new Point(
@@ -6742,7 +6742,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /**
    * Get a clone of this matrix.
-   * @return {benri.geometry.Matrix2D} The clone.
+   * @return {degree.geometry.Matrix2D} The clone.
    */
   Matrix2D.prototype.clone = function() {
     var tMatrix = Matrix2D.obtain();
@@ -6846,8 +6846,8 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
  */
 (function(global) {
   var mHandlers = theatre.crews.swf.ASHandlers;
-  var net = benri.net;
-  var Matrix2D = benri.geometry.Matrix2D;
+  var net = degree.net;
+  var Matrix2D = degree.geometry.Matrix2D;
   var ColorTransform = theatre.crews.swf.structs.ColorTransform;
   
   var mScaleTolerance = 0.00001;
@@ -7657,7 +7657,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /*
    * A utility function to update the scale of matrix relative to the current value.
-   * @param {benri.geometry.Matrix2D} pMatrix The matrix to apply scale to.
+   * @param {degree.geometry.Matrix2D} pMatrix The matrix to apply scale to.
    * @param {number} pScale Horizontal scale.
    */
   function applyRelativeScaleX(pMatrix, pScale) {
@@ -7681,7 +7681,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
   /*
    * A utility function to update the scale of matrix relative to the current value.
-   * @param {benri.geometry.Matrix2D} pMatrix The matrix to apply scale to.
+   * @param {degree.geometry.Matrix2D} pMatrix The matrix to apply scale to.
    * @param {number} pScale Verticle scale.
    */
   function applyRelativeScaleY(pMatrix, pScale) {
@@ -8293,8 +8293,8 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
 (function(global) {
 
-  var Matrix2D = benri.geometry.Matrix2D;
-  var Color = benri.graphics.draw.Color;
+  var Matrix2D = degree.geometry.Matrix2D;
+  var Color = degree.graphics.draw.Color;
 
   theatre.crews.render.Camera = Camera;
 
@@ -8322,7 +8322,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 
 (function(global) {
 
-  var Matrix2D = benri.geometry.Matrix2D;
+  var Matrix2D = degree.geometry.Matrix2D;
 
   theatre.crews.render.CacheManager = CacheManager;
 
@@ -8350,7 +8350,7 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
     this.isCachingProp = isCachingProp;
 
     // Registers the low-memory event handler.
-    benri.mem.getDefaultNativeSupervisor().on(
+    degree.mem.getDefaultNativeSupervisor().on(
       'lowMem-image',
       createOnLowMemImage(this._hashToCacheMap, this.usageCounterMax)
     );
@@ -8542,23 +8542,23 @@ benri.graphics.shader.fragment.ImageShader = benri.graphics.shader.fragment.crea
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.event = {};
+degree.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  global.benri.event.EventEmitter = EventEmitter;
+  global.degree.event.EventEmitter = EventEmitter;
 
-  var LinkedNode = benri.util.LinkedNode;
+  var LinkedNode = degree.util.LinkedNode;
 
   function EventEmitter(pInstance) {
     pInstance = pInstance || this;
@@ -8689,9 +8689,9 @@ benri.event = {};
 
 (function(global) {
 
-  var EventEmitter = benri.event.EventEmitter;
-  var LinkedNode = benri.util.LinkedNode;
-  var releasePendingObjects = benri.geometry.Matrix2D.releasePendingObjects;
+  var EventEmitter = degree.event.EventEmitter;
+  var LinkedNode = degree.util.LinkedNode;
+  var releasePendingObjects = degree.geometry.Matrix2D.releasePendingObjects;
 
   theatre.Stage = Stage;
 
@@ -8713,7 +8713,7 @@ benri.event = {};
 
   function Props(pStage) {
     this._stage = pStage;
-    this._map = new benri.util.IndexMap(8);
+    this._map = new degree.util.IndexMap(8);
 
     this.add = _addProp;
     this.get = _getProps;
@@ -8814,7 +8814,7 @@ benri.event = {};
     tStageManager.stage = this;
     tStageManager.stageId = 0;
 
-    var tActors = this._actors = new benri.util.IndexMap(256);
+    var tActors = this._actors = new degree.util.IndexMap(256);
 
     var tNode = this._actorRegistrationsTail = this._actorRegistrationsHead = new LinkedNode(tStageManager, null);
 
@@ -9422,7 +9422,7 @@ benri.event = {};
    * @extends {theatre.Prop}
    */
   var MorphShapeBoundsProp = (function(pSuper) {
-    var Rect = benri.geometry.Rect;
+    var Rect = degree.geometry.Rect;
     var ABS_BOUNDS_MASK = theatre.Stage.INVALIDATION_TYPE_DIRECT | 
                           theatre.Stage.INVALIDATION_TYPE_BUBBLE | 
                           theatre.Stage.INVALIDATION_TYPE_CHILD;
@@ -9939,7 +9939,7 @@ benri.event = {};
    * @extends {theatre.Prop}
    */
   var ContainerBoundsProp = (function(pSuper) {
-    var Rect = benri.geometry.Rect;
+    var Rect = degree.geometry.Rect;
     var ABS_BOUNDS_MASK = theatre.Stage.INVALIDATION_TYPE_DIRECT | 
                           theatre.Stage.INVALIDATION_TYPE_BUBBLE | 
                           theatre.Stage.INVALIDATION_TYPE_CHILD;
@@ -10103,7 +10103,7 @@ benri.event = {};
    * @extends {theatre.Prop}
    */
   var BoundsProp = (function(pSuper) {
-    var Rect = benri.geometry.Rect;
+    var Rect = degree.geometry.Rect;
     var ABS_BOUNDS_MASK = theatre.Stage.INVALIDATION_TYPE_DIRECT | 
                           theatre.Stage.INVALIDATION_TYPE_BUBBLE | 
                           theatre.Stage.INVALIDATION_TYPE_CHILD;
@@ -10184,10 +10184,10 @@ benri.event = {};
 
 (function(global) {
 
-  var Matrix2D = benri.geometry.Matrix2D;
+  var Matrix2D = degree.geometry.Matrix2D;
   var TraversalNode = theatre.TraversalNode;
-  var EventEmitter = benri.event.EventEmitter;
-  var IndexMap = benri.util.IndexMap;
+  var EventEmitter = degree.event.EventEmitter;
+  var IndexMap = degree.util.IndexMap;
   var ABS_POS_MASK = theatre.Stage.INVALIDATION_TYPE_DIRECT | theatre.Stage.INVALIDATION_TYPE_CHILD;
   var DISABLE_STAGE_DATA_CACHE_MASK = theatre.Stage.STATE_PREPARING |
                                       theatre.Stage.STATE_SCRIPTING;
@@ -10872,16 +10872,16 @@ benri.event = {};
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  benri.mem.Keeper = Keeper;
+  degree.mem.Keeper = Keeper;
 
-  var EventEmitter = benri.event.EventEmitter;
-  var LinkedNode = benri.util.LinkedNode;
+  var EventEmitter = degree.event.EventEmitter;
+  var LinkedNode = degree.util.LinkedNode;
 
   function KeepKey() {
   }
@@ -10996,20 +10996,20 @@ benri.event = {};
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var EventEmitter = benri.event.EventEmitter;
+  var EventEmitter = degree.event.EventEmitter;
 
-  global.benri.media.MediaRenderer = MediaRenderer;
+  global.degree.media.MediaRenderer = MediaRenderer;
 
   /**
    * A class that consumes media data.
    * @constructor
-   * @param {benri.media.MediaData} Media data to render.
+   * @param {degree.media.MediaData} Media data to render.
    */
   function MediaRenderer() {
     this.playbackState = MediaRenderer.PLAYBACK_STATE_READY;
@@ -11079,23 +11079,30 @@ benri.event = {};
   MediaRenderer.prototype.setVolume = function(pVolume) {
   };
 
+  /**
+   * Mutes audio output.
+   * @param {boolean} pMute
+   */
+  MediaRenderer.prototype.mute = function(pMute) {
+  };
+
 }(this));
 
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
+  var degree = global.degree;
   var mImplClass;
 
   /**
    * @class
-   * @extends {benri.media.MediaRenderer}
+   * @extends {degree.media.MediaRenderer}
    */
   var AudioRenderer = (function(pSuper) {
     function AudioRenderer(pAudioData) {
@@ -11107,16 +11114,16 @@ benri.event = {};
     AudioRenderer.prototype.constructor = AudioRenderer;
 
     return AudioRenderer;
-  })(benri.media.MediaRenderer);
+  })(degree.media.MediaRenderer);
 
-  benri.media.audio.AudioRenderer = AudioRenderer;
+  degree.media.audio.AudioRenderer = AudioRenderer;
 
   /**
    * A class method to return an impl object.
    */
   AudioRenderer.create = function(pAudioData) {
     if (mImplClass === void 0) {
-      mImplClass = benri.impl.get('media.audio.AudioRenderer').best;
+      mImplClass = degree.impl.get('media.audio.AudioRenderer').best;
     }
     return new mImplClass(pAudioData);
   };
@@ -11135,9 +11142,9 @@ benri.event = {};
 (function(global) {
 
   var theatre = global.theatre;
-  var benri = global.benri;
-  var MediaRenderer = benri.media.MediaRenderer;
-  var AudioRenderer = benri.media.audio.AudioRenderer;
+  var degree = global.degree;
+  var MediaRenderer = degree.media.MediaRenderer;
+  var AudioRenderer = degree.media.audio.AudioRenderer;
   var mActions = theatre.crews.swf.actions;
 
 
@@ -11152,6 +11159,12 @@ benri.event = {};
   theatre.Scene.registerPreparedCallback(
     mActions.PREPARE_STARTSOUND,
     function startSound(pSpriteActor, pData) {
+
+      var tSceneInstance = pSpriteActor.getSceneInstance();
+      if (tSceneInstance.target > tSceneInstance.current) {
+        return;
+      }
+
       var tId = pData.soundId,
           tInfo = pData.soundInfo,
           tSound = pSpriteActor.player.media.get(tId + ''),
@@ -11190,6 +11203,12 @@ benri.event = {};
   theatre.Scene.registerPreparedCallback(
     mActions.PREPARE_SOUNDSTREAMBLOCK,
     function soundStreamBlock(pSpriteActor, pData) {
+
+      var tSceneInstance = pSpriteActor.getSceneInstance();
+      if (tSceneInstance.target > tSceneInstance.current) {
+        return;
+      }
+
       var tMetadata = pSpriteActor.player.soundStreamHead,
           tSound = pData.soundData;
 
@@ -11205,16 +11224,20 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var impl = benri.impl = {};
+  var degree = global.degree;
+  var impl = degree.impl = {};
 
-  benri.event.EventEmitter(impl);
+  degree.event.EventEmitter(impl);
+
+  impl.options = {
+    filterList: {} // Holds key-value pairs of (implId, callback function)
+  };
 
   /**
    * Add a new implementation
@@ -11257,13 +11280,33 @@ benri.event = {};
       return null;
     }
 
+    tImpls.sort(function (a, b) {
+      if (a.score < b.score) {
+        return 1;
+      } else if (a.score > b.score) {
+        return -1;
+      }
+      return 0;
+    });
+
     var tBestImpl = tImpls[0].clazz;
     var tBestScore = tImpls[0].score;
+    var tFilterList  = impl.options.filterList;
+    var tId = pId.toLowerCase(), tFilter;
+    for (var k in tFilterList) {
+      if (tId.indexOf(k.toLowerCase()) !== -1) {
+        tFilter = tFilterList[k];
+        break;
+      }
+    }
 
-    for (var i = 1, il = tImpls.length; i < il; i++) {
-      if (tImpls[i].score >= tBestScore) {
-        tBestScore = tImpls[i].score;
-        tBestImpl = tImpls[i].clazz;
+    if (tFilter) {
+      for (var i = 0, il = tImpls.length; i < il; i++) {
+        if (tFilter(tImpls[i].clazz, tImpls[i].score)) {
+          tBestScore = tImpls[i].score;
+          tBestImpl = tImpls[i].clazz;
+          break;
+        }
       }
     }
 
@@ -11274,20 +11317,22 @@ benri.event = {};
     };
   };
 
+
 }(this));
+
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var impl = benri.impl;
+  var degree = global.degree;
+  var impl = degree.impl;
 
-  benri.text.Encoder = Encoder;
+  degree.text.Encoder = Encoder;
 
   function Encoder(pType) {
     this.type = pType;
@@ -11309,15 +11354,15 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  var impl = benri.impl;
+  var impl = degree.impl;
 
-  benri.text.Decoder = Decoder;
+  degree.text.Decoder = Decoder;
 
   function Decoder(pType) {
     this.type = pType;
@@ -11340,15 +11385,15 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var impl = benri.impl;
+  var impl = degree.impl;
 
-  benri.mem.MemoryMetrics = MemoryMetrics;
+  degree.mem.MemoryMetrics = MemoryMetrics;
 
   /**
    * @constructor
@@ -11416,21 +11461,21 @@ benri.event = {};
   /**
    * NameSpace to hold system supervisors.
    */
-  benri.mem.metrics = {};
+  degree.mem.metrics = {};
 
 }(this));
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var mem = benri.mem;
+  var degree = global.degree;
+  var mem = degree.mem;
   var MemoryMetrics = mem.MemoryMetrics;
 
   /**
@@ -11488,8 +11533,8 @@ benri.event = {};
    *  tInstance.recycle();
    *
    *  // You can bind your pool to memory supervisor.
-   *  // 'benri.mem.getDefaultSupervisor' returns the system-wide, pre-defined supervisor.
-   *  mPool.setOptions({supervisor : benri.mem.getDefaultSupervisor()});
+   *  // 'degree.mem.getDefaultSupervisor' returns the system-wide, pre-defined supervisor.
+   *  mPool.setOptions({supervisor : degree.mem.getDefaultSupervisor()});
    *
    *  // Now, obtain() can return null.
    *  var tInstance = Class.obtain(256, 256);
@@ -11572,7 +11617,7 @@ benri.event = {};
      */
     this._broadcastLowMemory = pOptions.broadcastLowMemory || false;
 
-    benri.event.EventEmitter(this);
+    degree.event.EventEmitter(this);
 
     // Starts timer when the first time a client registers an event listener.
     var tSelf = this;
@@ -11689,16 +11734,16 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var impl = benri.impl;
+  var degree = global.degree;
+  var impl = degree.impl;
 
-  benri.io.compression.Inflator = Inflator;
+  degree.io.compression.Inflator = Inflator;
 
   function Inflator(pType) {
     this.type = pType;
@@ -11720,16 +11765,16 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var impl = benri.impl;
+  var degree = global.degree;
+  var impl = degree.impl;
 
-  benri.io.compression.Deflator = Deflator;
+  degree.io.compression.Deflator = Deflator;
 
   function Deflator(pType) {
     this.type = pType;
@@ -11751,15 +11796,15 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  var getImpl = benri.impl.get;
+  var getImpl = degree.impl.get;
 
-  benri.io.Buffer = Buffer;
+  degree.io.Buffer = Buffer;
 
   function Buffer(pImpl, pData, pSize) {
     this._impl = pImpl;
@@ -11809,7 +11854,7 @@ benri.event = {};
   };
 
   Buffer.fromString = function(pString, pEncoding) {
-    return (new benri.text.Encoder(pEncoding || 'ascii')).encode(pString);
+    return (new degree.text.Encoder(pEncoding || 'ascii')).encode(pString);
   };
 
   Buffer.fromParts = function(pParts) {
@@ -11872,7 +11917,7 @@ benri.event = {};
   }
 
   function toString(pEncoding) {
-    return (new benri.text.Decoder(pEncoding || 'ascii')).decode(this);
+    return (new degree.text.Decoder(pEncoding || 'ascii')).decode(this);
   }
 
   function toArray() {
@@ -12109,15 +12154,15 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  benri.net.URLQuery = URLQuery;
-  var Decoder = benri.text.Decoder;
-  var Buffer = benri.io.Buffer;
+  degree.net.URLQuery = URLQuery;
+  var Decoder = degree.text.Decoder;
+  var Buffer = degree.io.Buffer;
 
   function NameValuePair(pName, pValue) {
     this.name = pName;
@@ -12385,13 +12430,13 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var net = global.benri.net;
+  var net = global.degree.net;
 
   var URLQuery = net.URLQuery;
 
@@ -12478,7 +12523,7 @@ benri.event = {};
     if (isRelative(this.scheme)) {
 
       if (this.authority) {
-        tString += '//' + this.authority;
+        tString += '://' + this.authority;
       }
 
       tString += (this.path ? this.path : '/');
@@ -12502,15 +12547,15 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var io = benri.io;
+  var io = degree.io;
   var Buffer = io.Buffer;
-  var Decoder = benri.text.Decoder;
+  var Decoder = degree.text.Decoder;
   io.Reader = Reader;
 
   function Reader(pSource) {
@@ -12676,7 +12721,7 @@ benri.event = {};
 (function(global) {
 
   var AlphabetJS = global.AlphabetJS;
-  var Reader = global.benri.io.Reader;
+  var Reader = global.degree.io.Reader;
 
   var parseFloat = global.parseFloat;
   var parseInt = global.parseInt;
@@ -13404,7 +13449,7 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -13414,7 +13459,7 @@ benri.event = {};
     return;
   }
 
-  benri.impl.add('log.console', function(pData) {
+  degree.impl.add('log.console', function(pData) {
     pData.add(ConsoleImpl);
   });
 
@@ -13422,7 +13467,7 @@ benri.event = {};
     this.log = logImpl;
   }
 
-  var log = benri.util.log;
+  var log = degree.util.log;
 
   var mLevelMap = [];
 
@@ -13450,35 +13495,39 @@ benri.event = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
   var URL = global.URL || global.webkitURL;
-  var createObjectURL = URL ? URL.createObjectURL : null;
-  var revokeObjectURL = URL ? URL.revokeObjectURL : revokeObjectURL;
+  var createObjectURL = URL ? URL.createObjectURL : createObjectURLWrapper;
+  var revokeObjectURL = URL ? URL.revokeObjectURL : revokeObjectURLWrapper;
   var GlobalBlob = global.Blob;
   var GlobalBlobBuilder = null;
 
   var mHaveBlob = GlobalBlob !== void 0;
-  var mTypedArrayBug = /(?:iPhone|iPad).+?Version\/6/.test(global.navigator.userAgent);
+  var mTypedArrayBug = false;
 
   if (mHaveBlob) {
-    if (mTypedArrayBug) {
-      GlobalBlob = WebBlob;
-    } else {
-      try {
-        new GlobalBlob([], {});
-      } catch (e) {
-        mHaveBlobConstructor = false;
+    try {
+      var tTestBlob = new GlobalBlob([new Uint8Array(0)], {type: 'application/octet-stream'});
+      if (tTestBlob.size !== 0) {
+        mTypedArrayBug = true;
         GlobalBlob = WebBlob;
-        GlobalBlobBuilder = global.BlobBuilder 
-            || global.WebKitBlobBuilder 
-            || global.MozBlobBuilder 
-            || global.MSBlobBuilder;
+        createObjectURL = createObjectURLWrapper;
+        revokeObjectURL = revokeObjectURLWrapper;
       }
+    } catch (e) {
+      mHaveBlobConstructor = false;
+      GlobalBlob = WebBlob;
+      createObjectURL = createObjectURLWrapper;
+      revokeObjectURL = revokeObjectURLWrapper;
+      GlobalBlobBuilder = global.BlobBuilder 
+        || global.WebKitBlobBuilder 
+        || global.MozBlobBuilder 
+        || global.MSBlobBuilder;
     }
   }
 
@@ -13568,79 +13617,80 @@ benri.event = {};
     }
   }
 
-  function createObjectURL(pBlob) {
+  function createObjectURLWrapper(pBlob) {
     if (mHaveBlob) {
-      if (createObjectURL === null) {
+      if (URL.createObjectURL === null) {
         throw new Error('Had a Blob but no objectURL!');
       }
 
-      return createObjectURL(pBlob instanceof Blob ? pBlob : pBlob.blob);
+      return URL.createObjectURL(pBlob instanceof Blob ? pBlob : pBlob.blob);
     }
 
     return 'data:' + pBlob.type + ';base64,' + global.btoa(pBlob.data);
   }
 
-  function revokeObjectURL(pURL) {
+  function revokeObjectURLWrapper(pURL) {
     // Don't need to do anything.
   }
 
-  benri.impl.web = {
+  degree.impl.web = {
     Blob: GlobalBlob,
     createObjectURL: createObjectURL,
     revokeObjectURL: revokeObjectURL
   };
 
 }(this));
+
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.web.util = {};
+degree.impl.web.util = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.web.util.log = {};
+degree.impl.web.util.log = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.web.net = {};
+degree.impl.web.net = {};
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.web.mem = {};
+degree.impl.web.mem = {};
 
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
+  var degree = global.degree;
 
-  benri.impl.add('mem.metrics', function(pData) {
+  degree.impl.add('mem.metrics', function(pData) {
     if (pData.hints.type === 'sys' || pData.hints.type === 'gc')
     pData.add(MemoryMetrics, 11);
   });
 
-  benri.impl.web.mem.MemoryMetrics = MemoryMetrics;
+  degree.impl.web.mem.MemoryMetrics = MemoryMetrics;
 
   var mThreshold = 10000;
 
@@ -13649,7 +13699,7 @@ benri.impl.web.mem = {};
 
   /**
    * @class
-   * @extends {benri.mem.MemoryMetrics}
+   * @extends {degree.mem.MemoryMetrics}
    */
   function MemoryMetrics() {
     this.mem = global.performance && global.performance.memory;
@@ -13726,19 +13776,19 @@ benri.impl.web.mem = {};
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
+  var degree = global.degree;
 
-  if (!('HTMLAudioElement' in global)) {
+  if (!('AudioContext' in global) && !('webkitAudioContext' in global)) {
     return;
   }
 
-  var MediaRenderer = benri.media.MediaRenderer;
+  var MediaRenderer = degree.media.MediaRenderer;
 
   var STATE_NOT_READY = MediaRenderer.PLAYBACK_STATE_NOT_READY;
   var STATE_READY = MediaRenderer.PLAYBACK_STATE_READY;
@@ -13747,7 +13797,231 @@ benri.impl.web.mem = {};
 
   /**
    * @class
-   * @extends {benri.media.audio.AudioRenderer}
+   * @extends {degree.media.audio.AudioRenderer}
+   */
+  var WebAudioRenderer = (function(pSuper) {
+    function WebAudioRenderer(pAudioData) {
+      pSuper.call(this, pAudioData);
+      var tContext = pAudioData.context;
+      var tGain = this.gain = tContext.createGainNode();
+      tGain.connect(tContext.destination);
+      this.buffer = this.audio.data;
+      this.source = null;
+      this.noteOnTime = 0;
+      this.playedTime = 0;
+      this.options = null;
+      this.savedVolume = 1;
+    }
+
+    WebAudioRenderer.prototype = Object.create(pSuper.prototype);
+    WebAudioRenderer.prototype.constructor = WebAudioRenderer;
+
+    return WebAudioRenderer;
+  })(degree.media.audio.AudioRenderer);
+
+  function _createOnEndedCallback(pSelf) {
+    return function (e) {
+      var tOptions = pSelf.options;
+      if (tOptions.loop) {
+        pSelf.stop();
+        pSelf.play(tOptions);
+      } else {
+        pSelf.stop();
+      }
+    };
+  }
+
+  /**
+   * @override
+   */
+  WebAudioRenderer.prototype.play = function(pOptions) {
+
+    if (this.playbackState === STATE_PAUSED) {
+      this.resume();
+      return;
+    } else if (this.playbackState === STATE_PLAYING) {
+      return;
+    }
+
+    var tContext = this.audio.context,
+        tSource = this.source = tContext.createBufferSource(),
+        tBuffer = tSource.buffer = this.buffer,
+        tOptions = this.options = pOptions || {},
+        tOffset = 0;
+
+    tSource.connect(this.gain);
+    tSource.onended = _createOnEndedCallback(this);
+    if (tOptions.startTime) {
+      tOffset = tOptions.startTime / 1000;
+    }
+    if (tSource.start) {
+      tSource.start(0, tOffset);
+    } else {
+      tSource.noteGrainOn(0, tOffset, tBuffer.duration);
+    }
+    this.noteOnTime = tContext.currentTime;
+    this.playedTime = tOffset;
+
+    this.playbackState = STATE_PLAYING;
+    this.emit('started');
+  };
+
+  /**
+   * @override
+   */
+  WebAudioRenderer.prototype.stop = function() {
+
+    if (this.playbackState === STATE_READY) {
+      return;
+    }
+
+    var tSource = this.source;
+
+    tSource.disconnect();
+    this.source = null;
+    this.noteOnTime = 0;
+    this.playedTime = 0;
+    this.options = null;
+    this.playbackState = STATE_READY;
+    this.emit('stopped');
+  };
+
+  /**
+   * @override
+   */
+  WebAudioRenderer.prototype.pause = function() {
+
+    if (this.playbackState === STATE_PAUSED
+        || this.playbackState === STATE_READY) {
+      return;
+    }
+
+    var tContext = this.audio.context,
+        tSource = this.source,
+        tDelta = tContext.currentTime - this.noteOnTime;
+
+    this.playedTime += tDelta;
+    tSource.disconnect();
+    this.source = null;
+
+    this.playbackState = STATE_PAUSED;
+    this.emit('stopped');
+  };
+
+  /**
+   * @override
+   */
+  WebAudioRenderer.prototype.resume = function() {
+
+    if (this.playbackState === STATE_PLAYING) {
+      return;
+    } else if (this.playbackState === STATE_READY) {
+      this.play();
+      return;
+    }
+
+    var tContext = this.audio.context,
+        tSource = this.source = tContext.createBufferSource(),
+        tBuffer = tSource.buffer = this.buffer,
+        tOptions = this.options,
+        tOffset = this.playedTime;
+
+    tSource.connect(this.gain);
+    tSource.onended = _createOnEndedCallback(this);
+    if (tSource.start) {
+      tSource.start(0, tOffset);
+    } else {
+      tSource.noteGrainOn(0, tOffset, tBuffer.duration);
+    }
+    this.noteOnTime = tContext.currentTime;
+
+    this.playbackState = STATE_PLAYING;
+    this.emit('started');
+  };
+
+  /**
+   * @override
+   */
+  WebAudioRenderer.prototype.seekTo = function(pTime) {
+    if (this.playbackState === STATE_PLAYING) {
+      this.pause();
+    } else if (this.playbackState === STATE_READY) {
+      return;
+    }
+
+    var tTime = pTime || 0;
+    
+    this.playedTime = tTime / 1000;
+    this.resume();
+  };
+
+  /**
+   * @override
+   */
+  WebAudioRenderer.prototype.getPlaybackTime = function() {
+    return (this.audio.context.currentTime % this.buffer.duration) * 1000;
+  };
+
+  /**
+   * @override
+   */
+  WebAudioRenderer.prototype.getVolume = function() {
+    return this.gain.gain.value;
+  };
+
+  /**
+   * @override
+   */
+  WebAudioRenderer.prototype.setVolume = function(pVolume) {
+    var tVolume = pVolume || 0;
+    if (tVolume >= 0 && tVolume <= 1) {
+      this.gain.gain.value = tVolume;
+    }
+  };
+
+  /**
+   * @override
+   */
+  WebAudioRenderer.prototype.mute = function(pMute) {
+    if (pMute) {
+      this.savedVolume = this.gain.gain.value;
+      this.gain.gain.value = 0;
+    } else {
+      this.gain.gain.value = this.savedVolume;
+    }
+  };
+
+  degree.impl.add('media.audio.AudioRenderer', function(pEvent) {
+    pEvent.add(WebAudioRenderer, 12);
+  });
+
+}(this));
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 degreeJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+
+(function(global) {
+
+  var degree = global.degree;
+
+  if (!('HTMLAudioElement' in global)) {
+    return;
+  }
+
+  var MediaRenderer = degree.media.MediaRenderer;
+
+  var STATE_NOT_READY = MediaRenderer.PLAYBACK_STATE_NOT_READY;
+  var STATE_READY = MediaRenderer.PLAYBACK_STATE_READY;
+  var STATE_PLAYING = MediaRenderer.PLAYBACK_STATE_PLAYING;
+  var STATE_PAUSED = MediaRenderer.PLAYBACK_STATE_PAUSED;
+
+  /**
+   * @class
+   * @extends {degree.media.audio.AudioRenderer}
    */
   var HTMLAudioRenderer = (function(pSuper) {
     function HTMLAudioRenderer(pAudioData) {
@@ -13757,7 +14031,7 @@ benri.impl.web.mem = {};
       var tSelf = this;
       tElem.addEventListener('ended', function () {
         tSelf.playbackState = STATE_READY;
-        tSelf.emit('ended');
+        tSelf.emit('stopped');
       }, false);
 
     }
@@ -13766,7 +14040,7 @@ benri.impl.web.mem = {};
     HTMLAudioRenderer.prototype.constructor = HTMLAudioRenderer;
 
     return HTMLAudioRenderer;
-  })(benri.media.audio.AudioRenderer);
+  })(degree.media.audio.AudioRenderer);
 
   /**
    * @override
@@ -13827,7 +14101,6 @@ benri.impl.web.mem = {};
    */
   HTMLAudioRenderer.prototype.seekTo = function(pTime) {
     this.element.fastSeek(pTime / 1000);
-    this.emit('seeked');
   };
 
   /**
@@ -13846,12 +14119,24 @@ benri.impl.web.mem = {};
 
   /**
    * @override
+   * This doesn't work with HTMLAudio in iOS Safari.
    */
   HTMLAudioRenderer.prototype.setVolume = function(pVolume) {
-    this.element.volume = pVolume;
+    var tVolume = pVolume || 0;
+    if (tVolume >= 0 && tVolume <= 1) {
+      this.element.volume = tVolume;
+    }
   };
 
-  benri.impl.add('media.audio.AudioRenderer', function(pEvent) {
+  /**
+   * @override
+   * This doesn't work with HTMLAudio in iOS Safari.
+   */
+  HTMLAudioRenderer.prototype.mute = function(pMute) {
+    this.element.muted = pMute;
+  };
+
+  degree.impl.add('media.audio.AudioRenderer', function(pEvent) {
     pEvent.add(HTMLAudioRenderer, 11);
   });
 
@@ -13860,37 +14145,37 @@ benri.impl.web.mem = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.web.io = {};
+degree.impl.web.io = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.web.io.compression = {};
+degree.impl.web.io.compression = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  benri.impl.web.io.compression.DeflateInflator = DeflateInflator;
-  benri.impl.web.io.compression.DeflateDeflator = DeflateDeflator;
+  var degree = global.degree;
+  degree.impl.web.io.compression.DeflateInflator = DeflateInflator;
+  degree.impl.web.io.compression.DeflateDeflator = DeflateDeflator;
 
-  benri.impl.add('io.compression.inflator.inflate', function(pEvent) {
+  degree.impl.add('io.compression.inflator.inflate', function(pEvent) {
     global.Zlib && global.Zlib.Inflate && pEvent.add(DeflateInflator, 11);
   });
 
-  benri.impl.add('io.compression.deflator.deflate', function(pEvent) {
+  degree.impl.add('io.compression.deflator.deflate', function(pEvent) {
     global.Zlib && global.Zlib.Deflate && pEvent.add(DeflateDeflator, 11);
   });
 
@@ -13900,7 +14185,7 @@ benri.impl.web.io.compression = {};
       pOptions.resize = true;
 
       var tInflator = new Zlib[this.type](pBuffer.data, pOptions);
-      return benri.io.Buffer.fromArray(tInflator.decompress());
+      return degree.io.Buffer.fromArray(tInflator.decompress());
     }
   };
 
@@ -13910,7 +14195,7 @@ benri.impl.web.io.compression = {};
       pOptions.resize = true;
 
       var tDeflator = new Zlib[this.type](pBuffer.data, pOptions);
-      return benri.io.Buffer.fromArray(tInflator.compress());
+      return degree.io.Buffer.fromArray(tInflator.compress());
     }
   };
 
@@ -13928,17 +14213,17 @@ benri.impl.web.io.compression = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
+  var degree = global.degree;
 
   var mErrorChar = String.fromCharCode(0xFFFD);
 
-  benri.impl.add('text.decoder.utf-8', function(pEvent) {
+  degree.impl.add('text.decoder.utf-8', function(pEvent) {
     pEvent.add(UTF8Decoder, 10);
   });
 
@@ -14053,17 +14338,17 @@ benri.impl.web.io.compression = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
+  var degree = global.degree;
 
   var mErrorChar = String.fromCharCode(0xFFFD);
 
-  benri.impl.add('text.decoder.shift_jis', function(pEvent) {
+  degree.impl.add('text.decoder.shift_jis', function(pEvent) {
     pEvent.add(ShiftJISDecoder, 10);
   });
 
@@ -14146,14 +14431,14 @@ benri.impl.web.io.compression = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  benri.impl.add('text.encoder.ascii', function(pEvent) {
-    pEvent.add(ASCIIDecoder, 10);
+  degree.impl.add('text.encoder.ascii', function(pEvent) {
+    pEvent.add(ASCIIEncoder, 10);
   });
 
   function ASCIIEncoder() {
@@ -14162,7 +14447,7 @@ benri.impl.web.io.compression = {};
 
   ASCIIEncoder.prototype.encode = function(pString) {
     var tLength = pString.length;
-    var tBuffer = benri.io.Buffer.create(tLength);
+    var tBuffer = degree.io.Buffer.create(tLength);
     var tData = tBuffer.data;
 
     for (var i = 0; i < tLength; i++) {
@@ -14173,18 +14458,19 @@ benri.impl.web.io.compression = {};
   };
 
 }());
+
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
+  var degree = global.degree;
 
-  benri.impl.add('text.decoder.ascii', function(pEvent) {
+  degree.impl.add('text.decoder.ascii', function(pEvent) {
     pEvent.add(ASCIIDecoder, 10);
   });
 
@@ -14207,31 +14493,31 @@ benri.impl.web.io.compression = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.shared = {};
+degree.impl.shared = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.shared.text = {};
+degree.impl.shared.text = {};
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
+  var degree = global.degree;
 
-  benri.impl.add('mem.metrics', function(pData) {
+  degree.impl.add('mem.metrics', function(pData) {
     if (pData.hints.type === 'native') {
       pData.add(MemoryMetrics, 10);
     }
@@ -14239,7 +14525,7 @@ benri.impl.shared.text = {};
 
   /**
    * @class
-   * @extends {benri.mem.MemoryMetrics}
+   * @extends {degree.mem.MemoryMetrics}
    */
   function MemoryMetrics() {
   }
@@ -14296,12 +14582,12 @@ benri.impl.shared.text = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 if ('Uint8Array' in this) {
-  benri.impl.add('io.buffer', function(pEvent) {
+  degree.impl.add('io.buffer', function(pEvent) {
     var mHaveSlice = ArrayBuffer.prototype.slice !== void 0;
 
     pEvent.add({
@@ -14314,8 +14600,9 @@ if ('Uint8Array' in this) {
           return new Uint8Array(pBuffer.buffer.slice(pOffset, pEndOffset));
         }
 
-        var tArray = new Uint8Array(pEndOffset - pOffset);
-        tArray.set(pBuffer.subarray(pOffset, pEndOffset));
+        var tActualEndOffset = pEndOffset > pBuffer.length ? pBuffer.length : pEndOffset;
+        var tArray = new Uint8Array(tActualEndOffset - pOffset);
+        tArray.set(pBuffer.subarray(pOffset, tActualEndOffset));
 
         return tArray;
       },
@@ -14355,14 +14642,15 @@ if ('Uint8Array' in this) {
     }, 12);
   });
 }
+
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.add('io.buffer', function(pEvent) {
+degree.impl.add('io.buffer', function(pEvent) {
   pEvent.add({
     create: function(pSize) {
       return new Array(pSize);
@@ -14400,7 +14688,7 @@ benri.impl.add('io.buffer', function(pEvent) {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -14413,9 +14701,9 @@ benri.impl.add('io.buffer', function(pEvent) {
       to use the default Target (usually the screen)
   */
 
-  var getImpl = benri.impl.get;
+  var getImpl = degree.impl.get;
 
-  benri.graphics.Surface = Surface;
+  degree.graphics.Surface = Surface;
 
   Surface.createSurface = function(pWidth, pHeight, pSurfaceHints, pImplHints) {
     return new (getImpl('graphics.surface', pImplHints).best)(pWidth || 1, pHeight || 1, pSurfaceHints);
@@ -14604,19 +14892,19 @@ benri.impl.add('io.buffer', function(pEvent) {
  * @author Kuu Miyazaki
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var graphics = benri.graphics;
+  var graphics = degree.graphics;
 
   graphics.Records = Records;
 
-  var deepCopy = benri.util.deepCopy;
-  var Keeper = benri.mem.Keeper;
-  var Matrix2D = benri.geometry.Matrix2D;
+  var deepCopy = degree.util.deepCopy;
+  var Keeper = degree.mem.Keeper;
+  var Matrix2D = degree.geometry.Matrix2D;
 
   var NOOP = Records.NOOP = 0x0;
 
@@ -14988,7 +15276,7 @@ benri.impl.add('io.buffer', function(pEvent) {
 
   /**
    * Concatenate records.
-   * @param {benri.graphics.Records} pRecord Records to be appended to this record.
+   * @param {degree.graphics.Records} pRecord Records to be appended to this record.
    */
   tProto.concat = function(pRecords) {
     var tImages = pRecords._images;
@@ -15151,7 +15439,7 @@ benri.impl.add('io.buffer', function(pEvent) {
 
 (function(global) {
 
-  var Records = global.benri.graphics.Records;
+  var Records = global.degree.graphics.Records;
 
   theatre.crews.swf.render.renderPropOnRenderable = onRenderable;
   theatre.crews.swf.render.renderPropOnPreRender = onPreRender;
@@ -15357,8 +15645,8 @@ benri.impl.add('io.buffer', function(pEvent) {
  */
 (function(global) {
 
-  var Rect = benri.geometry.Rect;
-  var Matrix2D = benri.geometry.Matrix2D;
+  var Rect = degree.geometry.Rect;
+  var Matrix2D = degree.geometry.Matrix2D;
 
   /**
    * A class for Actors that exist on the Display List of the SWF file.
@@ -15688,9 +15976,9 @@ benri.impl.add('io.buffer', function(pEvent) {
 (function(global) {
 
   var mSWFCrew = theatre.crews.swf;
-  var Rect = global.benri.geometry.Rect;
+  var Rect = global.degree.geometry.Rect;
   var Stage = theatre.Stage;
-  var Matrix2D = benri.geometry.Matrix2D;
+  var Matrix2D = degree.geometry.Matrix2D;
   var ColorTransform = mSWFCrew.structs.ColorTransform;
 
   function translateKeyCode(pKeyCode, pShift) {
@@ -15928,8 +16216,8 @@ benri.impl.add('io.buffer', function(pEvent) {
   var mSWFCrew = theatre.crews.swf;
   var mHandlers = mSWFCrew.handlers;
   var ButtonActor = mSWFCrew.actors.ButtonActor;
-  var Matrix2D = benri.geometry.Matrix2D;
-  var Rect = benri.geometry.Rect;
+  var Matrix2D = degree.geometry.Matrix2D;
+  var Rect = degree.geometry.Rect;
 
   function createLoaderWrapper(pActionScriptLoader, pActionScriptProgram, pScripts, pSWFVersion) {
     var tId = pActionScriptLoader.load(
@@ -16135,7 +16423,7 @@ benri.impl.add('io.buffer', function(pEvent) {
 (function(global) {
 
   var mActors = theatre.crews.swf.actors;
-  var Rect = global.benri.geometry.Rect;
+  var Rect = global.degree.geometry.Rect;
 
   /**
    * @class
@@ -16178,15 +16466,15 @@ benri.impl.add('io.buffer', function(pEvent) {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  benri.event.StoppableEventEmitter = StoppableEventEmitter;
+  degree.event.StoppableEventEmitter = StoppableEventEmitter;
 
-  var EventEmitter = benri.event.EventEmitter;
+  var EventEmitter = degree.event.EventEmitter;
   var on = EventEmitter.on;
   var ignore = EventEmitter.ignore;
 
@@ -16240,7 +16528,7 @@ benri.impl.add('io.buffer', function(pEvent) {
    * @extends {theatre.Prop}
    */
   var RenderProp = (function(pSuper) {
-    var StoppableEventEmitter = benri.event.StoppableEventEmitter;
+    var StoppableEventEmitter = degree.event.StoppableEventEmitter;
 
     /**
      * @constructor
@@ -16369,7 +16657,7 @@ benri.impl.add('io.buffer', function(pEvent) {
   var RenderManagerProp = (function(pSuper) {
     var RenderProp = theatre.crews.render.RenderProp;
     var CacheManager = theatre.crews.render.CacheManager;
-    var EventEmitter = benri.event.EventEmitter;
+    var EventEmitter = degree.event.EventEmitter;
 
     /**
      * @constructor
@@ -16653,13 +16941,13 @@ benri.impl.add('io.buffer', function(pEvent) {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  var EventEmitter = benri.event.EventEmitter;
+  var EventEmitter = degree.event.EventEmitter;
 
   /**
    * @class
@@ -16717,7 +17005,7 @@ benri.impl.add('io.buffer', function(pEvent) {
     }
   }
 
-  benri.event.PersistentEventEmitter = PersistentEventEmitter;
+  degree.event.PersistentEventEmitter = PersistentEventEmitter;
 
 }());
 /**
@@ -16729,7 +17017,7 @@ benri.impl.add('io.buffer', function(pEvent) {
 
 (function(global) {
   var swfcrew = theatre.crews.swf;
-  var PersistentEventEmitter = benri.event.PersistentEventEmitter;
+  var PersistentEventEmitter = degree.event.PersistentEventEmitter;
   
   /**
    * @constructor
@@ -16763,7 +17051,7 @@ benri.impl.add('io.buffer', function(pEvent) {
     this.swf = pSWF;
 
     if ('antialias' in pOptions) {
-      benri.env.setVar('benri.graphics.surface.antialias', pOptions.antialias);
+      degree.env.setVar('degree.graphics.surface.antialias', pOptions.antialias);
     }
 
     this.emit('loadstart', pSWF);
@@ -16881,7 +17169,7 @@ benri.impl.add('io.buffer', function(pEvent) {
       this.options = pOptions = (pOptions || {});
 
       var tSelf = this;
-      var tRequest = new benri.net.Request(pURL, 'GET', true);
+      var tRequest = new degree.net.Request(pURL, 'GET', true);
 
       tRequest.send(null)
       .then(function(pResponse) {
@@ -16910,15 +17198,15 @@ benri.impl.add('io.buffer', function(pEvent) {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  var env = benri.env = {};
+  var env = degree.env = {};
 
-  benri.event.EventEmitter(env);
+  degree.event.EventEmitter(env);
 
   var mVars = [];
 
@@ -16940,13 +17228,13 @@ benri.impl.add('io.buffer', function(pEvent) {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  var log = benri.util.log;
+  var log = degree.util.log;
 
   log.Logger = Logger;
 
@@ -16968,7 +17256,7 @@ benri.impl.add('io.buffer', function(pEvent) {
     Logger.emit('loggerCreated', this);
   }
 
-  benri.event.EventEmitter(Logger);
+  degree.event.EventEmitter(Logger);
 
   Logger.getActiveLoggers = function() {
     return mActiveLoggers.slice(0);
@@ -17061,23 +17349,23 @@ benri.impl.add('io.buffer', function(pEvent) {
     this.log(log.LEVEL_DEBUG, this.tag + ':' + ' ' + pMessage, pData);
   };
 
-  var tBenriLogger = log.benriLogger = new Logger('BenriJS', [
+  var tDegreeLogger = log.degreeLogger = new Logger('degreeJS', [
     new log.ConsoleAdapter({
       level: log.LEVEL_DEBUG
     })
   ]);
 
-  var tLogLevel = benri.env.getVar('logLevel');
+  var tLogLevel = degree.env.getVar('logLevel');
 
   if (tLogLevel !== null) {
-    tBenriLogger.level = tLogLevel;
+    tDegreeLogger.level = tLogLevel;
   } else {
-    tBenriLogger.level = log.LEVEL_INFO;
+    tDegreeLogger.level = log.LEVEL_INFO;
   }
 
-  benri.env.on('setvar', function(pEvent) {
+  degree.env.on('setvar', function(pEvent) {
     if (pEvent.varName === 'logLevel') {
-      tBenriLogger.level = pEvent.varValue;
+      tDegreeLogger.level = pEvent.varValue;
     }
   });
 
@@ -17098,10 +17386,10 @@ var quickswf = {
   utils: {
 
   },
-  logger: new benri.util.log.Logger(
+  logger: new degree.util.log.Logger(
     'QuickSWF',
-    [new benri.util.log.ConsoleAdapter({
-      level: benri.util.log.LEVEL_DEBUG
+    [new degree.util.log.ConsoleAdapter({
+      level: degree.util.log.LEVEL_DEBUG
     })]
   )
 };
@@ -17205,7 +17493,7 @@ var quickswf = {
 
   /**
    * Adler32 ハッシュ値の作成
-   * @param {benri.io.Buffer} array 算出に使用する byte array.
+   * @param {degree.io.Buffer} array 算出に使用する byte array.
    * @return {number} Adler32 ハッシュ値.
    */
   function Adler32(pBuffer) {
@@ -17215,7 +17503,7 @@ var quickswf = {
   /**
    * Adler32 ハッシュ値の更新
    * @param {number} adler 現在のハッシュ値.
-   * @param {benri.io.Buffer} array 更新に使用する byte array.
+   * @param {degree.io.Buffer} array 更新に使用する byte array.
    * @return {number} Adler32 ハッシュ値.
    */
   Adler32.update = function(adler, pBuffer) {
@@ -17270,7 +17558,7 @@ var quickswf = {
 
   /**
    * @class
-   * @extends {benri.io.Reader}
+   * @extends {degree.io.Reader}
    */
   var SWFReader = (function(pSuper) {
     /**
@@ -17430,7 +17718,7 @@ var quickswf = {
     };
 
     return SWFReader;
-  })(benri.io.Reader);
+  })(degree.io.Reader);
 
   global.quickswf.SWFReader = SWFReader;
 
@@ -18398,7 +18686,7 @@ var quickswf = {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -18406,7 +18694,7 @@ var quickswf = {
 
   var bugs = {};
 
-  benri.impl.web.graphics = {
+  degree.impl.web.graphics = {
     bugs: bugs
   };
 
@@ -18482,8 +18770,8 @@ var quickswf = {
     return detectPutImageDataBug();
   }
 
-  benri.env.on('setvar', function(pEvent) {
-    if (pEvent.varName === 'benri.impl.web.graphics.canvasSizeBug') {
+  degree.env.on('setvar', function(pEvent) {
+    if (pEvent.varName === 'degree.impl.web.graphics.canvasSizeBug') {
       bugs.canvasSizeBug = pEvent.varValue;
     }
   });
@@ -18492,32 +18780,32 @@ var quickswf = {
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.web.graphics.shader = {};
+degree.impl.web.graphics.shader = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.web.graphics.shader.fragment = {};
+degree.impl.web.graphics.shader.fragment = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var mHasBitmapPatternGapIssue = benri.impl.web.graphics.bugs.repeatPatternBug;
+  var mHasBitmapPatternGapIssue = degree.impl.web.graphics.bugs.repeatPatternBug;
 
 
-  benri.impl.web.graphics.shader.fragment.ImageShader = {
+  degree.impl.web.graphics.shader.fragment.ImageShader = {
     pre: function(pShader, pSurface, pProgram) {
       var tImage = pShader.getImage();
       var tSrcWidth = tImage.getWidth();
@@ -18600,18 +18888,18 @@ benri.impl.web.graphics.shader.fragment = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var Records = benri.graphics.Records;
-  var Color = benri.graphics.draw.Color;
+  var Records = degree.graphics.Records;
+  var Color = degree.graphics.draw.Color;
 
   var mHaveMultiplyMode;
 
-  benri.impl.web.graphics.shader.fragment.ColorTransformShader = {
+  degree.impl.web.graphics.shader.fragment.ColorTransformShader = {
     pre: function(pShader, pSurface, pProgram) {
       var tFillType = pProgram.fillType;
 
@@ -19016,7 +19304,7 @@ benri.impl.web.graphics.shader.fragment = {};
       var tAlphaRatio;
       var tAlphaInverter
 
-      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
+      if (degree.impl.web.graphics.bugs.putImageDataAlphaBug) {
         for (var i = 0, il = tPixels.length; i < il; i += 4) {
           tAlphaPixel = tPixels[i + 3];
 
@@ -19061,7 +19349,7 @@ benri.impl.web.graphics.shader.fragment = {};
       var tBM = tBlueMultiplier;
       var tBA = tBlueAdd;
 
-      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
+      if (degree.impl.web.graphics.bugs.putImageDataAlphaBug) {
         for (var i = 0, il = tPixels.length; i < il; i += 4) {
           tAlphaPixel = tPixels[i + 3];
 
@@ -19096,7 +19384,7 @@ benri.impl.web.graphics.shader.fragment = {};
       var tPixels = tAllPixels = tAllPixelsImageData.data;
       var tAlphaIndex = 3 - pIndex;
 
-      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
+      if (degree.impl.web.graphics.bugs.putImageDataAlphaBug) {
         for (var i = 0, il = tPixels.length; i < il; i += 4) {
           tAlphaPixel = tPixels[i + tAlphaIndex];
 
@@ -19126,7 +19414,7 @@ benri.impl.web.graphics.shader.fragment = {};
       var tAlphaIndex = 3 - pIndex;
       pIndex2 = pIndex2 - pIndex;
 
-      if (benri.impl.web.graphics.bugs.putImageDataAlphaBug) {
+      if (degree.impl.web.graphics.bugs.putImageDataAlphaBug) {
         for (var i = 0, il = tPixels.length; i < il; i += 4) {
           tAlphaPixel = tPixels[i + tAlphaIndex];
 
@@ -19200,13 +19488,13 @@ benri.impl.web.graphics.shader.fragment = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  benri.impl.web.graphics.shader.fragment.ColorShader = {
+  degree.impl.web.graphics.shader.fragment.ColorShader = {
     pre: function(pShader, pSurface, pProgram) {
       pProgram.colors.push(pShader.getColor().clone());
     },
@@ -19225,13 +19513,13 @@ benri.impl.web.graphics.shader.fragment = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  benri.impl.web.graphics.shader.fragment.AlphaShader = {
+  degree.impl.web.graphics.shader.fragment.AlphaShader = {
     pre: function(pShader, pSurface, pProgram) {
       var tContext = pSurface.context;
       var tAlpha = pShader.getGlobalAlpha();
@@ -19257,23 +19545,23 @@ benri.impl.web.graphics.shader.fragment = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS.
+ * Copyright (C) 2013 degreeJS.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.impl.web.graphics.draw = {};
+degree.impl.web.graphics.draw = {};
 
 /**
  * @author Guangyao Liu
  *
- * Copyright (C) 2014 BenriJS.
+ * Copyright (C) 2014 degreeJS.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var GradientStyle = global.benri.graphics.draw.GradientStyle;
+  var degree = global.degree;
+  var GradientStyle = global.degree.graphics.draw.GradientStyle;
 
   var mLinearGradientMap = {};
   var mRadialGradientMap = {};
@@ -19352,22 +19640,22 @@ benri.impl.web.graphics.draw = {};
     return tGradient;
   }
 
-  global.benri.impl.web.graphics.draw.CanvasGradientFactory = CanvasGradientFactory;
+  global.degree.impl.web.graphics.draw.CanvasGradientFactory = CanvasGradientFactory;
 
 }(this));
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var CanvasGradientFactory = benri.impl.web.graphics.draw.CanvasGradientFactory;
+  var CanvasGradientFactory = degree.impl.web.graphics.draw.CanvasGradientFactory;
 
-  benri.impl.web.graphics.shader.fragment.RadialGradientShader = {
+  degree.impl.web.graphics.shader.fragment.RadialGradientShader = {
     pre: function(pShader, pSurface, pProgram) {
       var tGradientStyle = pShader.getGradientStyle();
       var tColors;
@@ -19417,15 +19705,15 @@ benri.impl.web.graphics.draw = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var CanvasGradientFactory = benri.impl.web.graphics.draw.CanvasGradientFactory;
+  var CanvasGradientFactory = degree.impl.web.graphics.draw.CanvasGradientFactory;
 
-  benri.impl.web.graphics.shader.fragment.LinearGradientShader = {
+  degree.impl.web.graphics.shader.fragment.LinearGradientShader = {
     pre: function(pShader, pSurface, pProgram) {
       var tGradientStyle = pShader.getGradientStyle();
       var tColors;
@@ -19475,21 +19763,21 @@ benri.impl.web.graphics.draw = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.content = {};
+degree.content = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  benri.content.MimeType = MimeType;
+  degree.content.MimeType = MimeType;
 
   function MimeType(pString) {
     var tType = '';
@@ -19520,10 +19808,10 @@ benri.content = {};
 
           break;
         case STATE_SUBTYPE:
-          if (tChar !== ' ') {
-            tSubType += tChar;
-          } else if (tChar === ';') {
+          if (tChar === ';') {
             tState = STATE_PARAMNAME;
+          } else if (tChar !== ' ') {
+            tSubType += tChar;
           }
 
           break;
@@ -19584,25 +19872,25 @@ benri.content = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
-benri.concurrent = {};
+degree.concurrent = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
+  var degree = global.degree;
 
-  var PersistentEventEmitter = benri.event.PersistentEventEmitter;
+  var PersistentEventEmitter = degree.event.PersistentEventEmitter;
 
-  benri.concurrent.Delay = Delay;
+  degree.concurrent.Delay = Delay;
 
   function Delay() {
     PersistentEventEmitter(this);
@@ -19662,16 +19950,16 @@ benri.concurrent = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var net = benri.net;
-  var impl = benri.impl;
-  var Delay = benri.concurrent.Delay;
+  var degree = global.degree;
+  var net = degree.net;
+  var impl = degree.impl;
+  var Delay = degree.concurrent.Delay;
   var URL = net.URL;
 
   net.Request = Request;
@@ -19689,7 +19977,7 @@ benri.concurrent = {};
 
     this.url = pURL;
     this.method = (pMethod || 'GET').toUpperCase();
-    this._headers = [];
+    this._headers = {};
     this.timeout = 0;
     this._sending = false;
     this.isRaw = pRaw || false;
@@ -19768,19 +20056,19 @@ benri.concurrent = {};
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  var implGet = benri.impl.get;
-  var implAdd = benri.impl.add;
-  var MimeType = benri.content.MimeType;
-  var Keeper = benri.mem.Keeper;
-  var Delay = benri.concurrent.Delay;
+  var implGet = degree.impl.get;
+  var implAdd = degree.impl.add;
+  var MimeType = degree.content.MimeType;
+  var Keeper = degree.mem.Keeper;
+  var Delay = degree.concurrent.Delay;
 
-  benri.content.Blob = Blob;
+  degree.content.Blob = Blob;
 
   function Blob(pType) {
     Keeper(this);
@@ -19882,10 +20170,10 @@ benri.concurrent = {};
 
   /**
    * @class
-   * @extends {benri.content.Blob}
+   * @extends {degree.content.Blob}
    */
   var SWF = (function(pSuper) {
-    var Delay = benri.concurrent.Delay;
+    var Delay = degree.concurrent.Delay;
 
     /**
      * The data structure that holds all data
@@ -19911,7 +20199,7 @@ benri.concurrent = {};
       this.jpegTableDQT = null;
       this.jpegTableDHT = null;
       this.streamSoundMetadata = null;
-      this.assetManifest = new benri.content.Manifest();
+      this.assetManifest = new degree.content.Manifest();
 
       this.on('destroy', onDestroy);
     }
@@ -19956,7 +20244,7 @@ benri.concurrent = {};
     };
 
     return SWF;
-  })(benri.content.Blob);
+  })(degree.content.Blob);
 
   quickswf.SWF = SWF;
 
@@ -19987,7 +20275,7 @@ benri.concurrent = {};
    * @constructor
    */
   function Parser(pSWF) {
-    benri.event.EventEmitter(this);
+    degree.event.EventEmitter(this);
 
     /**
      * The SWFReader object for this parser.
@@ -20097,7 +20385,7 @@ benri.concurrent = {};
     this.encoding = tSWF.encoding = pReader.encoding = tEncoding;
 
     if (tCompressedFlag === 'C') {
-      var tInflator = new benri.io.compression.Inflator('inflate');
+      var tInflator = new degree.io.compression.Inflator('inflate');
       pReader = this.r = new quickswf.SWFReader(tInflator.inflate(pReader.getCopyTo(tFileSize)));
       tSWF.fileSize -= 8; // offset for beginning of file which doesn't exist in this new buffer.
     } else if (tCompressedFlag === 'Z') {
@@ -20401,7 +20689,7 @@ quickswf.logger.debug('+++ MP3');
    * @return {Uint8Array} RIFF chunk (i.e. WAVE file.)
    */
   function createRIFFChunk(pFmt, pCh, pFs, pDepth, pData, pLength) {
-    var Buffer = benri.io.Buffer,
+    var Buffer = degree.io.Buffer,
         tRIFF = Buffer.create(44 + pLength),
         tBuffer = tRIFF.data,
         tCurr = 0, tIntBuf = Buffer.create(4),
@@ -20854,8 +21142,8 @@ quickswf.logger.debug('+++ MP3');
   var RECT = quickswf.structs.RECT;
   var Shape = quickswf.structs.Shape;
   var KERNINGRECORD = quickswf.structs.KERNINGRECORD;;
-  var Decoder = benri.text.Decoder;
-  var Buffer = benri.io.Buffer;
+  var Decoder = degree.text.Decoder;
+  var Buffer = degree.io.Buffer;
 
   /**
    * @constructor
@@ -21745,8 +22033,8 @@ quickswf.logger.debug('+++ MP3');
   quickswf.Parser.prototype['20'] = defineBitsLossless;
   quickswf.Parser.prototype['36'] = defineBitsLossless2;
 
-  var fromBuffer = benri.content.Blob.fromBuffer;
-  var Buffer = benri.io.Buffer;
+  var fromBuffer = degree.content.Blob.fromBuffer;
+  var Buffer = degree.io.Buffer;
 
   //var mHaveAndroidAlphaBug = quickswf.browser.HavePutImageDataAlphaBug;
   var mAdler32 = quickswf.utils.Adler32;
@@ -21966,7 +22254,7 @@ quickswf.logger.debug('+++ MP3');
     }
 
     // compressed image data
-    this.plain = (new benri.io.compression.Inflator('inflate'))
+    this.plain = (new degree.io.compression.Inflator('inflate'))
     .inflate(
       tReader.getCopy(this.size),
       {
@@ -22003,7 +22291,7 @@ quickswf.logger.debug('+++ MP3');
    * @return {Object} Image information.
    */
   Lossless.prototype.getImage = function(pId) {
-    /** @type {benri.io.Buffer} */
+    /** @type {degree.io.Buffer} */
     var tPng = this.getPNG();
 
     this.swf.assetManifest.addBuffer(pId + '', tPng, 'image/png');
@@ -22011,7 +22299,7 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * create PNG buffer.
-   * @return {benri.io.Buffer} png buffer.
+   * @return {degree.io.Buffer} png buffer.
    */
   Lossless.prototype.getPNG = function() {
     this.png = Buffer.create(this.calcBufferSize());
@@ -22037,7 +22325,7 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * truncate output buffer.
-   * @return {benri.io.Buffer} png bytearray.
+   * @return {degree.io.Buffer} png bytearray.
    */
   Lossless.prototype.finish = function() {
     this.png = this.png.copyTo(0, this.pp);
@@ -22431,8 +22719,8 @@ quickswf.logger.debug('+++ MP3');
   quickswf.Parser.prototype['21'] = defineBitsJpeg2;
   quickswf.Parser.prototype['35'] = defineBitsJpeg3;
 
-  var fromBuffer = benri.content.Blob.fromBuffer;
-  var Buffer = benri.io.Buffer;
+  var fromBuffer = degree.content.Blob.fromBuffer;
+  var Buffer = degree.io.Buffer;
 
   function defineBits(pLength) {
     var tId = this.r.getUint16();
@@ -22468,7 +22756,7 @@ quickswf.logger.debug('+++ MP3');
       // JPEG file
       getJPEG(tId, this, tAlphaOffset);
       // alpha table
-      tAlphaData = (new benri.io.compression.Inflator('inflate'))
+      tAlphaData = (new degree.io.compression.Inflator('inflate'))
         .inflate(tReader.getCopy(pLength - 6 - tAlphaOffset));
 
       this.swf.assetManifest.onEntryLoad(tId + '', createOnJpeg3NonAlphaLoad(tAlphaData, tId + ''));
@@ -22684,7 +22972,7 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS.
+ * Copyright (C) 2013 degreeJS.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -22692,16 +22980,16 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * @class
-   * @extends {benri.content.Blob}
+   * @extends {degree.content.Blob}
    */
   var Text = (function(pSuper) {
-    var MimeType = benri.content.MimeType;
-    var Delay = benri.concurrent.Delay;
+    var MimeType = degree.content.MimeType;
+    var Delay = degree.concurrent.Delay;
 
     /**
      * @constructor
      * @param {string} pText
-     * @param {benri.content.MimeType} pType The Mimetype
+     * @param {degree.content.MimeType} pType The Mimetype
      */
     function Text(pText, pType) {
       pSuper.call(this, pType || new MimeType('text/plain'));
@@ -22713,7 +23001,7 @@ quickswf.logger.debug('+++ MP3');
       var tBlob = new Text('', pType);
       var tDelay = new Delay();
 
-      tBlob.setBuffer(pData, pType.params.charset ? pType.params.charset : 'ascii');
+      tBlob.setBuffer(pData, pType.params.charset ? pType.params.charset.toLowerCase() : 'ascii');
 
       // TODO: Support streaming this?
       return (new Delay()).resolve(tBlob);
@@ -22725,21 +23013,21 @@ quickswf.logger.debug('+++ MP3');
     tProto.constructor = Text;
 
     tProto.setBuffer = function(pBuffer, pEncoding) {
-      var tDecoder = new benri.text.Decoder(pEncoding);
+      var tDecoder = new degree.text.Decoder(pEncoding);
 
       this.text = tDecoder.decode(pBuffer);
     };
 
     tProto.getBuffer = function(pEncoding) {
-      return benri.io.Buffer.fromString(this.text, pEncoding);
+      return degree.io.Buffer.fromString(this.text, pEncoding);
     };
 
     return Text;
-  })(benri.content.Blob);
+  })(degree.content.Blob);
 
-  benri.text.Text = Text;
+  degree.text.Text = Text;
 
-  benri.content.Blob.register(['text/plain', 'text/*'], function(pEvent) {
+  degree.content.Blob.register(['text/plain', 'text/*'], function(pEvent) {
     pEvent.add(Text, 10);
   });
 
@@ -22748,17 +23036,17 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 (function(global) {
 
-  var benri = global.benri;
-  var MimeType = benri.content.MimeType;
+  var degree = global.degree;
+  var MimeType = degree.content.MimeType;
 
   /**
    * @class
-   * @extends {benri.content.Blob}
+   * @extends {degree.content.Blob}
    */
   var MediaData = (function(pSuper) {
     /**
@@ -22783,25 +23071,25 @@ quickswf.logger.debug('+++ MP3');
 
     return MediaData;
 
-  })(benri.content.Blob);
+  })(degree.content.Blob);
 
-  benri.media.MediaData = MediaData;
+  degree.media.MediaData = MediaData;
 
 }(this));
 
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 (function(global) {
 
-  var benri = global.benri;
+  var degree = global.degree;
 
   /**
    * @class
-   * @extends {benri.media.MediaData}
+   * @extends {degree.media.MediaData}
    */
   var AudioData = (function(pSuper) {
 
@@ -22819,30 +23107,30 @@ quickswf.logger.debug('+++ MP3');
 
     return AudioData;
 
-  }(benri.media.MediaData));
+  }(degree.media.MediaData));
 
-  benri.media.audio.AudioData = AudioData;
+  degree.media.audio.AudioData = AudioData;
 
 }(this));
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var EventEmitter = benri.event.EventEmitter;
+  var EventEmitter = degree.event.EventEmitter;
   var GlobalXMLHttpRequest = global.XMLHttpRequest;
-  var Blob = benri.content.Blob;
-  var MimeType = benri.content.MimeType;
-  var Buffer = benri.io.Buffer;
-  var Response = benri.net.Response;
-  var Delay = benri.concurrent.Delay;
+  var Blob = degree.content.Blob;
+  var MimeType = degree.content.MimeType;
+  var Buffer = degree.io.Buffer;
+  var Response = degree.net.Response;
+  var Delay = degree.concurrent.Delay;
 
-  benri.impl.add('net.Request', function(pEvent) {
+  degree.impl.add('net.Request', function(pEvent) {
     if (GlobalXMLHttpRequest) {
       pEvent.add(XMLHttpRequestImpl, 11);
     }
@@ -22860,9 +23148,9 @@ quickswf.logger.debug('+++ MP3');
 
   function getBlobDelay(pXHR) {
     var tResponse;
-    var tType = new MimeType(pXHR.getResponseHeader('Content-Type') || 'application/octet-binary');
+    var tType = new MimeType(pXHR.getResponseHeader('Content-Type') || 'application/octet-stream');
 
-    if (pXHR._benri_overriden) {
+    if (pXHR._degree_overriden) {
       // This is for old browsers.
       return Blob.fromBuffer(Buffer.fromString(pXHR.responseText), tType);
     }
@@ -22934,7 +23222,7 @@ quickswf.logger.debug('+++ MP3');
             )
           });
         } else {
-        getBlobDelay(tXHR).then(
+          getBlobDelay(tXHR).then(
             function(pBlob) {
               tSelf.emit('load', {
                 response: new Response(
@@ -22996,7 +23284,7 @@ quickswf.logger.debug('+++ MP3');
       tXHR.removeEventListener('loadend', onLoadEnd, false);
 
       tSelf.xhr = null;
-      tXHR._benri_overriden = false;
+      tXHR._degree_overriden = false;
 
       toPool(tXHR);
 
@@ -23023,8 +23311,10 @@ quickswf.logger.debug('+++ MP3');
         tXHR.responseType = 'arraybuffer';
       } else {
         tXHR.overrideMimeType('text/plain;charset=x-user-defined');
-        tXHR._benri_overriden = true;
+        tXHR._degree_overriden = true;
       }
+    } else if ('responseType' in tXHR) {
+      tXHR.responseType = 'arraybuffer';
     }
 
     tXHR.send(pData);
@@ -23041,7 +23331,71 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Kuu Miyazaki
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
+ * This code is licensed under the zlib license. See LICENSE for details.
+ */
+(function(global) {
+
+  var AudioContext = global.AudioContext || global.webkitAudioContext;
+
+  if (!AudioContext) {
+    return;
+  }
+
+  var mAudioContext = new AudioContext();
+
+  var degree = global.degree;
+  var Delay = degree.concurrent.Delay;
+  var Blob = degree.impl.web.Blob;
+
+  /**
+   * @class
+   * @extends {degree.media.audio.AudioData}
+   */
+  var WebAudio = (function(pSuper) {
+
+    /**
+     * A class representing audio data ready for playback.
+     * @constructor
+     */
+    function WebAudio(pData) {
+      pSuper.call(this, 'audio/*', pData);
+      this.context = mAudioContext;
+    }
+
+    WebAudio.prototype = Object.create(pSuper.prototype);
+    WebAudio.prototype.constructor = WebAudio;
+
+    return WebAudio;
+
+  }(degree.media.audio.AudioData));
+
+  WebAudio.fromBuffer = function(pData, pType) {
+    var tDelay = new Delay();
+    var tType = pType.toString();
+
+    mAudioContext.decodeAudioData(
+        pData.data.buffer,
+        function (pAudioBuffer) {
+            tDelay.resolve(new WebAudio(pAudioBuffer));
+        },  
+        function (e) {
+            tDelay.reject(e);
+        }   
+      );
+    return tDelay;
+  };
+
+  degree.content.Blob.register('audio/*', function(pEvent) {
+    pEvent.add(WebAudio, 12);
+  });
+
+}(this));
+
+/**
+ * @author Kuu Miyazaki
+ *
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 (function(global) {
@@ -23050,15 +23404,15 @@ quickswf.logger.debug('+++ MP3');
     return;
   }
 
-  var benri = global.benri;
-  var Delay = benri.concurrent.Delay;
-  var Blob = benri.impl.web.Blob;
-  var createObjectURL = benri.impl.web.createObjectURL;
-  var revokeObjectURL = benri.impl.web.revokeObjectURL;
+  var degree = global.degree;
+  var Delay = degree.concurrent.Delay;
+  var Blob = degree.impl.web.Blob;
+  var createObjectURL = degree.impl.web.createObjectURL;
+  var revokeObjectURL = degree.impl.web.revokeObjectURL;
 
   /**
    * @class
-   * @extends {benri.media.audio.AudioData}
+   * @extends {degree.media.audio.AudioData}
    */
   var HTMLAudio = (function(pSuper) {
 
@@ -23075,7 +23429,7 @@ quickswf.logger.debug('+++ MP3');
 
     return HTMLAudio;
 
-  }(benri.media.audio.AudioData));
+  }(degree.media.audio.AudioData));
 
   HTMLAudio.fromBuffer = function(pData, pType) {
     var tDelay = new Delay();
@@ -23101,7 +23455,27 @@ quickswf.logger.debug('+++ MP3');
     return tDelay;
   };
 
-  benri.content.Blob.register('audio/*', function(pEvent) {
+  HTMLAudio.fromURL = function(pURL, pType) {
+    var tDelay = new Delay();
+    var tType = pType.toString();
+
+    var tAudio = new global.Audio();
+    tAudio.src = pURL;
+
+    tAudio.addEventListener('loadeddata', function() {
+      tDelay.resolve(new HTMLAudio(tAudio));
+    }, false);
+
+    tAudio.addEventListener('error', function(e) {
+      tDelay.reject(e);
+    }, false);
+
+    tAudio.load();
+
+    return tDelay;
+  };
+
+  degree.content.Blob.register('audio/*', function(pEvent) {
     pEvent.add(HTMLAudio, 11);
   });
 
@@ -23110,7 +23484,7 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS.
+ * Copyright (C) 2013 degreeJS.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -23118,18 +23492,18 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * @class
-   * @extends {benri.content.Blob}
+   * @extends {degree.content.Blob}
    */
   var Image = (function(pSuper) {
-    var MimeType = benri.content.MimeType;
-    var Blob = benri.content.Blob;
-    var Delay = benri.concurrent.Delay;
+    var MimeType = degree.content.MimeType;
+    var Blob = degree.content.Blob;
+    var Delay = degree.concurrent.Delay;
 
     var mWildImageMimeType = new MimeType('image/*');
 
     /**
      * @constructor
-     * @param {benri.content.MimeType} pType The Mimetype
+     * @param {degree.content.MimeType} pType The Mimetype
      */
     function Image(pWidth, pHeight) {
       pSuper.call(this, new MimeType('image/*'));
@@ -23174,11 +23548,11 @@ quickswf.logger.debug('+++ MP3');
     };
 
     return Image;
-  })(benri.content.Blob);
+  })(degree.content.Blob);
 
-  benri.graphics.Image = Image;
+  degree.graphics.Image = Image;
 
-  benri.content.Blob.register('image/*', function(pEvent) {
+  degree.content.Blob.register('image/*', function(pEvent) {
     pEvent.add(Image, 5);
   });
 
@@ -23187,7 +23561,7 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS.
+ * Copyright (C) 2013 degreeJS.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -23197,16 +23571,16 @@ quickswf.logger.debug('+++ MP3');
     return;
   }
 
-  var mem = benri.mem;
-  var Delay = benri.concurrent.Delay;
+  var mem = degree.mem;
+  var Delay = degree.concurrent.Delay;
 
   var mInstancePoolEnabled = true;
   var mLRUPoolEnabled = true;
-  var ANTIALIAS = 'benri.graphics.surface.antialias';
+  var ANTIALIAS = 'degree.graphics.surface.antialias';
 
-  var mAntialias = benri.env.getVar(ANTIALIAS) || false;
+  var mAntialias = degree.env.getVar(ANTIALIAS) || false;
 
-  benri.env.on('setvar', function(pEvent) {
+  degree.env.on('setvar', function(pEvent) {
     if (pEvent.varName === ANTIALIAS) {
       mAntialias = pEvent.varValue;
     }
@@ -23220,7 +23594,7 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * @class
-   * @extends {benri.graphics.Image}
+   * @extends {degree.graphics.Image}
    */
   var DOMImage = (function(pSuper) {
 
@@ -23375,13 +23749,13 @@ quickswf.logger.debug('+++ MP3');
     };
 
     return DOMImage;
-  })(benri.graphics.Image);
+  })(degree.graphics.Image);
 
-  benri.impl.web.graphics.DOMImage = DOMImage;
+  degree.impl.web.graphics.DOMImage = DOMImage;
 
-  var Blob = benri.impl.web.Blob;
-  var createObjectURL = benri.impl.web.createObjectURL;
-  var revokeObjectURL = benri.impl.web.revokeObjectURL;
+  var Blob = degree.impl.web.Blob;
+  var createObjectURL = degree.impl.web.createObjectURL;
+  var revokeObjectURL = degree.impl.web.revokeObjectURL;
 
   DOMImage.fromBuffer = function(pBuffer, pType) {
     var tDelay = new Delay();
@@ -23405,7 +23779,7 @@ quickswf.logger.debug('+++ MP3');
     return tDelay;
   };
 
-  benri.content.Blob.register('image/*', function(pEvent) {
+  degree.content.Blob.register('image/*', function(pEvent) {
     pEvent.add(DOMImage, 11);
   });
 
@@ -23822,17 +24196,17 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
+  var degree = global.degree;
 
   /**
    * @class
-   * @extends {benri.graphics.Image}
+   * @extends {degree.graphics.Image}
    */
   var Texture = (function(pSuper) {
     /**
@@ -23871,7 +24245,7 @@ quickswf.logger.debug('+++ MP3');
      * This is to allow cross platform methods of handling
      * what exactly a texture is and how it deals with
      * the backing Image.
-     * @param {benri.graphics.draw.AbstractImage} pImage
+     * @param {degree.graphics.draw.AbstractImage} pImage
      */
     Texture.prototype.setImage = function(pImage) {
       this.surface.setTextureImage(this, pImage);
@@ -23882,16 +24256,16 @@ quickswf.logger.debug('+++ MP3');
     }
 
     return Texture;
-  })(benri.graphics.Image);
+  })(degree.graphics.Image);
 
-  benri.graphics.render.Texture = Texture;
+  degree.graphics.render.Texture = Texture;
 
 }(this));
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -23903,17 +24277,17 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * @class
-   * @extends {benri.graphics.Surface}
+   * @extends {degree.graphics.Surface}
    */
   var Canvas2DSurface = (function(pSuper) {
-    var DOMImage = benri.impl.web.graphics.DOMImage;
-    var Matrix2D = benri.geometry.Matrix2D;
-    var Records = benri.graphics.Records;
-    var Shader = benri.graphics.shader.Shader;
-    var Texture = benri.graphics.render.Texture;
-    var flag = benri.graphics.Surface.flag;
+    var DOMImage = degree.impl.web.graphics.DOMImage;
+    var Matrix2D = degree.geometry.Matrix2D;
+    var Records = degree.graphics.Records;
+    var Shader = degree.graphics.shader.Shader;
+    var Texture = degree.graphics.render.Texture;
+    var flag = degree.graphics.Surface.flag;
 
-    var mFragmentShaders = benri.impl.web.graphics.shader.fragment;
+    var mFragmentShaders = degree.impl.web.graphics.shader.fragment;
 
     /**
      * @constructor
@@ -24319,7 +24693,7 @@ quickswf.logger.debug('+++ MP3');
       return true;
     }
 
-    var mRawSizzorPolygon = new benri.geometry.Polygon([
+    var mRawSizzorPolygon = new degree.geometry.Polygon([
       0, 0,
       0, 0,
       0, 0,
@@ -24668,12 +25042,12 @@ quickswf.logger.debug('+++ MP3');
       }
     }
 
-    if (benri.impl.web.graphics.bugs.canvasSizeBug) {
+    if (degree.impl.web.graphics.bugs.canvasSizeBug) {
       tProto.flush = reflowHackFlush;
     }
 
-    benri.env.on('setvar', function(pEvent) {
-      if (pEvent.varName === 'benri.impl.web.graphics.canvasSizeBug') {
+    degree.env.on('setvar', function(pEvent) {
+      if (pEvent.varName === 'degree.impl.web.graphics.canvasSizeBug') {
         if (pEvent.varValue === true) {
           tProto.flush = reflowHackFlush;
         } else {
@@ -24983,34 +25357,34 @@ quickswf.logger.debug('+++ MP3');
     };
 
     return Canvas2DSurface;
-  }(benri.graphics.Surface));
+  }(degree.graphics.Surface));
 
-  benri.impl.add('graphics.surface', function(pData) {
+  degree.impl.add('graphics.surface', function(pData) {
     pData.add(Canvas2DSurface, 7);
   });
 
-  benri.impl.web.graphics.Canvas2DSurface = Canvas2DSurface;
+  degree.impl.web.graphics.Canvas2DSurface = Canvas2DSurface;
 
 }(this));
 
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var Matrix2D = benri.geometry.Matrix2D;
-  var Color = benri.graphics.draw.Color;
-  var Texture = benri.graphics.render.Texture;
-  var Records = benri.graphics.Records;
-  var Surface = benri.graphics.Surface;
+  var Matrix2D = degree.geometry.Matrix2D;
+  var Color = degree.graphics.draw.Color;
+  var Texture = degree.graphics.render.Texture;
+  var Records = degree.graphics.Records;
+  var Surface = degree.graphics.Surface;
 
-  var deepCopy = benri.util.deepCopy;
+  var deepCopy = degree.util.deepCopy;
 
-  benri.graphics.render.RenderContext = RenderContext;
+  degree.graphics.render.RenderContext = RenderContext;
 
   /**
    * @class
@@ -25043,7 +25417,7 @@ quickswf.logger.debug('+++ MP3');
 
     /**
      * The background colour of this context.
-     * @type {benri.graphics.draw.Color}
+     * @type {degree.graphics.draw.Color}
      */
     this.backgroundColor = new Color(0, 0, 0, 0);
 
@@ -25096,7 +25470,7 @@ quickswf.logger.debug('+++ MP3');
    * Creates a new Texture attached to this context.
    * Don't forget to call destroyTexture when finished with it.
    * @param  {object} pImage The Image to use for the Texture.
-   * @return {benri.graphics.render.Texture} The newly created Texture.
+   * @return {degree.graphics.render.Texture} The newly created Texture.
    */
   RenderContext.prototype.createTexture = function(pImage) {
     return new Texture(this.surface, pImage.getWidth(), pImage.getHeight(), pImage);
@@ -25105,7 +25479,7 @@ quickswf.logger.debug('+++ MP3');
   /**
    * Creates a new Texture with the given dimentions.
    * Use this when you want an empty Texture to render in to.
-   * @return {benri.graphics.render.Texture} The newly created Texture.
+   * @return {degree.graphics.render.Texture} The newly created Texture.
    */
   RenderContext.prototype.createEmptyTexture = function(pWidth, pHeight) {
     return new Texture(this.surface, pWidth, pHeight, null);
@@ -25113,9 +25487,9 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * Renders a Texture to this context.
-   * @param  {benri.graphics.render.Texture} pTexture The texture to render.
-   * @param  {benri.geometry.Rect=} pSourceRect A rectangluar area of the Texture to render to the context.
-   * @param  {benri.geometry.Rect=} pDestRect   A rectangular area on the context to render the Texture to.
+   * @param  {degree.graphics.render.Texture} pTexture The texture to render.
+   * @param  {degree.geometry.Rect=} pSourceRect A rectangluar area of the Texture to render to the context.
+   * @param  {degree.geometry.Rect=} pDestRect   A rectangular area on the context to render the Texture to.
    */
   RenderContext.prototype.renderTexture = function(pTexture, pSourceRect, pDestRect) {
     var tRecords = this.records;
@@ -25136,7 +25510,7 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * Renders the current target to the given Texture.
-   * @param  {benri.graphics.render.Texture} pTexture The Texture to render to.
+   * @param  {degree.graphics.render.Texture} pTexture The Texture to render to.
    */
   RenderContext.prototype.renderToTexture = function(pTexture) {
     if (!pTexture) {
@@ -25292,20 +25666,20 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  benri.graphics.Program = Program;
+  degree.graphics.Program = Program;
 
-  var Keeper = benri.mem.Keeper;
-  var Shader = benri.graphics.shader.Shader;
-  var Records = benri.graphics.Records;
-  var VertexBuffer = benri.geometry.VertexBuffer;
-  var Matrix2D = benri.geometry.Matrix2D;
-  var Image = benri.graphics.Image;
+  var Keeper = degree.mem.Keeper;
+  var Shader = degree.graphics.shader.Shader;
+  var Records = degree.graphics.Records;
+  var VertexBuffer = degree.geometry.VertexBuffer;
+  var Matrix2D = degree.geometry.Matrix2D;
+  var Image = degree.graphics.Image;
 
   var mProgramIdCounter = 0;
 
@@ -25633,21 +26007,21 @@ quickswf.logger.debug('+++ MP3');
 (function(global) {
 
   var theatre = global.theatre;
-  var benri = global.benri;
-  var RenderContext = benri.graphics.render.RenderContext;
+  var degree = global.degree;
+  var RenderContext = degree.graphics.render.RenderContext;
   var swfcrew = theatre.crews.swf;
-  var Color = benri.graphics.draw.Color;
-  var Program = benri.graphics.Program;
-  var Shader = benri.graphics.shader.Shader;
-  var Matrix2D = benri.geometry.Matrix2D;
-  var Rect = benri.geometry.Rect;
-  var flag = benri.graphics.Surface.flag;
-  var ColorShader = benri.graphics.shader.fragment.ColorShader;
-  var ImageShader = benri.graphics.shader.fragment.ImageShader;
-  var LinearGradientShader = benri.graphics.shader.fragment.LinearGradientShader;
-  var RadialGradientShader = benri.graphics.shader.fragment.RadialGradientShader;
-  var ColorTransformShader = benri.graphics.shader.fragment.ColorTransformShader;
-  var AlphaShader = benri.graphics.shader.fragment.AlphaShader;
+  var Color = degree.graphics.draw.Color;
+  var Program = degree.graphics.Program;
+  var Shader = degree.graphics.shader.Shader;
+  var Matrix2D = degree.geometry.Matrix2D;
+  var Rect = degree.geometry.Rect;
+  var flag = degree.graphics.Surface.flag;
+  var ColorShader = degree.graphics.shader.fragment.ColorShader;
+  var ImageShader = degree.graphics.shader.fragment.ImageShader;
+  var LinearGradientShader = degree.graphics.shader.fragment.LinearGradientShader;
+  var RadialGradientShader = degree.graphics.shader.fragment.RadialGradientShader;
+  var ColorTransformShader = degree.graphics.shader.fragment.ColorTransformShader;
+  var AlphaShader = degree.graphics.shader.fragment.AlphaShader;
   var ShapeVertexShader = swfcrew.render.ShapeVertexShader;
   var MorphShapeVertexShader = swfcrew.render.MorphShapeVertexShader;
 
@@ -25980,19 +26354,19 @@ quickswf.logger.debug('+++ MP3');
 
   var utils = theatre.crews.swf.utils;
 
-  var Path = benri.geometry.Path;
-  var Point = benri.geometry.Point;
-  var Rect = benri.geometry.Rect;
-  var Matrix2D = benri.geometry.Matrix2D;
+  var Path = degree.geometry.Path;
+  var Point = degree.geometry.Point;
+  var Rect = degree.geometry.Rect;
+  var Matrix2D = degree.geometry.Matrix2D;
 
-  var Color = benri.graphics.draw.Color;
-  var ComponentColor = benri.graphics.draw.ComponentColor;
-  var StrokeStyle = benri.graphics.draw.StrokeStyle;
-  var GradientStyle = benri.graphics.draw.GradientStyle;
+  var Color = degree.graphics.draw.Color;
+  var ComponentColor = degree.graphics.draw.ComponentColor;
+  var StrokeStyle = degree.graphics.draw.StrokeStyle;
+  var GradientStyle = degree.graphics.draw.GradientStyle;
 
-  var Records = benri.graphics.Records;
+  var Records = degree.graphics.Records;
   
-  var TYPE_FRAGMENT = benri.graphics.shader.Shader.TYPE_FRAGMENT;
+  var TYPE_FRAGMENT = degree.graphics.shader.Shader.TYPE_FRAGMENT;
   
   var mPrograms = theatre.crews.swf.render.Compositor.programs;
 
@@ -26113,17 +26487,17 @@ quickswf.logger.debug('+++ MP3');
     var tType = pStyle.type;
 
     /**
-     * @type {benri.graphics.draw.Color}
+     * @type {degree.graphics.draw.Color}
      */
     var tColor;
 
     /**
-     * @type {benri.graphics.shader.Shader}
+     * @type {degree.graphics.shader.Shader}
      */
     var tShader;
 
     /**
-     * @type {benri.geometry.Matrix2D}
+     * @type {degree.geometry.Matrix2D}
      */
     var tMatrix;
 
@@ -26861,9 +27235,9 @@ quickswf.logger.debug('+++ MP3');
   /**
    * Draws the given SWF shape to the given Canvas.
    * @param  {quickswf.structs.Shape} pShape The shape to draw.
-   * @param  {benri.graphics.draw.Canvas} pCanvas The Canvas to draw on to.
+   * @param  {degree.graphics.draw.Canvas} pCanvas The Canvas to draw on to.
    * @param  {quickswf.utils.MediaLoader} pResources Loaded resources to use.
-   * @return {benri.geometry.Rect} The bounding box that can contain every paths.
+   * @return {degree.geometry.Rect} The bounding box that can contain every paths.
    */
   mShape.drawShape = function(pShape, pResources, pIsMorphShape) {
     var tFillStyles = pShape.fillStyles;
@@ -27065,7 +27439,7 @@ quickswf.logger.debug('+++ MP3');
   var QuickSWFGradient = quickswf.structs.GRADIENT;
   var QuickSWFStyleChangedRecord = quickswf.structs.STYLECHANGERECORD;
   var QuickSWFStop = quickswf.structs.Stop;
-  var Matrix2D = global.benri.geometry.Matrix2D;
+  var Matrix2D = global.degree.geometry.Matrix2D;
   var StraightEdge = mSWFCrew.utils.shape.StraightEdge;
   var CurvedEdge = mSWFCrew.utils.shape.CurvedEdge;
   var shapeGenerateRecords = mSWFCrew.utils.shape.generateRecords;
@@ -27368,12 +27742,12 @@ quickswf.logger.debug('+++ MP3');
 (function(global) {
 
   var render = theatre.crews.swf.render;
-  var Matrix2D = benri.geometry.Matrix2D;
+  var Matrix2D = degree.geometry.Matrix2D;
   var mCacheProgram = theatre.crews.swf.render.Compositor.programs.cache.program;
 
   /**
    * @class
-   * @extends {benri.graphics.render.Renderable}
+   * @extends {degree.graphics.render.Renderable}
    */
   var DisplayListRenderable = (function(pSuper) {
     function DisplayListRenderable(pRenderData) {
@@ -27397,7 +27771,7 @@ quickswf.logger.debug('+++ MP3');
 
     return DisplayListRenderable;
 
-  })(benri.graphics.render.Renderable);
+  })(degree.graphics.render.Renderable);
 
   render.DisplayListRenderable = DisplayListRenderable;
 
@@ -27546,23 +27920,23 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function(global) {
 
-  var benri = global.benri;
-  var Matrix2D = benri.geometry.Matrix2D;
-  var Records = benri.graphics.Records;
-  var Color = benri.graphics.draw.Color;
-  var Program = benri.graphics.Program;
-  var Shader = benri.graphics.shader.Shader;
-  var ColorShader = benri.graphics.shader.fragment.ColorShader;
-  var Surface = benri.graphics.Surface;
-  var TextVertexShader = benri.graphics.draw.TextVertexShader;
+  var degree = global.degree;
+  var Matrix2D = degree.geometry.Matrix2D;
+  var Records = degree.graphics.Records;
+  var Color = degree.graphics.draw.Color;
+  var Program = degree.graphics.Program;
+  var Shader = degree.graphics.shader.Shader;
+  var ColorShader = degree.graphics.shader.fragment.ColorShader;
+  var Surface = degree.graphics.Surface;
+  var TextVertexShader = degree.graphics.draw.TextVertexShader;
 
-  benri.graphics.draw.Canvas = Canvas;
+  degree.graphics.draw.Canvas = Canvas;
 
   /**
    * A class for drawing 2D bitmaps on to a surface.
@@ -27611,14 +27985,14 @@ quickswf.logger.debug('+++ MP3');
 
     /**
      * The Surface of this Canvas.
-     * @type {benri.graphics.draw.Surface}
+     * @type {degree.graphics.draw.Surface}
      */
     this.surface = null;
 
     /**
      * Holds the last used matrix.
      * @private
-     * @type {benri.geometry.Matrix2D}
+     * @type {degree.geometry.Matrix2D}
      */
     this._lastMatrix = this.matrix.clone();
 
@@ -27641,7 +28015,7 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * Sets the surface for this Canvas
-   * @param {benri.graphics.draw.Surface} pSurface The Surface.
+   * @param {degree.graphics.draw.Surface} pSurface The Surface.
    */
   Canvas.prototype.setSurface = function(pSurface) {
     this.surface = pSurface;
@@ -27707,7 +28081,7 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * Fill the given Path with the given Style.
-   * @param  {benri.geometry.Path} pPath  The Path to fill.
+   * @param  {degree.geometry.Path} pPath  The Path to fill.
    */
   Canvas.prototype.fillPolygon = function(pPolygon) {
     var tRecords = this.records;
@@ -27721,7 +28095,7 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * Fill the given Path.
-   * @param  {benri.geometry.Path} pPath The Path to stroke.
+   * @param  {degree.geometry.Path} pPath The Path to stroke.
    */
   Canvas.prototype.fillPath = function(pPath) {
     var tRecords = this.records;
@@ -27735,8 +28109,8 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * Stroke the given Path with the given StrokeStyle.
-   * @param  {benri.geometry.Path} pPath The Path to stroke.
-   * @param  {benri.graphics.draw.StrokeStyle} pStrokeStyle The StrokeStyle to use to stroke.
+   * @param  {degree.geometry.Path} pPath The Path to stroke.
+   * @param  {degree.graphics.draw.StrokeStyle} pStrokeStyle The StrokeStyle to use to stroke.
    */
   Canvas.prototype.strokePath = function(pPath, pStrokeStyle) {
     var tRecords = this.records;
@@ -27771,8 +28145,8 @@ quickswf.logger.debug('+++ MP3');
    * Draws the given Image to this Canvas using the given Style
    * at the given position.
    * @param  {object} pImage The Image to draw.
-   * @param  {benri.geometry.Rect} pDestRect  The destination on this Canvas to draw to.
-   * @param  {benri.geometry.Rect} pSourceRect  The source rect to sample from to draw to the Canvas.
+   * @param  {degree.geometry.Rect} pDestRect  The destination on this Canvas to draw to.
+   * @param  {degree.geometry.Rect} pSourceRect  The source rect to sample from to draw to the Canvas.
    */
   Canvas.prototype.drawImageWithRects = function(pImage, pDestRect, pSourceRect) {
     this._syncMatrix();
@@ -27783,7 +28157,7 @@ quickswf.logger.debug('+++ MP3');
   /**
    * Draws text to the Canvas.
    * @param  {string} pText The text to draw.
-   * @param  {benri.graphics.draw.TextStyle} pStyle  The Style to use to draw the text.
+   * @param  {degree.graphics.draw.TextStyle} pStyle  The Style to use to draw the text.
    */
   Canvas.prototype.drawText = function(pText, pStyle) {
     var tFont = pStyle.font;
@@ -27866,7 +28240,7 @@ quickswf.logger.debug('+++ MP3');
 
   /**
    * Clears the Canvas with the given Color.
-   * @param  {benri.graphics.draw.Color} pColor The Color to clear with.
+   * @param  {degree.graphics.draw.Color} pColor The Color to clear with.
    */
   Canvas.prototype.clear = function(pColor) {
     if (this.surface !== null) {
@@ -27911,7 +28285,7 @@ quickswf.logger.debug('+++ MP3');
    * When this is called, all draw commands must
    * be flushed first so that the Image returned
    * is a representation of the current draw records.
-   * @return {benri.graphics.draw.Image} The Image.
+   * @return {degree.graphics.draw.Image} The Image.
    */
   Canvas.prototype.getImage = function() {
     this.flush();
@@ -27954,7 +28328,7 @@ quickswf.logger.debug('+++ MP3');
   };
 
   /**
-   * Returns benri.graphics.Records object.
+   * Returns degree.graphics.Records object.
    */
   Canvas.prototype.getRecords = function(pSplice) {
     var tRecords;
@@ -27971,8 +28345,8 @@ quickswf.logger.debug('+++ MP3');
   };
 
   /**
-   * Appends benri.graphics.Records object.
-   * @param {benri.graphics.Records} pRecords
+   * Appends degree.graphics.Records object.
+   * @param {degree.graphics.Records} pRecords
    */
   Canvas.prototype.appendRecords = function(pRecords) {
     this.records.concat(pRecords);
@@ -28009,14 +28383,14 @@ quickswf.logger.debug('+++ MP3');
 
   var theatre = global.theatre;
   var mShapeUtils = theatre.crews.swf.utils.shape;
-  var Canvas = global.benri.graphics.draw.Canvas;
-  var Color = global.benri.graphics.draw.Color;
-  var Glyph = global.benri.graphics.draw.Glyph;
+  var Canvas = global.degree.graphics.draw.Canvas;
+  var Color = global.degree.graphics.draw.Color;
+  var Glyph = global.degree.graphics.draw.Glyph;
   var QuickSWFShape = quickswf.structs.Shape;
   var CXFORM = quickswf.structs.CXFORM;
-  var Shader = benri.graphics.shader.Shader;
-  var ColorTransformShader = benri.graphics.shader.fragment.ColorTransformShader;
-  var AlphaShader = benri.graphics.shader.fragment.AlphaShader;
+  var Shader = degree.graphics.shader.Shader;
+  var ColorTransformShader = degree.graphics.shader.fragment.ColorTransformShader;
+  var AlphaShader = degree.graphics.shader.fragment.AlphaShader;
 
   theatre.crews.swf.render.renderPropOnEditTextPreRender = onEditTextPreRender;
   theatre.crews.swf.render.renderPropOnEditTextPostRender = onEditTextPostRender;
@@ -28313,7 +28687,7 @@ quickswf.logger.debug('+++ MP3');
   var ColorTransform = mSWFCrew.structs.ColorTransform;
   var TextActor = mSWFCrew.actors.TextActor;
   var EditTextActor = mSWFCrew.actors.EditTextActor;
-  var Matrix2D = benri.geometry.Matrix2D;
+  var Matrix2D = degree.geometry.Matrix2D;
 
   var mActionsMap = mSWFCrew.actionsMap;
 
@@ -28477,9 +28851,9 @@ quickswf.logger.debug('+++ MP3');
 
   var mSWFCrew = theatre.crews.swf;
   var mHandlers = mSWFCrew.handlers;
-  var Color = benri.graphics.draw.Color;
-  var Font = benri.graphics.draw.Font;
-  var TextStyle = benri.graphics.draw.TextStyle;
+  var Color = degree.graphics.draw.Color;
+  var Font = degree.graphics.draw.Font;
+  var TextStyle = degree.graphics.draw.TextStyle;
   var EditTextActor = mSWFCrew.actors.EditTextActor;
   var DisplayListRenderable = mSWFCrew.render.DisplayListRenderable;
 
@@ -28602,16 +28976,16 @@ quickswf.logger.debug('+++ MP3');
   var mHandlers = mSWFCrew.handlers;
   var mShapeUtils = mSWFCrew.utils.shape;
   var TextActor = mSWFCrew.actors.TextActor;
-  var Color = global.benri.graphics.draw.Color;
-  var Canvas = global.benri.graphics.draw.Canvas;
-  var Font = global.benri.graphics.draw.Font;
-  var Glyph = global.benri.graphics.draw.Glyph;
-  var TextStyle = global.benri.graphics.draw.TextStyle;
-  var Matrix2D = global.benri.geometry.Matrix2D;
+  var Color = global.degree.graphics.draw.Color;
+  var Canvas = global.degree.graphics.draw.Canvas;
+  var Font = global.degree.graphics.draw.Font;
+  var Glyph = global.degree.graphics.draw.Glyph;
+  var TextStyle = global.degree.graphics.draw.TextStyle;
+  var Matrix2D = global.degree.geometry.Matrix2D;
   var QuickSWFShape = quickswf.structs.Shape;
-  var Shader = benri.graphics.shader.Shader;
-  var ColorTransformShader = benri.graphics.shader.fragment.ColorTransformShader;
-  var AlphaShader = benri.graphics.shader.fragment.AlphaShader;
+  var Shader = degree.graphics.shader.Shader;
+  var ColorTransformShader = degree.graphics.shader.fragment.ColorTransformShader;
+  var AlphaShader = degree.graphics.shader.fragment.AlphaShader;
   var DisplayListRenderable = mSWFCrew.render.DisplayListRenderable;
 
   function createFont(pSwfFont) {
@@ -28695,7 +29069,7 @@ quickswf.logger.debug('+++ MP3');
           tFont, tStyle, tGlyph, tCharCode, tString = '',
           tShape, tGlyphIndex;
 
-      // Get benri.graphics.draw.Font object.
+      // Get degree.graphics.draw.Font object.
       if (!(tFont = this.getFontCache(tFontId))) {
         tFont = createFont(tSwfFont);
         this.setFontCache(tFontId, tFont);
@@ -28790,16 +29164,16 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2014 BenriJS Project.
+ * Copyright (C) 2014 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
 (function() {
 
-  benri.content.Manifest = Manifest;
+  degree.content.Manifest = Manifest;
 
-  var mGetBlobClasses = benri.content.Blob.getClasses;
-  var MimeType = benri.content.MimeType;
+  var mGetBlobClasses = degree.content.Blob.getClasses;
+  var MimeType = degree.content.MimeType;
 
   /**
    * @class
@@ -28807,7 +29181,7 @@ quickswf.logger.debug('+++ MP3');
    * @param {Object=} pPackage A package describing the manifest.
    */
   function Manifest(pPackage) {
-    benri.event.PersistentEventEmitter(this);
+    degree.event.PersistentEventEmitter(this);
 
     this._repo = {};
     this._entryLoadingCounter = 0;
@@ -28830,9 +29204,9 @@ quickswf.logger.debug('+++ MP3');
   /**
    * Add a new URL resource to this Manifest
    * @param {string} pId  A unique ID to identify this resource by
-   * @param {string|benri.net.URL} pURL The URL to download from
+   * @param {string|degree.net.URL} pURL The URL to download from
    * @param {string} pMimeType The mimetype of the resource
-   * @return {benri.content.Manifest} This Manifest
+   * @return {degree.content.Manifest} This Manifest
    */
   tProto.addURL = function(pId, pURL, pMimeType) {
     var tRepo = this._repo;
@@ -28853,9 +29227,9 @@ quickswf.logger.debug('+++ MP3');
   /**
    * Add a new URL resource to this Manifest
    * @param {string} pId  A unique ID to identify this resource by
-   * @param {benri.io.Buffer} pData The data of the resource
-   * @param {string|benri.content.MimeType} pMimeType The mimetype of the resource
-   * @return {benri.content.Manifest} This Manifest
+   * @param {degree.io.Buffer} pData The data of the resource
+   * @param {string|degree.content.MimeType} pMimeType The mimetype of the resource
+   * @return {degree.content.Manifest} This Manifest
    */
   tProto.addBuffer = function(pId, pBuffer, pMimeType) {
     var tRepo = this._repo;
@@ -29070,8 +29444,8 @@ quickswf.logger.debug('+++ MP3');
     var tBestClass, tBestVariant;
     var tBestScore = -1;
     var tThenCB = createEntryBlobThenCallback(this);
-    var tAsCB = createEntryBlobThenCallback(this);
-    var tCatchCB = createEntryBlobThenCallback(this);
+    var tAsCB = createEntryBlobAsCallback(this);
+    var tCatchCB = createEntryBlobCatchCallback(this);
 
     for (k in tVariants) {
       tVariant = tVariants[k];
@@ -29088,18 +29462,30 @@ quickswf.logger.debug('+++ MP3');
     this.activeVariant = tBestVariant;
 
     if (tBestVariant.variantType === VARIANT_TYPE_BUFFER) {
+      // Input is a Buffer.
       tBestClass.fromBuffer(tBestVariant.buffer, tBestVariant.type)
       .then(tThenCB)
       .as(tAsCB)
       .catch(tCatchCB);
     } else {
-      (new benri.net.Request(tBestVariant.url, 'GET', true)).send()
-      .then(function (pResponse) {
-        tBestClass.fromBuffer(pResponse.body, tBestVariant.type)
+      // Input is a URL.
+      if (tBestClass.fromURL) {
+        // Create a blob directly from the URL.
+        tBestClass.fromURL(tBestVariant.url, tBestVariant.type)
         .then(tThenCB)
         .as(tAsCB)
         .catch(tCatchCB);
-      }).catch(tCatchCB);
+      } else {
+        // Make an HTTP request to get a buffer.
+        (new degree.net.Request(tBestVariant.url, 'GET', true)).send()
+        .then(function (pResponse) {
+          // Then create a blob from the buffer.
+          tBestClass.fromBuffer(pResponse.body, tBestVariant.type)
+          .then(tThenCB)
+          .as(tAsCB)
+          .catch(tCatchCB);
+        }).catch(tCatchCB);
+      }
     }
   }
 
@@ -29157,7 +29543,7 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 
@@ -29169,7 +29555,7 @@ quickswf.logger.debug('+++ MP3');
 /**
  * @author Jason Parrott
  *
- * Copyright (C) 2013 BenriJS Project.
+ * Copyright (C) 2013 degreeJS Project.
  * This code is licensed under the zlib license. See LICENSE for details.
  */
 /*
@@ -29199,10 +29585,10 @@ return;
     return;
   }
   var WebGLSurface = (function(pSuper) {
-    var DOMImage = benri.impl.web.graphics.DOMImage;
-    var Texture = benri.graphics.render.Texture;
-    var Matrix2D = benri.geometry.Matrix2D;
-    var flag = benri.graphics.Surface.flag;
+    var DOMImage = degree.impl.web.graphics.DOMImage;
+    var Texture = degree.graphics.render.Texture;
+    var Matrix2D = degree.geometry.Matrix2D;
+    var flag = degree.graphics.Surface.flag;
 
     function WebGLSurface(pWidth, pHeight, pHints) {
       pSuper.call(this, pWidth, pHeight, pHints);
@@ -29672,13 +30058,13 @@ return;
     };
 
     return WebGLSurface;
-  })(benri.graphics.Surface);
+  })(degree.graphics.Surface);
 
-  benri.impl.add('graphics.surface', function(pData) {
+  degree.impl.add('graphics.surface', function(pData) {
     pData.add(WebGLSurface, 9);
   });
 
-  benri.impl.web.graphics.WebGLSurface = WebGLSurface;
+  degree.impl.web.graphics.WebGLSurface = WebGLSurface;
 
 }(this));
 */

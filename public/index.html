@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0,user-scalable=yes" />
   <title>Wipe Em Out</title>
 
+  <!-- soundcloud SDK -->
+  <script src="http://connect.soundcloud.com/sdk.js"></script>
+
   <!-- angular.js -->
   <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.11/angular.js"></script>
   <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.11/angular-route.js"></script>
@@ -48,5 +51,14 @@
   <div class="span10">
     <div ng-view></div>
   </div>
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // initialize client with app credentials
+    SC.initialize({
+      client_id: '82f28fb7984a058db4c11149aa29e572',
+      redirect_uri: 'http://localhost/root/#/'
+    });
+  }, false);
+  </script>
 </body>
 </html>

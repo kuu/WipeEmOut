@@ -159,7 +159,13 @@ function btnStopRecording() {
 }
 
 function btnUploadVoice(container, volume) {
-  container.innerHTML = '';
-  window.bgmAudio.volume = volume;
-  window.swfPlayer.play();
+  // initiate auth popup
+  SC.connect(function() {
+    SC.get('/me', function(me) { 
+      //alert('Hello, ' + me.username); 
+      container.innerHTML = '';
+      window.bgmAudio.volume = volume;
+      window.swfPlayer.play();
+    });
+  });
 }

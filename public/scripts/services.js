@@ -124,7 +124,7 @@ services.factory('BGM', function () {
     stop: function () {
       self.pause();
       state = 'ready';
-      audio = null;
+      window.bgmAudio = audio = null;
     }
   };
   return self;

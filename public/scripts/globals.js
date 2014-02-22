@@ -36,23 +36,29 @@ function WipeEmOut_DoFSCommand(command, args) {
   var tCanvas = document.createElement('canvas');
   tCanvas.id = 'view1';
   tCanvas.width = 582;
-  tCanvas.height = 150;
+  tCanvas.height = 480;
   tDiv.appendChild(tCanvas);
   container.appendChild(tDiv);
 
   getUserMedia({audio:true}, gotStream);
 
   var button = document.createElement('button');
-  button.innerText = 'Stop recording';
+  button.innerText = 'Start recording';
   button.addEventListener('click', function () {
     if (!window.microphone) {
       return;
     }
-    if (button.innerText === 'Stop recording') {
+
+    if (button.innerText === 'Start recording') {
+      recorder = new Recorder(window.voiceOutput);
+      recorder.record();
+      button.innerText = 'Stop recording';
+    } else if (button.innerText === 'Stop recording') {
       btnStopRecording();
       button.innerText = 'Upload your voice';
     } else {
       btnUploadVoice(container, volume);
+      window.microphone = null;
     }
   }, false);
   container.appendChild(button);
@@ -85,8 +91,7 @@ function WipeEmOut_DoFSCommand(command, args) {
 
   initBandpassFilters();
 
-  recorder = new Recorder(window.voiceOutput);
-  recorder.record();
+  window.voiceOutput.gain.value = 7.5;
 
   window.swfPlayer.pause();
 }
@@ -125,6 +130,8 @@ function stopRecording() {
   createDownloadLink();
     
   recorder.clear();
+  window.voiceOutput = null;
+  recorder = null;
 }
 
 function createDownloadLink() {

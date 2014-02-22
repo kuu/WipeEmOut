@@ -27,6 +27,8 @@ function parseOptions(pAttrs, pOverride) {
       tOptions[k] = pAttrs[k];
     } else if (k === 'width' || k === 'height') {
       tOptions[k] = parseInt(pAttrs[k]);
+    } else if (k === 'name') {
+      tOptions[k] = pAttrs[k];
     }
   }
 

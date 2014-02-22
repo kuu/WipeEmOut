@@ -100,7 +100,7 @@ services.factory('BGM', function () {
         audio.play();
         state = 'playing';
       } else if (state === 'ready') {
-        audio = new Audio(),
+        window.bgmAudio = audio = new Audio(),
         audio.src = "assets/bgm.mp3";
         audio.addEventListener('canplay', function () {
           audio.currentTime = 5.5;

@@ -4,19 +4,43 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0,user-scalable=yes" />
   <title>Wipe Em Out</title>
+
+  <!-- angular.js -->
   <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.11/angular.js"></script>
   <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.11/angular-route.js"></script>
+
+  <!-- swfcrew -->
   <script src="scripts/vendor/swfcrew.js"></script>
+
+  <!-- vocoder.js -->
+  <script src="scripts/vendor/vocoder.js"></script>
+  <script src="scripts/vendor/waveshaper.js"></script>
+
+  <!-- visualizer.js -->
+  <script src="scripts/vendor/visualizer/base.js"></script>
+  <script src="scripts/vendor/visualizer/events.js"></script>
+  <script src="scripts/vendor/visualizer/matrix4x4.js"></script>
+  <script src="scripts/vendor/visualizer/visualizer.js"></script>
+  <script src="scripts/vendor/visualizer/shader.js"></script>
+  <script src="scripts/vendor/visualizer/cameracontroller.js"></script>
+
+  <!-- recoder.js -->
+  <script src="scripts/vendor/recorder.js"></script>
+
+  <!-- application code -->
   <script src="scripts/app.js"></script>
   <script src="scripts/directives.js"></script>
   <script src="scripts/services.js"></script>
   <script src="scripts/controllers.js"></script>
+  <script src="scripts/globals.js"></script>
+
   <link href="styles/app.css" rel="stylesheet">
 </head>
 <body ng-app="app">
   <header>
     <h1>Wipe Em Out</h1>
   </header>
+  <div id="container"></div>
   <div class="span10">
     <div><a href="#/">Home</a></div>
   </div>

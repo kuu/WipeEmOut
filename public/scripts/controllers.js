@@ -37,7 +37,7 @@ controllers.controller('GameCtrl', [
 
   $scope.init = function(swf) {
 
-    player = swf;
+    window.swfPlayer = player = swf;
     swipe.onLeft = function () {
       swf.SetVariable('direction', 'left');
     };

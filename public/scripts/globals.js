@@ -94,6 +94,8 @@ function WipeEmOut_DoFSCommand(command, args) {
   window.voiceOutput.gain.value = 7.5;
 
   window.swfPlayer.pause();
+
+  window.swfPlayer.container.style.display = 'none';
 }
 
 function downloadAudioFromURL( url, cb ){
@@ -166,6 +168,7 @@ function btnUploadVoice(container, volume) {
       container.innerHTML = '';
       window.bgmAudio.volume = volume;
       window.swfPlayer.play();
+      window.swfPlayer.container.style.display = 'block';
     });
   });
 }

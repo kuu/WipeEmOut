@@ -38,6 +38,7 @@ controllers.controller('GameCtrl', [
   $scope.init = function(swf) {
 
     window.swfPlayer = player = swf;
+    window.swipeObject = swipe;
     swipe.onLeft = function () {
       swf.SetVariable('direction', 'left');
     };
@@ -59,6 +60,8 @@ controllers.controller('GameCtrl', [
       needTerm = false;
       player.pause();
       player = null;
+      delete window.swfPlayer;
+      delete window.swipeObject;
     }
   });
 }]);

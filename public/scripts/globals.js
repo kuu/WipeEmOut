@@ -28,11 +28,13 @@ function WipeEmOut_DoFSCommand(command, args) {
     audio.volume /= 2;
   }
 
+  window.swfPlayer.pause();
+  window.swfPlayer.container.style.display = 'none';
+
   var container = document.getElementById('container');
   container.innerHTML = "<h3>Live input to the Vocoder!</h3>";
 
   var tDiv = document.createElement('div');
-
   var tCanvas = document.createElement('canvas');
   tCanvas.id = 'view1';
   tCanvas.width = 582;
@@ -42,29 +44,6 @@ function WipeEmOut_DoFSCommand(command, args) {
 
   getUserMedia({audio:true}, gotStream);
 
-  var button = document.createElement('button');
-  button.innerText = 'Start recording';
-  button.addEventListener('click', function () {
-    if (!window.microphone) {
-      return;
-    }
-
-    if (button.innerText === 'Start recording') {
-      recorder = new Recorder(window.voiceOutput);
-      recorder.record();
-      button.innerText = 'Stop recording';
-    } else if (button.innerText === 'Stop recording') {
-      btnStopRecording();
-      button.innerText = 'Upload your voice';
-    } else {
-      btnUploadVoice(container, volume);
-      window.microphone = null;
-    }
-  }, false);
-  container.appendChild(button);
-
-  recordingslist = document.createElement('ul');
-  container.appendChild(recordingslist);
 
   cheapAnalysis = (navigator.userAgent.indexOf("Android")!=-1)||(navigator.userAgent.indexOf("iPad")!=-1)||(navigator.userAgent.indexOf("iPhone")!=-1);;
 	generateVocoderBands( 55, 7040, cheapAnalysis ? 14 : 28 );
@@ -91,11 +70,41 @@ function WipeEmOut_DoFSCommand(command, args) {
 
   initBandpassFilters();
 
-  window.voiceOutput.gain.value = 7.5;
+  var range = document.createElement('input');
+  range.type = 'range';
+  range.min = 0;
+  range.max = 10;
+  window.voiceOutput.gain.value = range.value = 7.5;
+  range.addEventListener('change', function () {
+    window.voiceOutput.gain.value = range.value;
+  }, false); 
+  container.appendChild(range);
 
-  window.swfPlayer.pause();
+  var button = document.createElement('button');
+  button.innerText = 'Start recording';
+  button.addEventListener('click', function () {
+    if (!window.microphone) {
+      return;
+    }
 
-  window.swfPlayer.container.style.display = 'none';
+    if (button.innerText === 'Start recording') {
+      recorder = new Recorder(window.voiceOutput);
+      recorder.record();
+      button.innerText = 'Stop recording';
+    } else if (button.innerText === 'Stop recording') {
+      btnStopRecording();
+      button.innerText = 'Upload your voice';
+    } else {
+      btnUploadVoice(container, volume);
+      window.microphone = null;
+    }
+  }, false);
+  container.appendChild(button);
+
+  recordingslist = document.createElement('ul');
+  container.appendChild(recordingslist);
+
+  window.swipeObject.disable();
 }
 
 function downloadAudioFromURL( url, cb ){
@@ -167,8 +176,20 @@ function btnUploadVoice(container, volume) {
       //alert('Hello, ' + me.username); 
       container.innerHTML = '';
       window.bgmAudio.volume = volume;
-      window.swfPlayer.play();
-      window.swfPlayer.container.style.display = 'block';
+      var swipe = window.swipeObject;
+      var swf = window.swfPlayer;
+      swipe.enable();
+      swipe.onLeft = function () {
+        swf.SetVariable('direction', 'left');
+      };
+      swipe.onRight = function () {
+        swf.SetVariable('direction', 'right');
+      };
+      swipe.onTap = function () {
+        swf.SetVariable('state', 'fire');
+      };
+      swf.play();
+      swf.container.style.display = 'block';
     });
   });
 }

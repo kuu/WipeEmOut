@@ -19,6 +19,8 @@ var recorder;
 
 var recordingslist;
 
+//var recordedData;
+
 function WipeEmOut_DoFSCommand(command, args) {
 
   var audio = window.bgmAudio, volume;
@@ -44,6 +46,13 @@ function WipeEmOut_DoFSCommand(command, args) {
 
   getUserMedia({audio:true}, gotStream);
 
+  // initiate auth popup
+  SC.connect(function() {
+    SC.record({
+      start: function() {
+      }
+    });
+  });
 
   cheapAnalysis = (navigator.userAgent.indexOf("Android")!=-1)||(navigator.userAgent.indexOf("iPad")!=-1)||(navigator.userAgent.indexOf("iPhone")!=-1);;
 	generateVocoderBands( 55, 7040, cheapAnalysis ? 14 : 28 );
@@ -88,7 +97,7 @@ function WipeEmOut_DoFSCommand(command, args) {
     }
 
     if (button.innerText === 'Start recording') {
-      recorder = new Recorder(window.voiceOutput);
+      recorder = new RecorderJS(window.voiceOutput);
       recorder.record();
       button.innerText = 'Stop recording';
     } else if (button.innerText === 'Stop recording') {
@@ -141,6 +150,7 @@ function stopRecording() {
   createDownloadLink();
     
   recorder.clear();
+  window.voiceOutput.disconnect();
   window.voiceOutput = null;
   recorder = null;
 }
@@ -160,6 +170,7 @@ function createDownloadLink() {
     li.appendChild(au);
     li.appendChild(hf);
     recordingslist.appendChild(li);
+    //recordedData = blob;
   });
 }
 
@@ -167,29 +178,48 @@ function btnStopRecording() {
   window.microphone.stop();
   stopRecording();
   window.bgmAudio.volume /= 4;
+
 }
 
 function btnUploadVoice(container, volume) {
-  // initiate auth popup
-  SC.connect(function() {
-    SC.get('/me', function(me) { 
-      //alert('Hello, ' + me.username); 
-      container.innerHTML = '';
-      window.bgmAudio.volume = volume;
-      var swipe = window.swipeObject;
-      var swf = window.swfPlayer;
-      swipe.enable();
-      swipe.onLeft = function () {
-        swf.SetVariable('direction', 'left');
-      };
-      swipe.onRight = function () {
-        swf.SetVariable('direction', 'right');
-      };
-      swipe.onTap = function () {
-        swf.SetVariable('state', 'fire');
-      };
-      swf.play();
-      swf.container.style.display = 'block';
-    });
+
+  SC.recordStop();
+  SC.recordUpload({
+    track: { title: 'Music Hack Day Tokyo 2014' }
   });
+
+  /*
+  Recorder.initialize({swfSrc: recordedData});
+  var uri = SC.prepareRequestURI("/tracks", {title: 'test'});
+  uri.query.format = "json";
+  SC.Helper.setFlashStatusCodeMaps(uri.query);
+  var flattenedParams = uri.flattenParams(uri.query);
+  Recorder.upload({
+    method: "POST",
+    url: "https://api.soundcloud.com/tracks",
+    audioParam: "track[asset_data]",
+    params: flattenedParams,
+    success: function(responseText) {
+      //var response = SC.Helper.responseHandler(responseText);
+      //return callback(response.json, response.error)
+    }
+  });
+  */
+
+  container.innerHTML = '';
+  window.bgmAudio.volume = volume;
+  var swipe = window.swipeObject;
+  var swf = window.swfPlayer;
+  swipe.enable();
+  swipe.onLeft = function () {
+    swf.SetVariable('direction', 'left');
+  };
+  swipe.onRight = function () {
+    swf.SetVariable('direction', 'right');
+  };
+  swipe.onTap = function () {
+    swf.SetVariable('state', 'fire');
+  };
+  swf.play();
+  swf.container.style.display = 'block';
 }

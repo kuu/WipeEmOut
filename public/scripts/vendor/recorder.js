@@ -84,6 +84,6 @@
     link.dispatchEvent(click);
   }
 
-  window.Recorder = Recorder;
+  window.RecorderJS = Recorder;
 
 })(window);

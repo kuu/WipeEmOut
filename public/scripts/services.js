@@ -92,6 +92,17 @@ services.factory('Swipe', function () {
 services.factory('BGM', function () {
   var audio, state = 'ready';
 
+  var activateHandler = function () {
+    if (audio && state === 'playing') {
+      audio.volume = 0.5;
+    }
+  };
+  var inactivateHandler = function () {
+    if (audio && state === 'playing') {
+      audio.volume = 0.2;
+    }
+  };
+
   var self = {
     play: function () {
       if (state === 'playing') {
@@ -113,6 +124,8 @@ services.factory('BGM', function () {
           document.removeEventListener('touchstart', loadAudio, false);
           audio.load();
         }, false);
+        window.addEventListener("blur", inactivateHandler, false)
+        window.addEventListener("focus", activateHandler, false)
       }
     },
     pause: function () {
@@ -125,6 +138,8 @@ services.factory('BGM', function () {
       self.pause();
       state = 'ready';
       window.bgmAudio = audio = null;
+      window.removeEventListener("blur", inactivateHandler, false)
+      window.removeEventListener("focus", activateHandler, false)
     }
   };
   return self;

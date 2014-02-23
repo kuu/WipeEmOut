@@ -49,8 +49,7 @@ function WipeEmOut_DoFSCommand(command, args) {
   // initiate auth popup
   SC.connect(function() {
     SC.record({
-      start: function() {
-      }
+      start: function() {}
     });
   });
 
